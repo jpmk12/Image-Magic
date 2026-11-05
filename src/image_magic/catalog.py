@@ -34,7 +34,28 @@ CREATE TABLE IF NOT EXISTS assets (
 CREATE INDEX IF NOT EXISTS idx_assets_sha ON assets(sha256);
 CREATE INDEX IF NOT EXISTS idx_assets_taken ON assets(taken_at);
 CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT);
+CREATE TABLE IF NOT EXISTS trips (
+    id            INTEGER PRIMARY KEY,
+    title         TEXT NOT NULL,      -- "Jordan", "Jordan & Israel"
+    subtitle      TEXT,               -- top cities
+    start_at      TEXT NOT NULL,
+    end_at        TEXT NOT NULL,
+    photo_count   INTEGER NOT NULL,
+    cover_id      INTEGER REFERENCES assets(id),
+    lat           REAL,
+    lon           REAL
+);
 """
+
+# Columns added after the first release; created on open if missing.
+MIGRATIONS = {
+    "country_code": "TEXT",
+    "country": "TEXT",
+    "region": "TEXT",
+    "city": "TEXT",
+    "place_km": "REAL",      # distance to the matched place; NULL = not looked up yet
+    "trip_id": "INTEGER",
+}
 
 LIVE_SUFFIXES = ("_HEVC",)  # icloudpd's default live-photo video suffix
 
@@ -48,6 +69,13 @@ def connect(db_file: Path) -> sqlite3.Connection:
     conn = sqlite3.connect(db_file)
     conn.row_factory = sqlite3.Row
     conn.executescript(SCHEMA)
+    have = {row["name"] for row in conn.execute("PRAGMA table_info(assets)")}
+    for col, typ in MIGRATIONS.items():
+        if col not in have:
+            conn.execute(f"ALTER TABLE assets ADD COLUMN {col} {typ}")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_assets_country ON assets(country_code)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_assets_trip ON assets(trip_id)")
+    conn.commit()
     return conn
 
 
@@ -89,6 +117,8 @@ class ScanResult:
     unchanged: int = 0
     missing: int = 0
     skipped: list[str] = field(default_factory=list)
+    places_added: int = 0
+    trips: int = 0
 
     @property
     def total(self) -> int:
@@ -163,6 +193,9 @@ def scan(conn: sqlite3.Connection, originals: Path, progress=None) -> ScanResult
 
     _link_live_photos(conn)
     _mark_duplicates(conn)
+    conn.commit()
+    from . import places  # local import: places is optional data-heavy code
+    result.places_added, result.trips = places.refresh(conn)
     set_meta(conn, "last_scan", now_iso())
     conn.commit()
     return result
@@ -236,6 +269,8 @@ def stats(conn: sqlite3.Connection) -> dict:
         "live_videos": q(f"SELECT COUNT(*) FROM assets WHERE {live} AND kind = 'live_video'"),
         "duplicates": q(f"SELECT COUNT(*) FROM assets WHERE {live} AND duplicate_of IS NOT NULL"),
         "missing": q("SELECT COUNT(*) FROM assets WHERE missing = 1"),
+        "countries": q(f"SELECT COUNT(DISTINCT country_code) FROM assets WHERE {live}"),
+        "trips": q("SELECT COUNT(*) FROM trips"),
         "with_gps": q(f"SELECT COUNT(*) FROM assets WHERE {live} AND lat IS NOT NULL"),
         "bytes": q(f"SELECT COALESCE(SUM(size), 0) FROM assets WHERE {live}"),
         "first": q(f"SELECT MIN(taken_at) FROM assets WHERE {live}"),

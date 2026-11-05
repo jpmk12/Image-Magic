@@ -1,0 +1,61 @@
+"""Thumbnails and browser-friendly copies of photos (cached under derived/)."""
+
+from __future__ import annotations
+
+import threading
+from pathlib import Path
+
+from PIL import Image, ImageOps
+
+from . import metadata  # noqa: F401  (registers the HEIC opener)
+
+THUMB_PX = 400
+VIEW_PX = 2048
+BROWSER_NATIVE = {".jpg", ".jpeg", ".png", ".gif", ".webp"}
+VIDEO_TYPES = {".mp4": "video/mp4", ".m4v": "video/mp4", ".mov": "video/quicktime",
+               ".3gp": "video/3gpp", ".avi": "video/x-msvideo", ".mkv": "video/x-matroska"}
+IMAGE_TYPES = {".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png",
+               ".gif": "image/gif", ".webp": "image/webp"}
+
+_locks: dict[str, threading.Lock] = {}
+_locks_guard = threading.Lock()
+
+
+def _lock_for(key: str) -> threading.Lock:
+    with _locks_guard:
+        return _locks.setdefault(key, threading.Lock())
+
+
+def _render(src: Path, dest: Path, px: int, quality: int) -> Path:
+    with _lock_for(str(dest)):
+        if dest.exists():
+            return dest
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        with Image.open(src) as im:
+            im = ImageOps.exif_transpose(im)
+            im.thumbnail((px, px))
+            if im.mode not in ("RGB", "L"):
+                im = im.convert("RGB")
+            tmp = dest.with_suffix(".tmp")
+            im.save(tmp, "JPEG", quality=quality, optimize=True)
+            tmp.replace(dest)
+    return dest
+
+
+def thumbnail(library: Path, originals: Path, rel_path: str, sha256: str) -> Path:
+    dest = library / "derived" / "thumbs" / sha256[:2] / f"{sha256}.jpg"
+    if dest.exists():
+        return dest
+    return _render(originals / rel_path, dest, THUMB_PX, 80)
+
+
+def viewable(library: Path, originals: Path, rel_path: str, sha256: str) -> tuple[Path, str]:
+    """A file the browser can show: the original if possible, else a JPEG copy."""
+    src = originals / rel_path
+    ext = src.suffix.lower()
+    if ext in VIDEO_TYPES:
+        return src, VIDEO_TYPES[ext]
+    if ext in BROWSER_NATIVE:
+        return src, IMAGE_TYPES[ext]
+    dest = library / "derived" / "view" / sha256[:2] / f"{sha256}.jpg"
+    return _render(src, dest, VIEW_PX, 88), "image/jpeg"

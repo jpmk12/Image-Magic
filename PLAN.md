@@ -156,5 +156,8 @@ Ideas, roughly in order of effort:
   opens the app in the browser, with Home, Settings and Activity log tabs. The iCloud
   password and iPhone code are entered in the app. Deleting from iCloud is blocked in code
   and covered by tests.
-- Next: run a test sync of 20 items on the laptop, then the full sync. Then M2 (places
-  and trips).
+- **M2 – Places and trips: built** (v0.3.0). Photos tab (grid, year/country/city filters,
+  full-size viewer), automatic trips, and a map. Place names are looked up offline from bundled
+  GeoNames data (~145k places).
+- Next: run a test sync on the laptop and a full download, then check that trips look right
+  on real data. After that, M3: search by subject ("C-17", "beach") on the laptop's GPU.

@@ -17,12 +17,14 @@ from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from importlib import resources
 from pathlib import Path
+from urllib.parse import parse_qs, urlsplit
 
-from . import __version__, catalog
+from . import __version__, browse, catalog, media
 from .jobs import JobRunner
 from .settings import Settings
 
 ALLOWED_HOSTS = {"127.0.0.1", "localhost"}
+STATIC_TYPES = {".js": "text/javascript", ".css": "text/css", ".png": "image/png"}
 
 
 class App:
@@ -50,6 +52,11 @@ class App:
             "stats": stats,
             "job": self.jobs.snapshot(),
         }
+
+    def db(self):
+        """Open the catalog for one request (SQLite connections aren't shared across threads)."""
+        s = self.settings_provider()
+        return s, catalog.connect(s.db)
 
     def get_settings(self) -> dict:
         return self.settings_provider().to_dict()
@@ -106,11 +113,16 @@ def make_handler(app: App):
         def _json(self, code: int, obj) -> None:
             self._send(code, json.dumps(obj).encode(), "application/json")
 
+        def _query(self) -> dict:
+            return {k: v[0] for k, v in parse_qs(urlsplit(self.path).query).items()}
+
         def _authorized(self) -> bool:
             if not self._host_ok():
                 self._json(HTTPStatus.FORBIDDEN, {"error": "bad host"})
                 return False
-            if not secrets.compare_digest(self.headers.get("X-Token", ""), app.token):
+            # <img>/<video> tags can't send headers, so media URLs carry ?t=<token>.
+            token = self.headers.get("X-Token") or self._query().get("t", "")
+            if not secrets.compare_digest(token, app.token):
                 self._json(HTTPStatus.FORBIDDEN, {"error": "bad token"})
                 return False
             return True
@@ -131,6 +143,8 @@ def make_handler(app: App):
                 if not self._host_ok():
                     return self._json(HTTPStatus.FORBIDDEN, {"error": "bad host"})
                 return self._send(200, page.encode(), "text/html; charset=utf-8")
+            if path.startswith("/static/vendor/") and self._host_ok():
+                return self._static(path)
             if not self._authorized():
                 return
             try:
@@ -139,11 +153,107 @@ def make_handler(app: App):
                 if path == "/api/settings":
                     return self._json(200, app.get_settings())
                 if path == "/api/log":
-                    since = int(self.path.partition("since=")[2] or 0)
+                    since = int(self._query().get("since") or 0)
                     return self._json(200, app.jobs.log_since(since))
+                if path.startswith(("/api/photos", "/api/photo/", "/api/facets", "/api/trips",
+                                    "/api/map", "/media/")):
+                    return self._browse(path, self._query())
             except Exception as e:
                 return self._json(500, {"error": str(e)})
             self._json(404, {"error": "not found"})
+
+        def _static(self, path: str):
+            """Bundled third-party files (map library). Only plain names, no '..'."""
+            parts = path.split("/")[3:]
+            if not parts or any(p in ("", ".", "..") or "\\" in p for p in parts) \
+                    or Path(parts[-1]).suffix not in STATIC_TYPES:
+                return self._json(404, {"error": "not found"})
+            res = resources.files("image_magic").joinpath("static", "vendor", *parts)
+            if not res.is_file():
+                return self._json(404, {"error": "not found"})
+            self.send_response(200)
+            body = res.read_bytes()
+            self.send_header("Content-Type", STATIC_TYPES[Path(parts[-1]).suffix])
+            self.send_header("Content-Length", str(len(body)))
+            self.send_header("Cache-Control", "public, max-age=604800")
+            self.end_headers()
+            self.wfile.write(body)
+
+        def _browse(self, path: str, q: dict):
+            settings, conn = app.db()
+            try:
+                if path == "/api/photos":
+                    return self._json(200, browse.photos(
+                        conn, q, int(q.get("offset") or 0), int(q.get("limit") or 200)))
+                if path == "/api/facets":
+                    return self._json(200, browse.facets(conn))
+                if path == "/api/trips":
+                    return self._json(200, browse.trips(conn))
+                if path == "/api/map":
+                    return self._json(200, browse.map_points(conn, q))
+                kind, _, ident = path.rpartition("/")
+                asset_id = int(ident)
+                if kind == "/api/photo":
+                    d = browse.photo_detail(conn, asset_id)
+                    return self._json(200, d) if d else self._json(404, {"error": "not found"})
+                row = conn.execute("SELECT path, sha256, kind FROM assets WHERE id = ? AND missing = 0",
+                                   (asset_id,)).fetchone()
+            finally:
+                conn.close()
+            if not row:
+                return self._json(404, {"error": "not found"})
+            if kind == "/media/thumb":
+                if row["kind"] != "photo":
+                    return self._json(404, {"error": "no thumbnail for videos"})
+                f = media.thumbnail(settings.library, settings.originals, row["path"], row["sha256"])
+                return self._file(f, "image/jpeg", cache=True)
+            if kind == "/media/view":
+                f, ctype = media.viewable(settings.library, settings.originals, row["path"], row["sha256"])
+                return self._file(f, ctype, cache=True)
+            return self._json(404, {"error": "not found"})
+
+        def _file(self, f: Path, ctype: str, cache: bool = False) -> None:
+            """Serve a file, with HTTP Range support so videos can seek."""
+            size = f.stat().st_size
+            start, end = 0, size - 1
+            rng = self.headers.get("Range", "")
+            partial = rng.startswith("bytes=")
+            if partial:
+                a, _, b = rng[6:].split(",")[0].partition("-")
+                try:
+                    if a:
+                        start, end = int(a), (int(b) if b else size - 1)
+                    else:
+                        start = max(0, size - int(b))
+                except ValueError:
+                    partial = False
+                    start, end = 0, size - 1
+                end = min(end, size - 1)
+                if start > end:
+                    self.send_response(416)
+                    self.send_header("Content-Range", f"bytes */{size}")
+                    self.end_headers()
+                    return
+            self.send_response(206 if partial else 200)
+            self.send_header("Content-Type", ctype)
+            self.send_header("Accept-Ranges", "bytes")
+            self.send_header("Content-Length", str(end - start + 1))
+            if partial:
+                self.send_header("Content-Range", f"bytes {start}-{end}/{size}")
+            self.send_header("Cache-Control", "private, max-age=86400" if cache else "no-store")
+            self.end_headers()
+            with f.open("rb") as fh:
+                fh.seek(start)
+                left = end - start + 1
+                while left > 0:
+                    chunk = fh.read(min(1 << 16, left))
+                    if not chunk:
+                        break
+                    try:
+                        self.wfile.write(chunk)
+                    except (BrokenPipeError, ConnectionResetError):
+                        return
+                    left -= len(chunk)
 
         def do_POST(self):
             if not self._authorized():

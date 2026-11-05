@@ -142,7 +142,8 @@ class JobRunner:
         try:
             settings = self._settings_provider()
             r = self._scan(settings)
-            self._finish("done", f"Catalog updated: {r.new:,} new, {r.total:,} total, {r.missing:,} missing.",
+            self._finish("done", f"Catalog updated: {r.new:,} new, {r.total:,} total, {r.missing:,} missing, "
+                                 f"{r.trips:,} trips.",
                          {"new": r.new, "total": r.total, "missing": r.missing})
         except Exception as e:  # report, never crash the app
             self._finish("failed", f"Cataloging failed: {e}")
@@ -233,7 +234,8 @@ class JobRunner:
             self._finish("failed", f"Download finished but cataloging failed: {e}")
             return
         self._finish("done",
-                     f"Sync complete: {self.state.downloaded:,} downloaded, {r.total:,} items in your library.",
+                     f"Sync complete: {self.state.downloaded:,} downloaded, {r.total:,} items in your library, "
+                     f"{r.trips:,} trips.",
                      {"downloaded": self.state.downloaded, "total": r.total, "missing": r.missing})
 
     def _watch_auth(self) -> None:

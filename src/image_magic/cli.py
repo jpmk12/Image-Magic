@@ -81,6 +81,7 @@ def _scan_and_report(conn, originals: Path) -> int:
     print("Cataloging files...")
     r = catalog.scan(conn, originals, progress=_progress("scanned"))
     print(f"{r.new:,} new, {r.updated:,} changed, {r.total:,} total, {r.missing:,} missing")
+    print(f"Places looked up: {r.places_added:,}; trips found: {r.trips:,}")
     if r.skipped:
         print(f"Ignored {len(r.skipped)} non-media file(s), e.g. {r.skipped[0]}")
     return 1 if r.missing else 0

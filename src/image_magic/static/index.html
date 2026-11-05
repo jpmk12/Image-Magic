@@ -4,6 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Image Magic</title>
+<link rel="stylesheet" href="/static/vendor/leaflet.css">
+<link rel="stylesheet" href="/static/vendor/MarkerCluster.css">
+<link rel="stylesheet" href="/static/vendor/MarkerCluster.Default.css">
 <style>
   :root {
     --bg: #f6f7f9; --panel: #ffffff; --text: #1c1e21; --muted: #626872; --line: #e1e4e8;
@@ -63,6 +66,39 @@
   pre#log { background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 12px;
             height: 420px; overflow: auto; font: 12px/1.45 ui-monospace, Consolas, monospace; white-space: pre-wrap; margin: 0; }
   .hidden { display: none !important; }
+  main.wide { max-width: 1400px; }
+  .filters { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 14px; }
+  .filters select { width: auto; min-width: 140px; }
+  .chip { display: inline-flex; gap: 6px; align-items: center; background: var(--soft); border-radius: 99px;
+          padding: 4px 12px; font-size: 13px; }
+  .chip button { background: none; border: 0; color: var(--muted); cursor: pointer; font-size: 15px; padding: 0; }
+  .month { grid-column: 1 / -1; font-weight: 650; margin: 14px 0 2px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 4px; }
+  .tile { position: relative; aspect-ratio: 1; background: var(--line); border-radius: 4px; overflow: hidden;
+          cursor: pointer; border: 0; padding: 0; }
+  .tile img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .tile .badge { position: absolute; left: 6px; bottom: 6px; background: rgba(0,0,0,.6); color: #fff;
+                 font-size: 11px; padding: 1px 6px; border-radius: 4px; }
+  .tile.video { display: grid; place-items: center; color: var(--muted); font-size: 32px; }
+  .trips { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; }
+  .trip { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; overflow: hidden;
+          cursor: pointer; text-align: left; padding: 0; font: inherit; color: inherit; }
+  .trip img { width: 100%; aspect-ratio: 16/10; object-fit: cover; display: block; background: var(--line); }
+  .trip .body { padding: 12px 14px; }
+  .trip .t { font-weight: 650; font-size: 16px; }
+  #map { height: calc(100vh - 190px); min-height: 400px; border-radius: 12px; border: 1px solid var(--line); }
+  .lb { position: fixed; inset: 0; background: rgba(0,0,0,.92); z-index: 2000; display: flex; }
+  .lb .stage { flex: 1; display: grid; place-items: center; position: relative; min-width: 0; }
+  .lb img, .lb video { max-width: 100%; max-height: 100vh; object-fit: contain; }
+  .lb .nav { position: absolute; top: 50%; transform: translateY(-50%); background: rgba(255,255,255,.12);
+             color: #fff; border: 0; width: 48px; height: 64px; font-size: 28px; cursor: pointer; border-radius: 8px; }
+  .lb .prev { left: 12px; } .lb .next { right: 12px; }
+  .lb .close { position: absolute; top: 12px; right: 12px; background: rgba(255,255,255,.12); color: #fff;
+               border: 0; width: 40px; height: 40px; border-radius: 8px; font-size: 20px; cursor: pointer; }
+  .lb aside { width: 280px; background: #15171a; color: #e8eaed; padding: 60px 18px 18px; font-size: 14px; overflow: auto; }
+  .lb aside div { margin-bottom: 12px; } .lb aside b { display: block; color: #9aa0a9; font-weight: 500; font-size: 12px; }
+  .lb aside a { color: #93c5fd; cursor: pointer; }
+  @media (max-width: 760px) { .lb { flex-direction: column; } .lb aside { width: auto; padding-top: 14px; max-height: 30vh; } }
   .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: var(--text);
            color: var(--bg); padding: 10px 16px; border-radius: 8px; font-size: 14px; }
 </style>
@@ -72,6 +108,9 @@
   <h1>📷 Image Magic</h1>
   <nav>
     <button data-tab="home" class="active">Home</button>
+    <button data-tab="photos">Photos</button>
+    <button data-tab="trips">Trips</button>
+    <button data-tab="map">Map</button>
     <button data-tab="settings">Settings</button>
     <button data-tab="log">Activity log</button>
   </nav>
@@ -127,6 +166,34 @@
       <h2>Your library</h2>
       <div class="stats" id="stats"><p class="muted">Nothing downloaded yet.</p></div>
     </div>
+  </section>
+
+  <!-- PHOTOS -->
+  <section id="tab-photos" class="hidden">
+    <div class="filters">
+      <select id="f-year"><option value="">All years</option></select>
+      <select id="f-country"><option value="">All places</option></select>
+      <select id="f-city" class="hidden"><option value="">All cities</option></select>
+      <select id="f-kind"><option value="">Photos &amp; videos</option><option value="photo">Photos only</option><option value="video">Videos only</option></select>
+      <span id="f-trip" class="chip hidden"></span>
+      <span class="muted small" id="f-count"></span>
+    </div>
+    <div class="grid" id="grid"></div>
+    <p class="muted" id="grid-empty" style="display:none">No photos here yet. Download some from the Home tab.</p>
+    <div id="grid-more" style="height:40px"></div>
+  </section>
+
+  <!-- TRIPS -->
+  <section id="tab-trips" class="hidden">
+    <p class="muted small">Trips are found automatically: photos taken more than 100 km from home, grouped by date.</p>
+    <div class="trips" id="trips"></div>
+    <p class="muted" id="trips-empty" style="display:none">No trips found yet. Trips appear once photos with locations are downloaded.</p>
+  </section>
+
+  <!-- MAP -->
+  <section id="tab-map" class="hidden">
+    <div id="map"></div>
+    <p class="muted small" id="map-note">Map tiles © OpenStreetMap contributors (needs internet). Place names: GeoNames (CC BY 4.0). Map library: Leaflet.</p>
   </section>
 
   <!-- SETTINGS -->
@@ -211,6 +278,18 @@
 
 <div class="toast hidden" id="toast"></div>
 
+<div class="lb hidden" id="lb">
+  <div class="stage" id="lb-stage">
+    <button class="nav prev" id="lb-prev" aria-label="Previous">‹</button>
+    <button class="nav next" id="lb-next" aria-label="Next">›</button>
+    <button class="close" id="lb-close" aria-label="Close">✕</button>
+  </div>
+  <aside id="lb-info"></aside>
+</div>
+
+<script src="/static/vendor/leaflet.js"></script>
+<script src="/static/vendor/leaflet.markercluster.js"></script>
+
 <script>
 const TOKEN = "__TOKEN__";
 const $ = (s, r = document) => r.querySelector(s);
@@ -238,7 +317,11 @@ function toast(msg) {
 function showTab(name) {
   $$("nav button").forEach(b => b.classList.toggle("active", b.dataset.tab === name));
   $$("main > section").forEach(s => s.classList.toggle("hidden", s.id !== "tab-" + name));
+  document.querySelector("main").classList.toggle("wide", ["photos", "trips", "map"].includes(name));
   if (name === "settings") loadSettings();
+  if (name === "photos") ensurePhotos();
+  if (name === "trips") loadTrips();
+  if (name === "map") loadMap();
 }
 $$("nav button").forEach(b => b.onclick = () => showTab(b.dataset.tab));
 $$("[data-goto]").forEach(b => b.onclick = () => showTab(b.dataset.goto));
@@ -258,6 +341,7 @@ function renderStats(s) {
   const items = [
     [fmt(s.photos), "Photos"], [fmt(s.videos), "Videos"], [fmt(s.live_videos), "Live Photo clips"],
     [bytes(s.bytes), "Space used"], [fmt(s.with_gps), "With location"],
+    [fmt(s.countries), "Countries"], [fmt(s.trips), "Trips"],
     [s.first ? s.first.slice(0, 4) + "–" + s.last.slice(0, 4) : "–", "Years"],
     [fmt(s.duplicates), "Exact duplicates"], [fmt(s.missing), "Missing files"],
     [when(s.last_sync), "Last sync"], [when(s.last_verify), "Last check"],
@@ -378,6 +462,204 @@ async function pollLog() {
       if (atBottom) pre.scrollTop = pre.scrollHeight;
     }
   } catch (e) {}
+}
+
+// ---- photos
+const media = (kind, id) => `/media/${kind}/${id}?t=${encodeURIComponent(TOKEN)}`;
+const PAGE = 200;
+let grid = { filters: {}, offset: 0, total: 0, items: [], loading: false, lastMonth: "", loaded: false };
+let facetsData = null;
+
+function monthLabel(iso) {
+  if (!iso) return "Unknown date";
+  const d = new Date(iso.slice(0, 7) + "-01T00:00:00");
+  return d.toLocaleDateString(undefined, { month: "long", year: "numeric" });
+}
+function placeLabel(p) { return [p.city, p.country].filter(Boolean).join(", "); }
+
+async function loadFacets() {
+  facetsData = await api("/api/facets");
+  const fy = $("#f-year"), fc = $("#f-country");
+  fy.length = 1; fc.length = 1;
+  for (const y of facetsData.years) fy.add(new Option(`${y.year} (${fmt(y.n)})`, y.year));
+  for (const c of facetsData.countries) fc.add(new Option(`${c.name} (${fmt(c.n)})`, c.code));
+  fy.value = grid.filters.year || ""; fc.value = grid.filters.country || "";
+  fillCities();
+}
+function fillCities() {
+  const fci = $("#f-city"); fci.length = 1;
+  const c = facetsData && facetsData.countries.find(c => c.code === grid.filters.country);
+  fci.classList.toggle("hidden", !c || !c.cities.length);
+  if (c) for (const ci of c.cities) fci.add(new Option(`${ci.name} (${fmt(ci.n)})`, ci.name));
+  fci.value = grid.filters.city || "";
+}
+
+function setFilters(f) {
+  grid = { filters: f, offset: 0, total: 0, items: [], loading: false, lastMonth: "", loaded: true };
+  $("#grid").replaceChildren();
+  $("#f-year").value = f.year || ""; $("#f-country").value = f.country || ""; $("#f-kind").value = f.kind || "";
+  fillCities();
+  const chip = $("#f-trip");
+  chip.classList.toggle("hidden", !f.trip);
+  if (f.trip) {
+    chip.replaceChildren(document.createTextNode("Trip: " + (f.tripTitle || "")));
+    const x = document.createElement("button"); x.textContent = "✕"; x.title = "Show all photos";
+    x.onclick = () => setFilters({}); chip.append(x);
+  }
+  loadMorePhotos();
+}
+function ensurePhotos() {
+  loadFacets().catch(() => {});
+  if (!grid.loaded) setFilters({});
+}
+$("#f-year").onchange = e => setFilters({ ...grid.filters, year: e.target.value, trip: "" });
+$("#f-country").onchange = e => setFilters({ ...grid.filters, country: e.target.value, city: "", trip: "" });
+$("#f-city").onchange = e => setFilters({ ...grid.filters, city: e.target.value, trip: "" });
+$("#f-kind").onchange = e => setFilters({ ...grid.filters, kind: e.target.value });
+
+async function loadMorePhotos() {
+  if (grid.loading || (grid.offset && grid.offset >= grid.total)) return;
+  grid.loading = true;
+  const mine = grid;
+  const q = new URLSearchParams({ offset: grid.offset, limit: PAGE });
+  for (const k of ["year", "country", "city", "trip", "kind"]) if (grid.filters[k]) q.set(k, grid.filters[k]);
+  try {
+    const res = await api("/api/photos?" + q);
+    if (mine !== grid) return;  // filters changed meanwhile
+    grid.total = res.total;
+    const box = $("#grid"), frag = document.createDocumentFragment();
+    for (const it of res.items) {
+      const m = monthLabel(it.taken_at);
+      if (m !== grid.lastMonth) {
+        const h = document.createElement("div"); h.className = "month"; h.textContent = m;
+        frag.append(h); grid.lastMonth = m;
+      }
+      const idx = grid.items.length; grid.items.push(it);
+      const b = document.createElement("button"); b.className = "tile"; b.title = placeLabel(it);
+      if (it.kind === "video") { b.classList.add("video"); b.textContent = "▶"; }
+      else {
+        const img = document.createElement("img"); img.loading = "lazy"; img.decoding = "async";
+        img.src = media("thumb", it.id); img.alt = ""; b.append(img);
+      }
+      if (it.live) { const s = document.createElement("span"); s.className = "badge"; s.textContent = "LIVE"; b.append(s); }
+      b.onclick = () => openLightbox(idx);
+      frag.append(b);
+    }
+    box.append(frag);
+    grid.offset += res.items.length;
+    $("#f-count").textContent = fmt(grid.total) + " items";
+    $("#grid-empty").style.display = grid.total ? "none" : "";
+  } catch (e) { toast(e.message); }
+  finally { if (mine === grid) grid.loading = false; }
+}
+new IntersectionObserver(entries => {
+  if (entries.some(e => e.isIntersecting) && grid.loaded) loadMorePhotos();
+}, { rootMargin: "800px" }).observe($("#grid-more"));
+
+// ---- lightbox
+let lbIndex = -1, lbItems = null;
+async function openLightbox(i, items) {
+  lbItems = items || grid.items;
+  if (i < 0 || i >= lbItems.length) return;
+  if (!items && i >= grid.items.length - 5) loadMorePhotos();
+  lbIndex = i;
+  const it = lbItems[i], stage = $("#lb-stage");
+  stage.querySelectorAll("img,video").forEach(n => n.remove());
+  let el;
+  if (it.kind === "video") { el = document.createElement("video"); el.controls = true; el.autoplay = true; }
+  else el = document.createElement("img");
+  el.src = media("view", it.id);
+  stage.prepend(el);
+  $("#lb").classList.remove("hidden");
+  $("#lb-prev").style.visibility = i > 0 ? "" : "hidden";
+  $("#lb-next").style.visibility = i < lbItems.length - 1 ? "" : "hidden";
+  const info = $("#lb-info"); info.replaceChildren();
+  try {
+    const d = await api("/api/photo/" + it.id);
+    if (lbIndex !== i) return;
+    const add = (label, value, onclick) => {
+      if (!value) return;
+      const div = document.createElement("div"), b = document.createElement("b");
+      b.textContent = label; div.append(b);
+      const v = document.createElement(onclick ? "a" : "span"); v.textContent = value;
+      if (onclick) v.onclick = onclick;
+      div.append(v); info.append(div);
+    };
+    add("Taken", d.taken_at ? new Date(d.taken_at).toLocaleString() : "");
+    add("Place", [d.city, d.region, d.country].filter(Boolean).join(", "));
+    add("Trip", d.trip_title, () => { closeLightbox(); showTab("photos"); setFilters({ trip: d.trip_id, tripTitle: d.trip_title }); });
+    add("Camera", [d.camera_make, d.camera_model].filter(Boolean).join(" "));
+    add("Size", d.width ? `${d.width} × ${d.height} · ${bytes(d.size)}` : bytes(d.size));
+    add("File", d.path);
+    if (d.live_video_id) add("Live Photo", "Play motion", () => {
+      stage.querySelectorAll("img,video").forEach(n => n.remove());
+      const v = document.createElement("video"); v.src = media("view", d.live_video_id);
+      v.autoplay = true; v.loop = true; v.muted = true; stage.prepend(v);
+    });
+  } catch (e) {}
+}
+function closeLightbox() {
+  $("#lb").classList.add("hidden"); lbIndex = -1;
+  $("#lb-stage").querySelectorAll("img,video").forEach(n => n.remove());
+}
+$("#lb-close").onclick = closeLightbox;
+$("#lb-prev").onclick = () => openLightbox(lbIndex - 1, lbItems === grid.items ? undefined : lbItems);
+$("#lb-next").onclick = () => openLightbox(lbIndex + 1, lbItems === grid.items ? undefined : lbItems);
+document.addEventListener("keydown", e => {
+  if (lbIndex < 0) return;
+  if (e.key === "Escape") closeLightbox();
+  if (e.key === "ArrowLeft") $("#lb-prev").click();
+  if (e.key === "ArrowRight") $("#lb-next").click();
+});
+
+// ---- trips
+async function loadTrips() {
+  const list = await api("/api/trips").catch(e => { toast(e.message); return []; });
+  const box = $("#trips");
+  $("#trips-empty").style.display = list.length ? "none" : "";
+  box.replaceChildren(...list.map(t => {
+    const b = document.createElement("button"); b.className = "trip";
+    const img = document.createElement("img"); img.loading = "lazy"; img.alt = "";
+    if (t.cover_id) img.src = media("thumb", t.cover_id);
+    const body = document.createElement("div"); body.className = "body";
+    const title = document.createElement("div"); title.className = "t"; title.textContent = t.title;
+    const sub = document.createElement("div"); sub.className = "muted small"; sub.textContent = t.subtitle || "";
+    const start = new Date(t.start_at), end = new Date(t.end_at);
+    const opts = { month: "short", day: "numeric", year: "numeric" };
+    const when = document.createElement("div"); when.className = "small";
+    when.textContent = `${start.toLocaleDateString(undefined, opts)} – ${end.toLocaleDateString(undefined, opts)} · ${fmt(t.photo_count)} items`;
+    body.append(title, sub, when); b.append(img, body);
+    b.onclick = () => { showTab("photos"); setFilters({ trip: t.id, tripTitle: `${t.title}, ${start.toLocaleDateString(undefined, { month: "short", year: "numeric" })}` }); };
+    return b;
+  }));
+}
+
+// ---- map
+let map = null, cluster = null;
+async function loadMap() {
+  if (typeof L === "undefined") {
+    $("#map").replaceChildren(Object.assign(document.createElement("p"),
+      { className: "muted", style: "padding:20px", textContent: "The map could not load." }));
+    return;
+  }
+  if (!map) {
+    map = L.map("map", { worldCopyJump: true }).setView([20, 10], 2);
+    L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+      { maxZoom: 19, attribution: "© OpenStreetMap contributors" }).addTo(map);
+  }
+  setTimeout(() => map.invalidateSize(), 50);
+  if (!navigator.onLine) toast("You're offline: map background needs internet, but your photo pins still show.");
+  const pts = await api("/api/map").catch(e => { toast(e.message); return []; });
+  if (cluster) map.removeLayer(cluster);
+  cluster = L.markerClusterGroup({ chunkedLoading: true, maxClusterRadius: 50 });
+  const items = pts.map(([id]) => ({ id, kind: "photo" }));
+  pts.forEach(([id, lat, lon], i) => {
+    const m = L.marker([lat, lon]);
+    m.on("click", () => openLightbox(i, items));
+    cluster.addLayer(m);
+  });
+  map.addLayer(cluster);
+  if (pts.length) map.fitBounds(cluster.getBounds(), { padding: [30, 30], maxZoom: 12 });
 }
 
 refresh(); pollLog();

@@ -36,6 +36,19 @@ app to stop it. Closing the browser tab doesn't stop it.
 **Uninstall:** go to Windows Settings → Apps → Image Magic → Uninstall. This removes the
 program only. Your photos and settings are kept.
 
+## Browsing your photos
+- **Photos:** every photo and video, newest first, grouped by month. Filter by **year**,
+  **country**, **city** or photos/videos. Click a photo to view it full size, with its date,
+  place, camera and trip. Use the ← → keys to move between photos. For a Live Photo, click
+  **Play motion**.
+- **Trips:** found automatically. A trip is a run of photos taken more than 100 km from home,
+  where "home" is where you took the most photos that year. Click a trip to see its photos.
+- **Map:** every photo with a location, clustered on a world map. Click a pin to open the photo.
+  The map background needs internet. Everything else works offline.
+
+Place names are looked up **on your computer** from a bundled list of about 145,000 places
+(GeoNames, CC BY 4.0). Your locations are never sent anywhere.
+
 ## Settings
 | Setting | What it does |
 |---|---|
