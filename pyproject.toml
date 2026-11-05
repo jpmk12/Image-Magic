@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "image-magic"
-version = "0.1.0"
+version = "0.2.0"
 description = "Back up, catalog and (soon) categorize an iCloud photo library."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -20,8 +20,14 @@ dev = ["pytest>=8"]
 [project.scripts]
 image-magic = "image_magic.cli:main"
 
+[project.gui-scripts]
+image-magic-app = "image_magic.app:main"
+
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+image_magic = ["static/*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

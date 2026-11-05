@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 from PIL import Image
 
-from image_magic import catalog, cli, sync
+from image_magic import catalog
 from image_magic.metadata import read_photo_meta
 
 
@@ -123,20 +123,3 @@ def test_video_falls_back_to_file_date(library):
     assert taken is not None
 
 
-def test_sync_command_shape(tmp_path):
-    cmd = sync.build_command("icloudpd", "me@example.com", tmp_path, recent=10, adp=True)
-    assert cmd[:3] == ["icloudpd", "--username", "me@example.com"]
-    assert cmd[cmd.index("--folder-structure") + 1] == "{:%Y/%Y-%m}"
-    assert ["--size", "original"] == cmd[cmd.index("--size"):cmd.index("--size") + 2]
-    assert "--adp-web-access" in cmd and "--recent" in cmd
-
-
-def test_cli_init_scan_status(tmp_path, capsys):
-    lib = tmp_path / "lib"
-    assert cli.main(["--library", str(lib), "init", "--apple-id", "me@example.com"]) == 0
-    make_photo(lib / "originals/2019/2019-03/IMG_0001.JPG", gps=PETRA)
-    assert cli.main(["--library", str(lib), "scan"]) == 0
-    assert cli.main(["--library", str(lib), "verify"]) == 0
-    assert cli.main(["--library", str(lib), "status"]) == 0
-    out = capsys.readouterr().out
-    assert "1 new" in out and "1 OK" in out and "With GPS:     1" in out

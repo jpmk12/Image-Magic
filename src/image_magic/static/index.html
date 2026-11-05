@@ -1,0 +1,387 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Image Magic</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --panel: #ffffff; --text: #1c1e21; --muted: #626872; --line: #e1e4e8;
+    --accent: #2563eb; --accent-text: #ffffff; --ok: #15803d; --warn: #b45309; --bad: #b91c1c;
+    --soft: #eef2ff;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #111316; --panel: #1b1e23; --text: #e8eaed; --muted: #9aa0a9; --line: #2c3038;
+      --accent: #60a5fa; --accent-text: #0b1220; --ok: #4ade80; --warn: #fbbf24; --bad: #f87171;
+      --soft: #1e2635;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  header { display: flex; align-items: center; gap: 16px; padding: 14px 24px;
+           background: var(--panel); border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+  header h1 { font-size: 18px; margin: 0; }
+  nav { display: flex; gap: 4px; }
+  nav button { background: none; border: 0; color: var(--muted); padding: 8px 14px;
+               border-radius: 8px; font: inherit; cursor: pointer; }
+  nav button.active { background: var(--soft); color: var(--text); font-weight: 600; }
+  header .spacer { flex: 1; }
+  main { max-width: 920px; margin: 0 auto; padding: 24px 16px 60px; }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+           padding: 20px; margin-bottom: 18px; }
+  .panel h2 { font-size: 16px; margin: 0 0 12px; }
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
+  .stat { border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; }
+  .stat .n { font-size: 22px; font-weight: 650; }
+  .stat .l { color: var(--muted); font-size: 13px; }
+  .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+  button.btn { font: inherit; border-radius: 8px; padding: 9px 16px; cursor: pointer;
+               border: 1px solid var(--line); background: var(--panel); color: var(--text); }
+  button.btn.primary { background: var(--accent); color: var(--accent-text); border-color: var(--accent); font-weight: 600; }
+  button.btn:disabled { opacity: .45; cursor: default; }
+  .safe { display: inline-flex; gap: 8px; align-items: center; color: var(--ok); font-size: 13px; font-weight: 600; }
+  .muted { color: var(--muted); }
+  .small { font-size: 13px; }
+  .bar { height: 8px; background: var(--line); border-radius: 99px; overflow: hidden; margin: 10px 0 6px; }
+  .bar > div { height: 100%; width: 0; background: var(--accent); transition: width .4s; }
+  .bar.indeterminate > div { width: 30%; animation: slide 1.4s infinite ease-in-out; }
+  @keyframes slide { 0% { margin-left: -30%; } 100% { margin-left: 100%; } }
+  .state-done { color: var(--ok); } .state-failed { color: var(--bad); } .state-cancelled { color: var(--warn); }
+  .signin { border: 2px solid var(--accent); }
+  label.field { display: block; margin: 0 0 16px; }
+  label.field > span { display: block; font-weight: 600; margin-bottom: 4px; }
+  label.field small { display: block; color: var(--muted); margin-top: 4px; }
+  input[type=text], input[type=email], input[type=password], input[type=number], select {
+    font: inherit; width: 100%; max-width: 460px; padding: 8px 10px; border-radius: 8px;
+    border: 1px solid var(--line); background: var(--bg); color: var(--text); }
+  label.check { display: flex; gap: 10px; align-items: flex-start; margin: 0 0 14px; cursor: pointer; }
+  label.check input { margin-top: 4px; width: 18px; height: 18px; flex: none; }
+  label.check small { display: block; color: var(--muted); }
+  .note { background: var(--soft); border-radius: 8px; padding: 10px 12px; font-size: 13px; }
+  pre#log { background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 12px;
+            height: 420px; overflow: auto; font: 12px/1.45 ui-monospace, Consolas, monospace; white-space: pre-wrap; margin: 0; }
+  .hidden { display: none !important; }
+  .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: var(--text);
+           color: var(--bg); padding: 10px 16px; border-radius: 8px; font-size: 14px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>📷 Image Magic</h1>
+  <nav>
+    <button data-tab="home" class="active">Home</button>
+    <button data-tab="settings">Settings</button>
+    <button data-tab="log">Activity log</button>
+  </nav>
+  <div class="spacer"></div>
+  <button class="btn" id="quit" title="Stop Image Magic">Quit</button>
+</header>
+
+<main>
+  <!-- HOME -->
+  <section id="tab-home">
+    <div class="panel hidden" id="welcome">
+      <h2>Welcome! Let's get started</h2>
+      <p>Open <b>Settings</b>, enter your Apple ID, check the folder your photos will be saved to, and click Save.
+         Then come back here and click <b>Test with 20 photos</b>.</p>
+      <button class="btn primary" data-goto="settings">Open Settings</button>
+    </div>
+
+    <div class="panel signin hidden" id="signin">
+      <h2 id="signin-title">Sign in to iCloud</h2>
+      <p class="muted small" id="signin-help"></p>
+      <form id="signin-form" class="row">
+        <input id="signin-value" autocomplete="off" style="max-width:300px">
+        <button class="btn primary" type="submit">Submit</button>
+      </form>
+      <p class="small" id="signin-error" style="color:var(--bad)"></p>
+      <p class="muted small">Your password goes straight to Apple's sign-in and is never saved by Image Magic.</p>
+    </div>
+
+    <div class="panel">
+      <div class="row" style="justify-content:space-between">
+        <h2 style="margin:0">Backup</h2>
+        <span class="safe">🛡️ Copies from iCloud only. Never deletes anything in iCloud.</span>
+      </div>
+      <p class="muted small" id="libpath"></p>
+      <div class="row">
+        <button class="btn primary" data-run="sync" data-mode="quick" title="Fast: stops once it reaches photos you already have">Get new photos</button>
+        <button class="btn" data-run="sync" data-mode="full" title="Goes through the whole iCloud library. Safe to stop and resume.">Download everything</button>
+        <button class="btn" data-run="sync" data-mode="test">Test with 20 photos</button>
+        <button class="btn" data-run="verify" title="Re-reads every file and checks it is undamaged">Check backup</button>
+        <button class="btn" id="open-folder">Open folder</button>
+      </div>
+      <div id="job" class="hidden" style="margin-top:16px">
+        <div class="row" style="justify-content:space-between">
+          <b id="job-msg"></b>
+          <button class="btn" id="cancel">Stop</button>
+        </div>
+        <div class="bar" id="job-bar"><div></div></div>
+      </div>
+      <p id="job-last" class="small"></p>
+    </div>
+
+    <div class="panel">
+      <h2>Your library</h2>
+      <div class="stats" id="stats"><p class="muted">Nothing downloaded yet.</p></div>
+    </div>
+  </section>
+
+  <!-- SETTINGS -->
+  <section id="tab-settings" class="hidden">
+    <form id="settings-form">
+      <div class="panel">
+        <h2>Account</h2>
+        <label class="field"><span>Apple ID</span>
+          <input type="email" name="apple_id" placeholder="you@icloud.com" required>
+          <small>The email you use for iCloud. You'll be asked for the password and iPhone code when you sync.</small>
+        </label>
+        <label class="check"><input type="checkbox" name="advanced_data_protection">
+          <span>My iCloud uses Advanced Data Protection
+          <small>Only tick this if it's on (iPhone: Settings → your name → iCloud → Advanced Data Protection). You'll approve a prompt on your iPhone.</small></span>
+        </label>
+      </div>
+
+      <div class="panel">
+        <h2>Where photos are saved</h2>
+        <label class="field"><span>Library folder</span>
+          <input type="text" name="library_path">
+          <small>Needs about 50–100 GB free. Avoid OneDrive folders. Changing this doesn't move photos already downloaded.</small>
+        </label>
+        <label class="field"><span>Folder layout</span>
+          <select name="folder_structure">
+            <option value="year_month">Year / Year-Month (2019/2019-03)</option>
+            <option value="year_month_day">Year / Month / Day (2019/03/14)</option>
+            <option value="year">Year only (2019)</option>
+          </select>
+          <small id="layout-warn">Pick this before your first full download. Changing it later downloads everything again into the new layout.</small>
+        </label>
+      </div>
+
+      <div class="panel">
+        <h2>What to download</h2>
+        <label class="check"><input type="checkbox" name="download_edited">
+          <span>Edited versions too<small>Keeps both the original and your edited/cropped version.</small></span></label>
+        <label class="check"><input type="checkbox" name="download_videos">
+          <span>Videos</span></label>
+        <label class="check"><input type="checkbox" name="download_live_videos">
+          <span>Live Photo clips<small>The short motion clip behind each Live Photo.</small></span></label>
+        <label class="check"><input type="checkbox" name="save_xmp">
+          <span>Save favorites, titles and keywords<small>Stored in small .xmp files next to each photo.</small></span></label>
+      </div>
+
+      <div class="panel">
+        <h2>Syncing</h2>
+        <label class="field"><span>Automatically get new photos</span>
+          <select name="auto_sync_hours">
+            <option value="0">Off</option>
+            <option value="1">Every hour</option>
+            <option value="6">Every 6 hours</option>
+            <option value="24">Once a day</option>
+          </select>
+          <small>Runs while Image Magic is open.</small>
+        </label>
+        <label class="field"><span>"Get new photos" stops after</span>
+          <input type="number" name="quick_sync_stop_after" min="1" max="10000" style="max-width:120px">
+          <small>…this many photos in a row that you already have. Higher is more thorough but slower.</small>
+        </label>
+      </div>
+
+      <div class="panel">
+        <h2>Safety</h2>
+        <p class="note">🛡️ <b>Never delete from iCloud</b> is always on and can't be turned off.
+          Image Magic only copies photos to this computer.</p>
+      </div>
+
+      <div class="row"><button class="btn primary" type="submit">Save settings</button>
+        <span id="settings-msg" class="small"></span></div>
+    </form>
+  </section>
+
+  <!-- LOG -->
+  <section id="tab-log" class="hidden">
+    <div class="panel">
+      <h2>Activity log</h2>
+      <pre id="log"></pre>
+    </div>
+  </section>
+</main>
+
+<div class="toast hidden" id="toast"></div>
+
+<script>
+const TOKEN = "__TOKEN__";
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+
+async function api(path, body) {
+  const opts = { headers: { "X-Token": TOKEN } };
+  if (body !== undefined) {
+    opts.method = "POST";
+    opts.headers["Content-Type"] = "application/json";
+    opts.body = JSON.stringify(body);
+  }
+  const res = await fetch(path, opts);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || res.statusText);
+  return data;
+}
+
+function toast(msg) {
+  const t = $("#toast"); t.textContent = msg; t.classList.remove("hidden");
+  clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.add("hidden"), 3500);
+}
+
+// ---- tabs
+function showTab(name) {
+  $$("nav button").forEach(b => b.classList.toggle("active", b.dataset.tab === name));
+  $$("main > section").forEach(s => s.classList.toggle("hidden", s.id !== "tab-" + name));
+  if (name === "settings") loadSettings();
+}
+$$("nav button").forEach(b => b.onclick = () => showTab(b.dataset.tab));
+$$("[data-goto]").forEach(b => b.onclick = () => showTab(b.dataset.goto));
+
+// ---- status
+const fmt = n => (n ?? 0).toLocaleString();
+function bytes(n) {
+  const u = ["B", "KB", "MB", "GB", "TB"]; let i = 0;
+  while (n >= 1024 && i < u.length - 1) { n /= 1024; i++; }
+  return (i ? n.toFixed(1) : n) + " " + u[i];
+}
+function when(iso) { return iso ? new Date(iso).toLocaleString() : "never"; }
+
+function renderStats(s) {
+  const box = $("#stats");
+  if (!s || !(s.photos + s.videos)) { box.innerHTML = '<p class="muted">Nothing downloaded yet.</p>'; return; }
+  const items = [
+    [fmt(s.photos), "Photos"], [fmt(s.videos), "Videos"], [fmt(s.live_videos), "Live Photo clips"],
+    [bytes(s.bytes), "Space used"], [fmt(s.with_gps), "With location"],
+    [s.first ? s.first.slice(0, 4) + "–" + s.last.slice(0, 4) : "–", "Years"],
+    [fmt(s.duplicates), "Exact duplicates"], [fmt(s.missing), "Missing files"],
+    [when(s.last_sync), "Last sync"], [when(s.last_verify), "Last check"],
+  ];
+  box.replaceChildren(...items.map(([n, l]) => {
+    const d = document.createElement("div"); d.className = "stat";
+    const a = document.createElement("div"); a.className = "n"; a.textContent = n;
+    const b = document.createElement("div"); b.className = "l"; b.textContent = l;
+    if (l.startsWith("Last")) a.style.fontSize = "14px";
+    d.append(a, b); return d;
+  }));
+}
+
+let lastSigninState = "";
+function renderJob(j) {
+  const busy = ["running", "needs_password", "needs_code"].includes(j.state);
+  $("#job").classList.toggle("hidden", !busy);
+  $$("[data-run]").forEach(b => b.disabled = busy);
+  $("#job-msg").textContent = j.message || "Working...";
+  const bar = $("#job-bar");
+  if (j.total && j.kind === "sync") {
+    bar.classList.remove("indeterminate");
+    bar.firstElementChild.style.width = Math.min(100, 100 * j.downloaded / j.total) + "%";
+  } else {
+    bar.classList.add("indeterminate");
+    bar.firstElementChild.style.width = "";
+  }
+  const last = $("#job-last");
+  last.className = "small state-" + j.state;
+  last.textContent = !busy && j.state !== "idle" ? j.message : "";
+
+  const need = j.state === "needs_password" || j.state === "needs_code" ? j.state : "";
+  $("#signin").classList.toggle("hidden", !need);
+  if (need && need !== lastSigninState) {
+    const input = $("#signin-value");
+    input.value = "";
+    if (need === "needs_password") {
+      $("#signin-title").textContent = "Sign in to iCloud";
+      $("#signin-help").textContent = "Enter your Apple ID password. This is only needed every couple of months.";
+      input.type = "password"; input.placeholder = "Apple ID password"; input.inputMode = "text";
+    } else {
+      $("#signin-title").textContent = "Enter your iPhone code";
+      $("#signin-help").textContent = "Apple just sent a 6-digit code to your iPhone. Tap Allow there, then type the code here.";
+      input.type = "text"; input.placeholder = "123456"; input.inputMode = "numeric";
+    }
+    $("#signin-error").textContent = "";
+    showTab("home"); input.focus();
+  }
+  lastSigninState = need;
+}
+
+async function refresh() {
+  try {
+    const st = await api("/api/status");
+    $("#welcome").classList.toggle("hidden", st.configured);
+    $("#libpath").textContent = "Saving to: " + st.library;
+    renderStats(st.stats);
+    renderJob(st.job);
+  } catch (e) { /* app may be quitting */ }
+}
+
+// ---- actions
+$$("[data-run]").forEach(b => b.onclick = async () => {
+  if (b.dataset.mode === "full" && !confirm(
+      "Download your entire iCloud library? The first time this takes a few hours. You can stop and resume any time.")) return;
+  try { renderJob(await api("/api/run", { kind: b.dataset.run, mode: b.dataset.mode || "full" })); }
+  catch (e) { toast(e.message); }
+});
+$("#cancel").onclick = () => api("/api/cancel", {}).catch(e => toast(e.message));
+$("#open-folder").onclick = () => api("/api/open-folder", {}).catch(e => toast(e.message));
+$("#quit").onclick = async () => {
+  if (!confirm("Quit Image Magic? Any download in progress will stop (you can resume later).")) return;
+  await api("/api/quit", {}).catch(() => {});
+  document.body.innerHTML = '<main><div class="panel"><h2>Image Magic has stopped.</h2><p class="muted">You can close this tab. Open Image Magic again from the desktop or Start menu.</p></div></main>';
+};
+$("#signin-form").onsubmit = async ev => {
+  ev.preventDefault();
+  const field = lastSigninState === "needs_password" ? "password" : "code";
+  try {
+    await api("/api/auth", { field, value: $("#signin-value").value });
+    $("#signin").classList.add("hidden"); lastSigninState = ""; toast("Sent. Connecting...");
+  } catch (e) { $("#signin-error").textContent = "That didn't work. Check it and try again."; }
+};
+
+// ---- settings
+async function loadSettings() {
+  const s = await api("/api/settings");
+  const f = $("#settings-form");
+  for (const [k, v] of Object.entries(s)) {
+    const el = f.elements[k]; if (!el) continue;
+    if (el.type === "checkbox") el.checked = !!v; else el.value = v;
+  }
+  $("#settings-msg").textContent = "";
+}
+$("#settings-form").onsubmit = async ev => {
+  ev.preventDefault();
+  const f = ev.target, data = {};
+  for (const el of f.elements) {
+    if (!el.name) continue;
+    data[el.name] = el.type === "checkbox" ? el.checked : el.value;
+  }
+  try {
+    await api("/api/settings", data);
+    $("#settings-msg").textContent = "Saved ✓"; $("#settings-msg").style.color = "var(--ok)";
+    refresh();
+  } catch (e) { $("#settings-msg").textContent = e.message; $("#settings-msg").style.color = "var(--bad)"; }
+};
+
+// ---- log
+let logSeq = 0;
+async function pollLog() {
+  try {
+    const lines = await api("/api/log?since=" + logSeq);
+    if (lines.length) {
+      const pre = $("#log"), atBottom = pre.scrollTop + pre.clientHeight >= pre.scrollHeight - 20;
+      pre.textContent += lines.map(l => l.line).join("\n") + "\n";
+      logSeq = lines[lines.length - 1].seq;
+      if (atBottom) pre.scrollTop = pre.scrollHeight;
+    }
+  } catch (e) {}
+}
+
+refresh(); pollLog();
+setInterval(refresh, 1500); setInterval(pollLog, 2000);
+</script>
+</body>
+</html>

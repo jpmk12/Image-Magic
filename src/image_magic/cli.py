@@ -1,4 +1,8 @@
-"""Command line: image-magic init | sync | scan | verify | status"""
+"""Command line: image-magic init | sync | scan | verify | status | app
+
+The desktop app (image-magic app, or the installed Image Magic shortcut) does
+the same things with buttons; both share the same settings.
+"""
 
 from __future__ import annotations
 
@@ -7,7 +11,7 @@ import sys
 from pathlib import Path
 
 from . import __version__, catalog, sync
-from .config import Config, db_path, default_library_path, originals_dir
+from .settings import Settings
 
 
 def _human_bytes(n: int) -> str:
@@ -25,52 +29,52 @@ def _progress(label: str):
     return report
 
 
+def _settings(args) -> Settings:
+    s = Settings.load()
+    if args.library:
+        s.library_path = str(args.library)
+    return s
+
+
 def cmd_init(args) -> int:
-    lib: Path = args.library
-    cfg = Config.load(lib)
-    cfg.apple_id = args.apple_id or cfg.apple_id or input("Apple ID (email): ").strip()
-    cfg.save(lib)
-    originals_dir(lib).mkdir(parents=True, exist_ok=True)
-    catalog.connect(db_path(lib)).close()
-    print(f"Library ready at {lib}")
-    print("Next:  image-magic sync")
+    s = _settings(args)
+    s.apple_id = args.apple_id or s.apple_id or input("Apple ID (email): ").strip()
+    s.save()
+    s.originals.mkdir(parents=True, exist_ok=True)
+    catalog.connect(s.db).close()
+    print(f"Library ready at {s.library}")
+    print(f"Settings saved to {Settings.path()}")
+    print("Next:  image-magic sync --test")
     return 0
 
 
-def _require_config(lib: Path) -> Config:
-    cfg = Config.load(lib)
-    if not cfg.apple_id:
-        sys.exit(f"No library set up at {lib}. Run:  image-magic init")
-    return cfg
-
-
 def cmd_sync(args) -> int:
-    lib: Path = args.library
-    cfg = _require_config(lib)
-    originals = originals_dir(lib)
-    originals.mkdir(parents=True, exist_ok=True)
-    cmd = sync.build_command(
-        sync.find_icloudpd(), cfg.apple_id, originals,
-        recent=args.recent, until_found=args.until_found,
-        adp=args.adp, dry_run=args.dry_run, auth_only=args.auth_only,
-    )
-    print("Downloading from iCloud. You may be asked for your password and a 2FA code.")
-    code = sync.run(cmd)
+    s = _settings(args)
+    if not s.apple_id:
+        sys.exit("No Apple ID set. Run:  image-magic init")
+    if args.adp:
+        s.advanced_data_protection = True
+    s.originals.mkdir(parents=True, exist_ok=True)
+    mode = "test" if args.test else "quick" if args.quick else "full"
+    cmd = sync.build_command(sync.find_icloudpd(), s, mode=mode,
+                             dry_run=args.dry_run, auth_only=args.auth_only)
+    print("Downloading from iCloud (copy only, nothing is deleted from iCloud).")
+    print("You may be asked for your Apple ID password and the code shown on your iPhone.")
+    code = sync.run_interactive(cmd)
     if code != 0:
         print(f"icloudpd exited with code {code}. The catalog was not updated.")
         return code
     if args.dry_run or args.auth_only:
         return 0
-    conn = catalog.connect(db_path(lib))
+    conn = catalog.connect(s.db)
     catalog.set_meta(conn, "last_sync", catalog.now_iso())
     conn.commit()
-    return _scan_and_report(conn, originals)
+    return _scan_and_report(conn, s.originals)
 
 
 def cmd_scan(args) -> int:
-    lib: Path = args.library
-    conn = catalog.connect(db_path(lib))
-    return _scan_and_report(conn, originals_dir(lib))
+    s = _settings(args)
+    return _scan_and_report(catalog.connect(s.db), s.originals)
 
 
 def _scan_and_report(conn, originals: Path) -> int:
@@ -83,10 +87,10 @@ def _scan_and_report(conn, originals: Path) -> int:
 
 
 def cmd_verify(args) -> int:
-    lib: Path = args.library
-    conn = catalog.connect(db_path(lib))
+    s = _settings(args)
+    conn = catalog.connect(s.db)
     print("Checking every file against its checksum...")
-    r = catalog.verify(conn, originals_dir(lib), progress=_progress("verified"))
+    r = catalog.verify(conn, s.originals, progress=_progress("verified"))
     print(f"{r.ok:,} OK, {len(r.changed)} changed/corrupt, {len(r.missing)} missing")
     for p in r.changed[:20]:
         print(f"  CHANGED  {p}")
@@ -96,60 +100,63 @@ def cmd_verify(args) -> int:
 
 
 def cmd_status(args) -> int:
-    lib: Path = args.library
-    conn = catalog.connect(db_path(lib))
-    s = catalog.stats(conn)
-    print(f"Library:      {lib}")
-    print(f"Photos:       {s['photos']:,}")
-    print(f"Videos:       {s['videos']:,}  (+{s['live_videos']:,} Live Photo clips)")
-    print(f"Size:         {_human_bytes(s['bytes'])}")
-    print(f"With GPS:     {s['with_gps']:,}")
-    print(f"Duplicates:   {s['duplicates']:,}")
-    print(f"Missing:      {s['missing']:,}")
-    if s["first"]:
-        print(f"Date range:   {s['first'][:10]} to {s['last'][:10]}")
+    s = _settings(args)
+    st = catalog.stats(catalog.connect(s.db))
+    print(f"Library:      {s.library}")
+    print(f"Photos:       {st['photos']:,}")
+    print(f"Videos:       {st['videos']:,}  (+{st['live_videos']:,} Live Photo clips)")
+    print(f"Size:         {_human_bytes(st['bytes'])}")
+    print(f"With GPS:     {st['with_gps']:,}")
+    print(f"Duplicates:   {st['duplicates']:,}")
+    print(f"Missing:      {st['missing']:,}")
+    if st["first"]:
+        print(f"Date range:   {st['first'][:10]} to {st['last'][:10]}")
     for key in ("last_sync", "last_scan", "last_verify"):
-        print(f"{key.replace('_', ' ').capitalize() + ':':<14}{s[key] or 'never'}")
+        print(f"{key.replace('_', ' ').capitalize() + ':':<14}{st[key] or 'never'}")
     return 0
+
+
+def cmd_app(args) -> int:
+    from .app import main as app_main
+    return app_main([])
 
 
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="image-magic", description=__doc__)
     p.add_argument("--version", action="version", version=__version__)
-    p.add_argument(
-        "--library", type=Path, default=default_library_path(),
-        help="Library folder (default: %(default)s, or $IMAGE_MAGIC_LIBRARY)",
-    )
+    p.add_argument("--library", type=Path, default=None,
+                   help="Library folder for this command (default: from settings)")
     sub = p.add_subparsers(dest="command", required=True)
 
     s = sub.add_parser("init", help="Create a library and save your Apple ID")
     s.add_argument("--apple-id")
     s.set_defaults(func=cmd_init)
 
-    s = sub.add_parser("sync", help="Download new photos from iCloud, then catalog them")
-    s.add_argument("--recent", type=int, help="Only the N most recent items (good for a test run)")
-    s.add_argument("--until-found", type=int,
-                   help="Stop after N already-downloaded items in a row (fast incremental sync)")
-    s.add_argument("--adp", action="store_true",
-                   help="Account uses Advanced Data Protection: request web access consent")
+    s = sub.add_parser("sync", help="Download from iCloud (copy only), then catalog")
+    g = s.add_mutually_exclusive_group()
+    g.add_argument("--test", action="store_true", help="Only the 20 most recent items")
+    g.add_argument("--quick", action="store_true",
+                   help="Stop after reaching photos you already have (fast incremental sync)")
+    s.add_argument("--adp", action="store_true", help="Account uses Advanced Data Protection")
     s.add_argument("--dry-run", action="store_true", help="List what would be downloaded")
     s.add_argument("--auth-only", action="store_true", help="Just sign in and save the session")
     s.set_defaults(func=cmd_sync)
 
     s = sub.add_parser("scan", help="Catalog files already in the library (no download)")
     s.set_defaults(func=cmd_scan)
-
     s = sub.add_parser("verify", help="Re-check every file against its checksum")
     s.set_defaults(func=cmd_verify)
-
     s = sub.add_parser("status", help="Show library totals")
     s.set_defaults(func=cmd_status)
+    s = sub.add_parser("app", help="Open the Image Magic app in your browser")
+    s.set_defaults(func=cmd_app)
     return p
 
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
-    args.library = args.library.expanduser()
+    if args.library:
+        args.library = args.library.expanduser()
     return args.func(args)
 
 

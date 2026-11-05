@@ -3,85 +3,81 @@
 Back up your whole iCloud Photos library to your own computer and keep a catalog of
 every photo. Search by person, place and subject comes next. See [PLAN.md](PLAN.md).
 
-**Milestone 1 (this version):** download everything from iCloud, catalog it, and verify the
-backup is complete and undamaged.
+🛡️ **Image Magic only copies photos from iCloud. It never deletes anything in iCloud.**
+The iCloud download tool it uses has options that delete photos, and Image Magic blocks
+all of them in code. Automated tests check this.
 
-## What it does
-- Downloads **originals and edited versions**, **Live Photo videos**, and regular videos,
-  using [icloudpd](https://github.com/icloud-photos-downloader/icloud_photos_downloader).
-- Sorts them into `originals/<year>/<year-month>/` folders.
-- Writes Apple's extra info (favorites, titles, keywords) to `.xmp` files next to each photo.
-- Builds a catalog (`library.db`) with the date taken, GPS location, camera, size and a
-  checksum for each file. It also links each Live Photo video to its still photo and flags
-  exact duplicates.
-- `verify` re-reads every file and confirms it still matches its checksum.
+## Install (Windows)
 
-## Setup on Windows
+1. Go to the **[Releases page](../../releases/latest)** and download **`ImageMagic-Setup.exe`**.
+2. Double-click it. No admin rights are needed.
+   - Windows may show **"Windows protected your PC"**, because the app isn't signed by a
+     paid publisher certificate. Click **More info → Run anyway**.
+3. Image Magic opens in your web browser. Next time, open it from the **desktop icon** or the
+   **Start menu**.
 
-1. Install **Python 3.12 or newer** from <https://www.python.org/downloads/>.
-   On the first installer screen, tick **"Add python.exe to PATH"**.
-2. Get this project. Either use `git clone https://github.com/jpmk12/Image-Magic`, or on
-   GitHub click **Code → Download ZIP** and unzip it.
-3. Open **PowerShell** in the project folder and run:
-   ```powershell
-   py -m venv .venv
-   .venv\Scripts\Activate.ps1
-   pip install -e .
-   ```
-   If PowerShell refuses to run `Activate.ps1`, run this once and try again:
-   `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`
-4. Set up the library:
-   ```powershell
-   image-magic init --apple-id you@icloud.com
-   ```
-   The library goes in `C:\Users\<you>\ImageMagic`. To put it somewhere else, add
-   `--library D:\Photos` to every command, or set the environment variable
-   `IMAGE_MAGIC_LIBRARY`.
+### First use
+1. Go to **Settings**, enter your **Apple ID**, check the library folder, and click **Save**.
+2. On **Home**, click **Test with 20 photos**.
+3. When asked, enter your **Apple ID password**, then the **6-digit code** shown on your
+   iPhone. You only need to sign in again about every 2 months.
+   - Windows Firewall may ask whether *icloudpd* can use the network. Click **Cancel** (or
+     leave "Public networks" unticked). Sign-in still works, because it stays on your
+     computer.
+4. Click **Open folder** to check that the photos look right, then click
+   **Download everything**. The first time takes a few hours. You can **Stop** at any time
+   and resume later, and it picks up where it left off.
+5. After that, **Get new photos** fetches only what's new. You can also turn on
+   **Automatically get new photos** in Settings.
 
-> **Disk space:** about 16,000 items is roughly 50–100 GB. Check that the laptop has enough
-> free space first.
-> **Don't put the library inside a OneDrive folder**, or it will upload everything again.
+**Quit:** Image Magic runs in the background while it's open. Use the **Quit** button in the
+app to stop it. Closing the browser tab doesn't stop it.
 
-## Using it
+**Uninstall:** go to Windows Settings → Apps → Image Magic → Uninstall. This removes the
+program only. Your photos and settings are kept.
 
-Each time you open a new PowerShell window, run `.venv\Scripts\Activate.ps1` first.
+## Settings
+| Setting | What it does |
+|---|---|
+| Apple ID | The iCloud account to back up |
+| Advanced Data Protection | Tick only if it's on for your iCloud |
+| Library folder | Where photos go (default `C:\Users\<you>\ImageMagic`). Avoid OneDrive folders |
+| Folder layout | Year/Month, Year/Month/Day or Year. Choose before the first full download |
+| Edited versions | Keep your edited version as well as the original |
+| Videos / Live Photo clips | Include videos and the motion clip behind each Live Photo |
+| Favorites, titles, keywords | Save Apple's extra info in `.xmp` files |
+| Auto sync | Get new photos every hour, every 6 hours or daily while the app is open |
+| "Get new photos" stops after | How many already-downloaded photos in a row before a quick sync stops |
 
-```powershell
-# 1. Test run: download only the 20 most recent items
-image-magic sync --recent 20
+Settings are stored in `%APPDATA%\ImageMagic\settings.json`. Your Apple ID password is
+**never** stored by Image Magic. The iCloud sign-in session is kept by icloudpd in
+`C:\Users\<you>\.pyicloud`.
 
-# 2. Full download (a few hours the first time; safe to stop and re-run, it resumes)
-image-magic sync
+## What a backup contains
+- Original photos, edited versions, Live Photo clips and videos, sorted into
+  `originals/<year>/<year-month>/`.
+- `.xmp` files with favorites, titles and keywords.
+- `library.db`: a catalog of every file with its date taken, GPS location, camera and
+  checksum. It also links each Live Photo clip to its photo and flags exact duplicates.
+- **Check backup** re-reads every file and confirms that none are missing or damaged.
 
-# 3. Later syncs: fetch only new photos, stopping after 50 already-downloaded in a row
-image-magic sync --until-found 50
+## Command line (optional)
+The same features are available from a terminal for advanced use or scripting. This needs
+Python 3.10+ and `pip install -e .` in this folder.
 
-# Check the backup at any time
-image-magic status
-image-magic verify
-```
-
-**Signing in:** the first `sync` asks for your Apple ID password and then the 6-digit code
-that appears on your iPhone. The sign-in is saved for about 2 months. After that, `sync`
-asks you to sign in again.
-
-**Advanced Data Protection:** if it's on (Settings → [your name] → iCloud → Advanced Data
-Protection), add `--adp` to `sync` and approve the prompt that appears on your iPhone.
-
-Your Apple ID password is never stored by Image Magic. icloudpd keeps the sign-in session
-in `C:\Users\<you>\.pyicloud`.
-
-## Commands
 | Command | What it does |
 |---|---|
-| `image-magic init` | Create the library and save your Apple ID |
-| `image-magic sync` | Download from iCloud, then update the catalog |
-| `image-magic scan` | Update the catalog from files already on disk (no download) |
-| `image-magic verify` | Re-check every file against its checksum |
-| `image-magic status` | Show totals: photos, videos, size, GPS coverage, duplicates, last sync |
+| `image-magic app` | Open the app |
+| `image-magic init --apple-id you@icloud.com` | Save your Apple ID |
+| `image-magic sync [--test \| --quick]` | Download (copy only), then catalog |
+| `image-magic scan` | Catalog files already on disk |
+| `image-magic verify` | Check every file against its checksum |
+| `image-magic status` | Library totals |
 
 ## Development
 ```bash
 pip install -e ".[dev]"
 pytest
 ```
+The Windows installer is built by GitHub Actions (`.github/workflows/build-windows.yml`) on
+every push. Pushing a `v*` tag publishes it as a Release.

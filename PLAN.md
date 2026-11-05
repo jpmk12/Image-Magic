@@ -152,5 +152,9 @@ Ideas, roughly in order of effort:
 2. Later: which second backup do you want (an external drive or a cloud service)?
 
 ## Status
-- **M1 – Backup: built.** See README.md for the Windows setup steps. Next, run it on the
-  laptop: a test sync of 20 items, then the full sync.
+- **M1 – Backup: built** (v0.2.0). A one-click Windows installer (built by GitHub Actions)
+  opens the app in the browser, with Home, Settings and Activity log tabs. The iCloud
+  password and iPhone code are entered in the app. Deleting from iCloud is blocked in code
+  and covered by tests.
+- Next: run a test sync of 20 items on the laptop, then the full sync. Then M2 (places
+  and trips).

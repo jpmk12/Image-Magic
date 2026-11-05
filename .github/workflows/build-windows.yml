@@ -1,0 +1,85 @@
+name: Build Windows installer
+
+on:
+  push:
+    branches: [master]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write   # needed to publish a Release when a v* tag is pushed
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install ".[dev]" pyinstaller
+
+      - name: Test
+        run: pytest -q
+
+      - name: Build app
+        run: >
+          pyinstaller --noconfirm --clean --windowed --name ImageMagic
+          --collect-data image_magic --hidden-import pillow_heif
+          packaging/launcher.py
+
+      - name: Bundle icloudpd
+        shell: pwsh
+        run: |
+          $src = (Get-Command icloudpd).Source
+          $size = (Get-Item $src).Length
+          Write-Host "icloudpd: $src ($size bytes)"
+          # Must be the standalone build, not a tiny pip launcher that needs Python.
+          if ($size -lt 5MB) { throw "icloudpd.exe looks like a pip stub, not a standalone build" }
+          Copy-Item $src dist\ImageMagic\icloudpd.exe
+          & dist\ImageMagic\icloudpd.exe --version
+          if ($LASTEXITCODE -ne 0) { throw "bundled icloudpd.exe does not run" }
+
+      - name: Smoke test the packaged app
+        shell: pwsh
+        run: |
+          $env:IMAGE_MAGIC_HOME = "$env:RUNNER_TEMP\im-home"
+          $p = Start-Process dist\ImageMagic\ImageMagic.exe -ArgumentList "--no-browser","--port","8799" -PassThru
+          $html = $null
+          for ($i = 0; $i -lt 30 -and -not $html; $i++) {
+            Start-Sleep 1
+            try { $html = (Invoke-WebRequest http://127.0.0.1:8799/ -UseBasicParsing).Content } catch {}
+          }
+          if (-not $html -or $html -notmatch 'const TOKEN = "([^"]+)"') { throw "app did not start" }
+          $h = @{ "X-Token" = $Matches[1] }
+          $st = Invoke-RestMethod http://127.0.0.1:8799/api/status -Headers $h
+          Write-Host "status OK, version $($st.version), library $($st.library)"
+          Invoke-RestMethod http://127.0.0.1:8799/api/quit -Method Post -Headers $h -ContentType "application/json" -Body "{}" | Out-Null
+          if (-not $p.WaitForExit(15000)) { $p.Kill(); throw "app did not quit" }
+
+      - name: Build installer
+        shell: pwsh
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) { choco install innosetup --no-progress -y; }
+          $version = (python -c "import image_magic; print(image_magic.__version__)")
+          & $iscc "/DAppVersion=$version" packaging\windows\installer.iss
+          if ($LASTEXITCODE -ne 0) { throw "installer build failed" }
+          Get-Item dist\ImageMagic-Setup.exe
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ImageMagic-Setup
+          path: dist/ImageMagic-Setup.exe
+
+      - name: Publish release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/ImageMagic-Setup.exe
