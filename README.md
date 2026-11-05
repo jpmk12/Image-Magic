@@ -46,6 +46,14 @@ program only. Your photos and settings are kept.
 - **Map:** every photo with a location, clustered on a world map. Click a pin to open the photo.
   The map background needs internet. Everything else works offline.
 
+- **Smart search:** type what you're looking for, like *"C-17 on the flight line"*,
+  *"kids at the beach"* or *"sunset over the desert"*, and the best matches appear first. It
+  combines with the year, place and trip filters, for example "desert" + Jordan. Turn it on
+  once from the Home tab. That downloads the search model (about 600 MB, checked against a
+  fixed fingerprint) and prepares your photos. This takes a few minutes on a GPU, or roughly
+  30 minutes per 16,000 photos on a CPU, and is a one-time job. New photos are prepared
+  after each sync.
+
 Place names are looked up **on your computer** from a bundled list of about 145,000 places
 (GeoNames, CC BY 4.0). Your locations are never sent anywhere.
 
@@ -69,6 +77,8 @@ Place names are looked up **on your computer** from a bundled list of about 145,
 - They stay on your laptop and in iCloud. Image Magic has no server of its own and sends no
   analytics.
 - Place names are worked out on your laptop. GPS locations are never sent anywhere.
+- Smart search runs on your laptop using OpenAI's open CLIP model (MIT License). Photos are
+  analysed locally and never uploaded. The only network use is the one-time model download.
 - The only outside connections are to **Apple** (downloading) and, if enabled,
   **OpenStreetMap** for the map background. OpenStreetMap sees which map areas you view,
   not your photos. You can turn the map background off in Settings → Privacy.

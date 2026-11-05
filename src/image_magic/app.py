@@ -67,11 +67,52 @@ def app_url(port: int, token: str) -> str:
     return f"http://127.0.0.1:{port}/#t={token}"
 
 
+def self_test(out_path: str, download: bool) -> int:
+    """Used by the Windows build to check the packaged app end to end.
+
+    Writes a JSON report (a windowed .exe has no console to print to).
+    """
+    report: dict = {"ok": False}
+    try:
+        import numpy as np
+        import onnxruntime as ort
+        from PIL import Image
+        from . import places, search
+        from .clip_tokenizer import Tokenizer
+
+        report["providers"] = ort.get_available_providers()
+        report["tokens"] = Tokenizer().encode("a photo of a cat")
+        report["place"] = places.lookup(30.3285, 35.4444).city
+        if download:
+            search.download_model()
+        if search.model_ready():
+            model = search.Model()
+            report["device"] = model.device
+            red = Image.new("RGB", (300, 200), (230, 20, 20))
+            green = Image.new("RGB", (300, 200), (20, 200, 40))
+            vecs = model.encode_images([red, green])
+            q = search.query_vector(model, "something bright red")
+            report["red_vs_green"] = [round(float(x), 4) for x in vecs @ q]
+            report["search_ok"] = bool(np.argmax(vecs @ q) == 0)
+        report["ok"] = report["tokens"] == [320, 1125, 539, 320, 2368] and report["place"] == "Petra" \
+            and report.get("search_ok", not download)
+    except Exception as e:  # report, don't crash
+        import traceback
+        report["error"] = traceback.format_exc()
+    with open(out_path, "w", encoding="utf-8") as f:
+        json.dump(report, f, indent=2)
+    return 0 if report["ok"] else 1
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="image-magic-app")
     parser.add_argument("--port", type=int, default=int(os.environ.get("IMAGE_MAGIC_PORT", DEFAULT_PORT)))
     parser.add_argument("--no-browser", action="store_true")
+    parser.add_argument("--self-test", metavar="REPORT.json", help=argparse.SUPPRESS)
+    parser.add_argument("--self-test-download", action="store_true", help=argparse.SUPPRESS)
     args = parser.parse_args(argv)
+    if args.self_test:
+        return self_test(args.self_test, args.self_test_download)
 
     if _already_running(args.port):
         # Second double-click: reopen the existing app with its token.

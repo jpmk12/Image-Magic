@@ -159,5 +159,10 @@ Ideas, roughly in order of effort:
 - **M2 – Places and trips: built** (v0.3.0). Photos tab (grid, year/country/city filters,
   full-size viewer), automatic trips, and a map. Place names are looked up offline from bundled
   GeoNames data (~145k places).
-- Next: run a test sync on the laptop and a full download, then check that trips look right
-  on real data. After that, M3: search by subject ("C-17", "beach") on the laptop's GPU.
+- **Security hardening** (v0.3.1): access code no longer embedded in the page, firewall rule for
+  the sign-in helper, setting to turn off the map background.
+- **M3 – Smart search: built** (v0.4.0). CLIP ViT-B/16 (ONNX) runs locally on the GPU through
+  DirectML, or on the CPU. One-time model download of about 600 MB, verified by SHA-256.
+  Search combines with the year, place and trip filters.
+- Next: test with the real library. Then M4 – People (face grouping and labelling), M5 –
+  custom tags (e.g. a trained "my C-17" tag), then Phase 3 – memories and sharing.

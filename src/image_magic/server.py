@@ -52,10 +52,25 @@ class App:
             "version": __version__,
             "configured": bool(s.apple_id),
             "map_online": s.map_online,
+            "smart_search": s.smart_search,
+            "search": self.search_counts(s),
             "library": str(s.library),
             "stats": stats,
             "job": self.jobs.snapshot(),
         }
+
+    def search_counts(self, s):
+        if not s.db.exists():
+            return None
+        try:
+            from . import search
+            conn = catalog.connect(s.db)
+            try:
+                return search.counts(conn)
+            finally:
+                conn.close()
+        except ImportError:   # onnxruntime/numpy not installed
+            return None
 
     def db(self):
         """Open the catalog for one request (SQLite connections aren't shared across threads)."""
@@ -186,8 +201,10 @@ def make_handler(app: App):
             settings, conn = app.db()
             try:
                 if path == "/api/photos":
+                    if q.get("q", "").strip():
+                        return self._json(200, self._search(conn, settings, q))
                     return self._json(200, browse.photos(
-                        conn, q, int(q.get("offset") or 0), int(q.get("limit") or 200)))
+                        conn, q, int(q.get("offset") or 0), min(int(q.get("limit") or 200), 500)))
                 if path == "/api/facets":
                     return self._json(200, browse.facets(conn))
                 if path == "/api/trips":
@@ -214,6 +231,24 @@ def make_handler(app: App):
                 f, ctype = media.viewable(settings.library, settings.originals, row["path"], row["sha256"])
                 return self._file(f, ctype, cache=True)
             return self._json(404, {"error": "not found"})
+
+        def _search(self, conn, settings, q: dict) -> dict:
+            from . import search
+            if not search.model_ready():
+                raise ValueError("Smart search isn't set up yet. Turn it on from the Home tab.")
+            text = q["q"].strip()[:200]
+            has_filters = any(q.get(k) for k in ("year", "country", "city", "trip", "kind"))
+            allowed = None
+            if has_filters:
+                allowed = {r["id"] for r in browse.photos(conn, q, 0, 10**9)["items"]}
+            hits = search.search(conn, str(settings.db), search.Model.get(), text, allowed)
+            offset, limit = int(q.get("offset") or 0), min(int(q.get("limit") or 200), 500)
+            page = hits[offset:offset + limit]
+            items = browse.by_ids(conn, [h[0] for h in page])
+            score = dict(page)
+            for it in items:
+                it["score"] = score.get(it["id"])
+            return {"total": len(hits), "items": items, "search": text}
 
         def _file(self, f: Path, ctype: str, cache: bool = False) -> None:
             """Serve a file, with HTTP Range support so videos can seek."""
@@ -269,7 +304,7 @@ def make_handler(app: App):
                 if path == "/api/run":
                     kind = data.get("kind", "sync")
                     mode = data.get("mode", "full")
-                    if kind not in ("sync", "scan", "verify") or mode not in ("full", "quick", "test"):
+                    if kind not in ("sync", "scan", "verify", "index") or mode not in ("full", "quick", "test"):
                         raise ValueError("unknown task")
                     if kind == "sync" and not app.settings_provider().apple_id:
                         raise ValueError("Enter your Apple ID in Settings first.")

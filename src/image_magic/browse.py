@@ -36,7 +36,7 @@ def photos(conn: sqlite3.Connection, params: dict, offset: int = 0, limit: int =
         f"""SELECT id, kind, taken_at, city, region, country, width, height, live_pair_id
             FROM assets WHERE {where}
             ORDER BY taken_at DESC, id DESC LIMIT ? OFFSET ?""",
-        [*args, max(1, min(limit, 500)), max(0, offset)],
+        [*args, max(1, limit), max(0, offset)],
     ).fetchall()
     items = [dict(r) for r in rows]
     # Mark photos that have a Live Photo clip.
@@ -49,6 +49,17 @@ def photos(conn: sqlite3.Connection, params: dict, offset: int = 0, limit: int =
             it["live"] = it["id"] in live
             it.pop("live_pair_id", None)
     return {"total": total, "items": items}
+
+
+def by_ids(conn: sqlite3.Connection, ids: list[int]) -> list[dict]:
+    """Rows for the given ids, in the given order (e.g. search ranking)."""
+    if not ids:
+        return []
+    rows = conn.execute(
+        f"""SELECT id, kind, taken_at, city, region, country, width, height FROM assets
+            WHERE id IN ({','.join('?' * len(ids))})""", ids).fetchall()
+    by = {r["id"]: dict(r) for r in rows}
+    return [by[i] for i in ids if i in by]
 
 
 def photo_detail(conn: sqlite3.Connection, asset_id: int) -> dict | None:

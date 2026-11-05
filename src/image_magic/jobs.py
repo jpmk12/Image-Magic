@@ -94,7 +94,8 @@ class JobRunner:
                 raise RuntimeError("Another task is already running")
             self._cancel.clear()
             self.state = JobState(kind=kind, state="running", started=time.time())
-            target = {"sync": self._run_sync, "scan": self._run_scan, "verify": self._run_verify}[kind]
+            target = {"sync": self._run_sync, "scan": self._run_scan, "verify": self._run_verify,
+                      "index": self._run_index}[kind]
             threading.Thread(target=target, args=(mode,), daemon=True).start()
 
     def cancel(self) -> None:
@@ -155,6 +156,49 @@ class JobRunner:
             return catalog.scan(conn, settings.originals, progress=self._progress("Cataloged"))
         finally:
             conn.close()
+
+    def _run_index(self, _mode: str) -> None:
+        try:
+            self._index(self._settings_provider(), standalone=True)
+        except Exception as e:
+            self._finish("failed", f"Smart search setup failed: {e}")
+
+    def _index(self, settings: Settings, standalone: bool) -> int:
+        """Download the search model if needed, then index new photos."""
+        from . import search
+        if not search.model_ready():
+            self.state.message = "Downloading smart search model (one time, about 600 MB)..."
+            self._add_log(self.state.message)
+
+            def dl(done, total):
+                self.state.downloaded, self.state.total = done, total
+                self.state.message = f"Downloading smart search model: {done / 1e6:,.0f} of {total / 1e6:,.0f} MB"
+            search.download_model(dl, cancelled=self._cancel.is_set)
+            if self._cancel.is_set():
+                self._finish("cancelled", "Stopped. The download resumes where it left off next time.")
+                return 0
+        self.state.downloaded, self.state.total = 0, None
+        self.state.message = "Loading smart search model..."
+        model = search.Model.get()
+        self._add_log(f"Smart search model loaded on {model.device}.")
+        conn = catalog.connect(settings.db)
+        try:
+            todo = len(search.pending(conn))
+            self._add_log(f"Indexing {todo:,} photos for smart search...")
+
+            def prog(done, total):
+                self.state.downloaded, self.state.total = done, total
+                self.state.message = f"Preparing smart search: {done:,} of {total:,} photos ({model.device})"
+            n = search.index_photos(conn, settings.library, settings.originals, model,
+                                    progress=prog, cancelled=self._cancel.is_set)
+        finally:
+            conn.close()
+        if standalone:
+            if self._cancel.is_set():
+                self._finish("cancelled", f"Stopped after {n:,} photos. Run it again to continue.")
+            else:
+                self._finish("done", f"Smart search is ready: {n:,} photos added.", {"indexed": n})
+        return n
 
     def _run_verify(self, _mode: str) -> None:
         try:
@@ -233,6 +277,11 @@ class JobRunner:
         except Exception as e:
             self._finish("failed", f"Download finished but cataloging failed: {e}")
             return
+        if settings.smart_search:
+            try:
+                self._index(settings, standalone=False)
+            except Exception as e:
+                self._add_log(f"Smart search indexing failed: {e}")
         self._finish("done",
                      f"Sync complete: {self.state.downloaded:,} downloaded, {r.total:,} items in your library, "
                      f"{r.trips:,} trips.",

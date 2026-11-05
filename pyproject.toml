@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "image-magic"
-version = "0.3.1"
+version = "0.4.0"
 description = "Back up, catalog and (soon) categorize an iCloud photo library."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -12,6 +12,10 @@ dependencies = [
     "icloudpd>=1.33",
     "pillow>=11",
     "pillow-heif>=0.20",
+    "numpy>=1.26",
+    # Smart search. On Windows the DirectML build uses any GPU (NVIDIA, AMD, Intel).
+    "onnxruntime>=1.18; sys_platform != 'win32'",
+    "onnxruntime-directml>=1.18; sys_platform == 'win32'",
 ]
 
 [project.optional-dependencies]

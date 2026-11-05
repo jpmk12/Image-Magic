@@ -162,6 +162,20 @@
       <p id="job-last" class="small"></p>
     </div>
 
+    <div class="panel" id="smart">
+      <div class="row" style="justify-content:space-between">
+        <h2 style="margin:0">Smart search</h2>
+        <span class="small muted">Runs on this computer. Photos never leave it.</span>
+      </div>
+      <p class="small" id="smart-text">Find photos by describing them, like <i>"C-17 on the flight line"</i>,
+        <i>"kids at the beach"</i> or <i>"sunset"</i>.</p>
+      <div class="row">
+        <button class="btn primary" id="smart-on">Turn on smart search</button>
+        <button class="btn hidden" id="smart-update">Prepare new photos</button>
+        <span class="small muted" id="smart-note">One-time download of about 600 MB.</span>
+      </div>
+    </div>
+
     <div class="panel">
       <h2>Your library</h2>
       <div class="stats" id="stats"><p class="muted">Nothing downloaded yet.</p></div>
@@ -170,6 +184,11 @@
 
   <!-- PHOTOS -->
   <section id="tab-photos" class="hidden">
+    <form class="filters" id="search-form" style="margin-bottom:10px">
+      <input type="text" id="f-q" placeholder='Search: "C-17", "kids at the beach", "sunset"...' style="max-width:520px" autocomplete="off">
+      <button class="btn primary" type="submit">Search</button>
+      <button class="btn hidden" type="button" id="f-q-clear">Clear</button>
+    </form>
     <div class="filters">
       <select id="f-year"><option value="">All years</option></select>
       <select id="f-country"><option value="">All places</option></select>
@@ -250,6 +269,9 @@
           </select>
           <small>Runs while Image Magic is open.</small>
         </label>
+        <label class="check"><input type="checkbox" name="smart_search">
+          <span>Prepare new photos for smart search after each sync
+          <small>Turned on automatically when you set up smart search on the Home tab.</small></span></label>
         <label class="field"><span>"Get new photos" stops after</span>
           <input type="number" name="quick_sync_stop_after" min="1" max="10000" style="max-width:120px">
           <small>…this many photos in a row that you already have. Higher is more thorough but slower.</small>
@@ -390,7 +412,7 @@ function renderJob(j) {
   $$("[data-run]").forEach(b => b.disabled = busy);
   $("#job-msg").textContent = j.message || "Working...";
   const bar = $("#job-bar");
-  if (j.total && j.kind === "sync") {
+  if (j.total && (j.kind === "sync" || j.kind === "index")) {
     bar.classList.remove("indeterminate");
     bar.firstElementChild.style.width = Math.min(100, 100 * j.downloaded / j.total) + "%";
   } else {
@@ -428,8 +450,34 @@ async function refresh() {
     $("#libpath").textContent = "Saving to: " + st.library;
     renderStats(st.stats);
     renderJob(st.job);
+    renderSmart(st);
   } catch (e) { /* app may be quitting */ }
 }
+
+function renderSmart(st) {
+  const s = st.search, busy = ["running", "needs_password", "needs_code"].includes(st.job.state);
+  const ready = s && s.model_ready && st.smart_search;
+  $("#smart-on").classList.toggle("hidden", !!ready);
+  $("#smart-update").classList.toggle("hidden", !ready || !s || s.indexed >= s.photos);
+  $("#smart-on").disabled = busy || !st.configured; $("#smart-update").disabled = busy;
+  if (ready) {
+    $("#smart-note").textContent = s.indexed >= s.photos
+      ? `Ready: all ${fmt(s.photos)} photos can be searched from the Photos tab.`
+      : `${fmt(s.indexed)} of ${fmt(s.photos)} photos ready. New photos are prepared after each sync.`;
+  } else {
+    $("#smart-note").textContent = s && s.model_ready ? "Model already downloaded." : "One-time download of about 600 MB.";
+  }
+  smartReady = !!(s && s.model_ready && s.indexed);
+}
+let smartReady = false;
+$("#smart-on").onclick = async () => {
+  try {
+    const cur = await api("/api/settings");
+    await api("/api/settings", { ...cur, smart_search: true });
+    renderJob(await api("/api/run", { kind: "index" }));
+  } catch (e) { toast(e.message); }
+};
+$("#smart-update").onclick = () => api("/api/run", { kind: "index" }).then(renderJob).catch(e => toast(e.message));
 
 // ---- actions
 $$("[data-run]").forEach(b => b.onclick = async () => {
@@ -526,6 +574,7 @@ function setFilters(f) {
   grid = { filters: f, offset: 0, total: 0, items: [], loading: false, lastMonth: "", loaded: true };
   $("#grid").replaceChildren();
   $("#f-year").value = f.year || ""; $("#f-country").value = f.country || ""; $("#f-kind").value = f.kind || "";
+  $("#f-q").value = f.q || ""; $("#f-q-clear").classList.toggle("hidden", !f.q);
   fillCities();
   const chip = $("#f-trip");
   chip.classList.toggle("hidden", !f.trip);
@@ -540,6 +589,13 @@ function ensurePhotos() {
   loadFacets().catch(() => {});
   if (!grid.loaded) setFilters({});
 }
+$("#search-form").onsubmit = ev => {
+  ev.preventDefault();
+  const q = $("#f-q").value.trim();
+  if (q && !smartReady) { toast("Turn on smart search on the Home tab first."); return; }
+  setFilters({ ...grid.filters, q });
+};
+$("#f-q-clear").onclick = () => setFilters({ ...grid.filters, q: "" });
 $("#f-year").onchange = e => setFilters({ ...grid.filters, year: e.target.value, trip: "" });
 $("#f-country").onchange = e => setFilters({ ...grid.filters, country: e.target.value, city: "", trip: "" });
 $("#f-city").onchange = e => setFilters({ ...grid.filters, city: e.target.value, trip: "" });
@@ -550,14 +606,19 @@ async function loadMorePhotos() {
   grid.loading = true;
   const mine = grid;
   const q = new URLSearchParams({ offset: grid.offset, limit: PAGE });
-  for (const k of ["year", "country", "city", "trip", "kind"]) if (grid.filters[k]) q.set(k, grid.filters[k]);
+  for (const k of ["q", "year", "country", "city", "trip", "kind"]) if (grid.filters[k]) q.set(k, grid.filters[k]);
   try {
     const res = await api("/api/photos?" + q);
     if (mine !== grid) return;  // filters changed meanwhile
     grid.total = res.total;
     const box = $("#grid"), frag = document.createDocumentFragment();
+    if (grid.filters.q && !grid.offset) {
+      const h = document.createElement("div"); h.className = "month";
+      h.textContent = res.total ? `Best matches for "${grid.filters.q}"` : `No good matches for "${grid.filters.q}". Try describing it differently.`;
+      frag.append(h); grid.lastMonth = "search";
+    }
     for (const it of res.items) {
-      const m = monthLabel(it.taken_at);
+      const m = grid.filters.q ? "search" : monthLabel(it.taken_at);
       if (m !== grid.lastMonth) {
         const h = document.createElement("div"); h.className = "month"; h.textContent = m;
         frag.append(h); grid.lastMonth = m;
@@ -576,7 +637,7 @@ async function loadMorePhotos() {
     box.append(frag);
     grid.offset += res.items.length;
     $("#f-count").textContent = fmt(grid.total) + " items";
-    $("#grid-empty").style.display = grid.total ? "none" : "";
+    $("#grid-empty").style.display = grid.total || grid.filters.q ? "none" : "";
   } catch (e) { toast(e.message); }
   finally { if (mine === grid) grid.loading = false; }
 }

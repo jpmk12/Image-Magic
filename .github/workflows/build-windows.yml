@@ -32,7 +32,25 @@ jobs:
         run: >
           pyinstaller --noconfirm --clean --windowed --name ImageMagic
           --collect-data image_magic --hidden-import pillow_heif
+          --collect-all onnxruntime
           packaging/launcher.py
+
+      - name: Cache smart search model
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/im-selftest/models
+          key: clip-vit-b-16-52d329a1-e2bb83fb
+
+      - name: Self-test packaged app (place lookup, AI runtime, model download and real search)
+        shell: pwsh
+        run: |
+          $env:IMAGE_MAGIC_HOME = "$env:RUNNER_TEMP\im-selftest"
+          $report = "$env:RUNNER_TEMP\selftest.json"
+          $p = Start-Process dist\ImageMagic\ImageMagic.exe -ArgumentList "--self-test",$report,"--self-test-download" -PassThru -Wait
+          Get-Content $report
+          if ($p.ExitCode -ne 0) { throw "self-test failed" }
+          $r = Get-Content $report | ConvertFrom-Json
+          if (-not ($r.providers -contains "DmlExecutionProvider")) { throw "DirectML (GPU) support missing from the build" }
 
       - name: Bundle icloudpd
         shell: pwsh
