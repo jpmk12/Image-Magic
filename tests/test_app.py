@@ -35,10 +35,22 @@ def call(base, path, body=None, token=None, host=None):
         return json.loads(r.read())
 
 
-def test_page_embeds_token(running):
+def test_page_does_not_contain_token(running):
+    """Any local program can fetch the page, so it must not leak the token."""
     app, base = running
     html = urllib.request.urlopen(base + "/").read().decode()
-    assert "Image Magic" in html and app.token in html
+    assert "Image Magic" in html and app.token not in html
+
+
+def test_session_file_roundtrip(tmp_path):
+    from image_magic import app as appmod
+    appmod._write_session(8765, "tok123")
+    assert appmod._read_session()["token"] == "tok123"
+    assert appmod.app_url(8765, "tok123") == "http://127.0.0.1:8765/#t=tok123"
+    appmod._clear_session("other")          # someone else's token: keep
+    assert appmod._read_session() is not None
+    appmod._clear_session("tok123")
+    assert appmod._read_session() is None
 
 
 def test_api_requires_token(running):

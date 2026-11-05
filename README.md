@@ -10,7 +10,8 @@ all of them in code. Automated tests check this.
 ## Install (Windows)
 
 1. Go to the **[Releases page](../../releases/latest)** and download **`ImageMagic-Setup.exe`**.
-2. Double-click it. No admin rights are needed.
+2. Double-click it. Keep **"Block network access to the iCloud sign-in helper"** ticked
+   (Windows will ask for administrator approval once). See [Security](#security-and-privacy).
    - Windows may show **"Windows protected your PC"**, because the app isn't signed by a
      paid publisher certificate. Click **More info → Run anyway**.
 3. Image Magic opens in your web browser. Next time, open it from the **desktop icon** or the
@@ -21,9 +22,8 @@ all of them in code. Automated tests check this.
 2. On **Home**, click **Test with 20 photos**.
 3. When asked, enter your **Apple ID password**, then the **6-digit code** shown on your
    iPhone. You only need to sign in again about every 2 months.
-   - Windows Firewall may ask whether *icloudpd* can use the network. Click **Cancel** (or
-     leave "Public networks" unticked). Sign-in still works, because it stays on your
-     computer.
+   - If Windows Firewall asks whether *icloudpd* can use the network, click **Cancel**.
+     Sign-in still works, because it stays on your computer.
 4. Click **Open folder** to check that the photos look right, then click
    **Download everything**. The first time takes a few hours. You can **Stop** at any time
    and resume later, and it picks up where it left off.
@@ -49,6 +49,41 @@ program only. Your photos and settings are kept.
 Place names are looked up **on your computer** from a bundled list of about 145,000 places
 (GeoNames, CC BY 4.0). Your locations are never sent anywhere.
 
+## Security and privacy
+
+**Your Apple ID password**
+- Image Magic never saves it. You type it into the app, and the app passes it straight to
+  the iCloud download tool on your own computer, which sends it to Apple over an encrypted
+  connection. It is never written to disk or to the activity log.
+- After you sign in, Apple issues a sign-in session (like "stay signed in" on a website),
+  which lasts about 2 months. icloudpd keeps it in `C:\Users\<you>\.pyicloud`. Anyone who
+  can get into your Windows account could copy it, so protect the laptop with a Windows
+  password and **turn on Device Encryption or BitLocker** (Settings → Privacy & security →
+  Device encryption).
+- While it waits for your password, the download tool's sign-in page listens on the network.
+  The installer's **"Block network access to the iCloud sign-in helper"** option adds a
+  Windows Firewall rule so only your own computer can reach it. Keep that option ticked, and
+  if Windows Firewall ever asks about *icloudpd*, click **Cancel**.
+
+**Your photos**
+- They stay on your laptop and in iCloud. Image Magic has no server of its own and sends no
+  analytics.
+- Place names are worked out on your laptop. GPS locations are never sent anywhere.
+- The only outside connections are to **Apple** (downloading) and, if enabled,
+  **OpenStreetMap** for the map background. OpenStreetMap sees which map areas you view,
+  not your photos. You can turn the map background off in Settings → Privacy.
+- The app's window is a web page served only to your own computer (`127.0.0.1`). Every request
+  must carry a random access code that's created at each launch and given only to your
+  browser, so other websites and other accounts on the laptop can't use it.
+- Image Magic never deletes anything in iCloud (see the top of this page).
+
+**Honest limits**
+- icloudpd is a popular open-source tool, but it isn't made by Apple, and Apple could change
+  iCloud in a way that breaks it until it's updated.
+- The installer isn't code-signed, which is why Windows shows a warning the first time.
+- Photos on the laptop are ordinary files. Disk encryption (above) is what protects them if
+  the laptop is lost or stolen.
+
 ## Settings
 | Setting | What it does |
 |---|---|
@@ -59,6 +94,7 @@ Place names are looked up **on your computer** from a bundled list of about 145,
 | Edited versions | Keep your edited version as well as the original |
 | Videos / Live Photo clips | Include videos and the motion clip behind each Live Photo |
 | Favorites, titles, keywords | Save Apple's extra info in `.xmp` files |
+| Map background | Turn off to keep map views from going to OpenStreetMap |
 | Auto sync | Get new photos every hour, every 6 hours or daily while the app is open |
 | "Get new photos" stops after | How many already-downloaded photos in a row before a quick sync stops |
 

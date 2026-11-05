@@ -1,7 +1,10 @@
 """Local web server for the app. Listens on 127.0.0.1 only.
 
-Every API call must carry the per-launch token embedded in the page, so other
-websites open in the browser cannot drive the app.
+Every API call must carry the per-launch token. The page itself does NOT contain
+the token: the launcher passes it to the browser in the URL fragment (#t=...),
+which is never sent to the server and can't be read by other programs or by
+other websites. Requests must also name 127.0.0.1/localhost as Host, which
+blocks DNS-rebinding attacks.
 """
 
 from __future__ import annotations
@@ -48,6 +51,7 @@ class App:
         return {
             "version": __version__,
             "configured": bool(s.apple_id),
+            "map_online": s.map_online,
             "library": str(s.library),
             "stats": stats,
             "job": self.jobs.snapshot(),
@@ -89,7 +93,6 @@ def _open_folder(path: Path) -> None:
 
 def make_handler(app: App):
     page = (resources.files("image_magic") / "static" / "index.html").read_text(encoding="utf-8")
-    page = page.replace("__TOKEN__", app.token)
 
     class Handler(BaseHTTPRequestHandler):
         server_version = "ImageMagic"

@@ -50,6 +50,7 @@ class Settings:
     quick_sync_stop_after: int = 50    # quick sync stops after N known photos in a row
     advanced_data_protection: bool = False
     auto_sync_hours: int = 0           # 0 = off; otherwise quick sync every N hours while open
+    map_online: bool = True            # load map background tiles from OpenStreetMap
 
     def __post_init__(self) -> None:
         if not self.library_path:

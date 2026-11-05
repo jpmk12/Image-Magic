@@ -257,6 +257,15 @@
       </div>
 
       <div class="panel">
+        <h2>Privacy</h2>
+        <label class="check"><input type="checkbox" name="map_online">
+          <span>Show map background (from OpenStreetMap)
+          <small>The map background is downloaded from OpenStreetMap, which can see which areas
+            you look at (not your photos or their exact locations). Turn this off and the map shows
+            your photo pins without a background.</small></span></label>
+      </div>
+
+      <div class="panel">
         <h2>Safety</h2>
         <p class="note">🛡️ <b>Never delete from iCloud</b> is always on and can't be turned off.
           Image Magic only copies photos to this computer.</p>
@@ -291,7 +300,26 @@
 <script src="/static/vendor/leaflet.markercluster.js"></script>
 
 <script>
-const TOKEN = "__TOKEN__";
+// The launcher opens this page as /#t=<token>. Keep the token for this tab only,
+// and remove it from the address bar.
+const TOKEN = (() => {
+  const m = location.hash.match(/[#&]t=([^&]+)/);
+  let t = m ? decodeURIComponent(m[1]) : "";
+  try {
+    if (t) sessionStorage.setItem("im-token", t); else t = sessionStorage.getItem("im-token") || "";
+  } catch (e) {}
+  if (m) history.replaceState(null, "", location.pathname);
+  return t;
+})();
+// Opening the app link in a tab that already shows this page only changes the
+// fragment; reload so the new token is picked up.
+window.addEventListener("hashchange", () => { if (/[#&]t=/.test(location.hash)) location.reload(); });
+if (!TOKEN) {
+  document.addEventListener("DOMContentLoaded", () => {
+    document.querySelector("main").innerHTML = '<div class="panel"><h2>Open Image Magic from its icon</h2>' +
+      '<p class="muted">For your security this page only works when opened from the Image Magic desktop or Start menu icon.</p></div>';
+  });
+}
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 
@@ -642,13 +670,17 @@ async function loadMap() {
       { className: "muted", style: "padding:20px", textContent: "The map could not load." }));
     return;
   }
-  if (!map) {
-    map = L.map("map", { worldCopyJump: true }).setView([20, 10], 2);
-    L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+  const st = await api("/api/status").catch(() => ({ map_online: true }));
+  if (!map) map = L.map("map", { worldCopyJump: true }).setView([20, 10], 2);
+  if (st.map_online && !map._tiles) {
+    map._tiles = L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png",
       { maxZoom: 19, attribution: "© OpenStreetMap contributors" }).addTo(map);
+  } else if (!st.map_online && map._tiles) {
+    map.removeLayer(map._tiles); map._tiles = null;
   }
   setTimeout(() => map.invalidateSize(), 50);
-  if (!navigator.onLine) toast("You're offline: map background needs internet, but your photo pins still show.");
+  if (!st.map_online) toast("Map background is off (Settings → Privacy). Showing photo pins only.");
+  else if (!navigator.onLine) toast("You're offline: map background needs internet, but your photo pins still show.");
   const pts = await api("/api/map").catch(e => { toast(e.message); return []; });
   if (cluster) map.removeLayer(cluster);
   cluster = L.markerClusterGroup({ chunkedLoading: true, maxClusterRadius: 50 });
