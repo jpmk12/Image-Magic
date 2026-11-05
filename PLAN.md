@@ -4,6 +4,14 @@ Goal: get every photo out of iCloud into a backup you control, make it searchabl
 **who** (my kids), **what** (my C-17) and **where** (Jordan), and then build a better way
 to relive and share those memories.
 
+## Decisions so far
+| Question | Answer | What it means |
+|---|---|---|
+| Have a Mac? | **No** | Ingest uses **`icloudpd`** (route B). Apple's face names can't be exported, so the app does its own face recognition. |
+| Library size | **~16,000 items** | Roughly 50–100 GB including videos. Small enough for one external drive, and for one AI-caption pass over everything. |
+| Advanced Data Protection | Unknown | Check under Settings → [your name] → iCloud → Advanced Data Protection. If it's on, also turn on "Access iCloud Data on the Web". |
+| Paid AI | **Small cost OK** | Caption every photo once with a low-cost AI vision model (about $2–5 total, see Phase 2). |
+
 The plan has three phases. Each one is useful by itself, so you can stop after any of them
 and still have something worth having.
 
@@ -21,9 +29,9 @@ Apple has no public iCloud Photos API. Every tool uses one of these four routes:
 | C. privacy.apple.com export | Ask Apple for a copy of your data | Official and complete | Slow (days), comes as many large zip files, one-time only |
 | D. iCloud for Windows | Syncs photos to a Windows folder | Simple | Flaky with large libraries |
 
-**Recommendation:** use route A for the first full export, because the face names Apple has
-already learned save a lot of work in Phase 2. Use route B on a schedule after that, so new
-photos keep flowing in. If there's no Mac, B alone is fine.
+**Decision: route B (`icloudpd`)**, since there's no Mac. The first run downloads all
+~16k items, which takes a few hours. After that it runs on a schedule and fetches only new
+photos. Route C (privacy.apple.com) is a fallback if the unofficial API ever breaks.
 
 ### What the backup has to handle
 - **HEIC/HEVC** originals: keep them as they are, and create JPEG/WebP thumbnails for viewing.
@@ -67,8 +75,7 @@ Each of the three example searches needs a different technique.
   close to the same time.
 
 ### Who: "photos of my kids" (medium)
-- If the Mac route was used, start from **Apple's existing named people**.
-- Otherwise run local face detection and embedding (InsightFace), then **cluster** the
+- Run local face detection and embedding (InsightFace), then **cluster** the
   faces. You label each cluster once ("this is Emma") and every match gets tagged.
 - A review screen lets you confirm uncertain matches. Kids' faces change a lot with age,
   so the model keeps several reference faces per person across the years.
@@ -80,9 +87,17 @@ Each of the three example searches needs a different technique.
 - For things you care about a lot (C-17, a specific pet, your house), mark around 20
   examples and the app trains a small classifier on top of the embeddings. That makes
   those tags very accurate.
-- Optional: an AI vision model writes a caption and keywords for each photo. It's richer
-  but costs money per photo. Use it for favorites or trips only, or run it once across the
-  whole library if the cost is acceptable.
+- **AI captions (decided: yes).** Send a downscaled copy (~1000 px) of each photo to an AI
+  vision model, which returns a caption plus keywords, for example "C-17 Globemaster on
+  the flight line at dusk". These are stored in the catalog and are searchable.
+  Rough cost for 16,000 photos (about 1,100 input and 200 output tokens per photo, using
+  the batch API at half price):
+  | Model | Approx. cost, whole library |
+  |---|---|
+  | Claude Haiku 5.5 (default for bulk) | **about $2–5** |
+  | Claude Sonnet 5.5 (richer, for favorites and trips) | about $30–60 |
+  After the first pass, new photos cost a fraction of a cent each. Photos are sent as
+  downscaled copies with location data removed. Anything you mark private is never sent.
 
 ### Privacy and OPSEC note
 Family photos and military aircraft photos are both sensitive. The default design runs
@@ -131,9 +146,7 @@ Ideas, roughly in order of effort:
 7. **M7 – Sharing:** links, export and the OPSEC scrub.
 
 ## Open questions
-1. Do you have a Mac (preferably Apple Silicon)? This decides the ingest route and where ML runs.
-2. Roughly how big is the library? (Settings → Apple ID → iCloud → Photos shows the size.)
-3. Is Advanced Data Protection turned on for iCloud?
-4. Where should the backup live: an external drive, a NAS, or a cloud provider?
-5. Is paying a little for AI captions acceptable, or should everything stay local and free?
-6. Who will you share with: family only, or wider (social media)?
+1. What computer will run this: a Windows PC, Linux, a NAS/home server? Does it have an NVIDIA GPU?
+2. Where should the backup live: an external drive, a NAS, or a cloud provider?
+3. Is Advanced Data Protection turned on? (See "Decisions so far".)
+4. Who will you share with: family only, or wider (social media)?
