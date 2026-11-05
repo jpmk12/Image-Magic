@@ -9,7 +9,9 @@ to relive and share those memories.
 |---|---|---|
 | Have a Mac? | **No** | Ingest uses **`icloudpd`** (route B). Apple's face names can't be exported, so the app does its own face recognition. |
 | Library size | **~16,000 items** | Roughly 50–100 GB including videos. Small enough for one external drive, and for one AI-caption pass over everything. |
-| Advanced Data Protection | Unknown | Check under Settings → [your name] → iCloud → Advanced Data Protection. If it's on, also turn on "Access iCloud Data on the Web". |
+| Advanced Data Protection | Reported OK | If sync is refused, run it with `--adp` and approve the prompt on the iPhone. |
+| Computer | **Windows laptop with an NVIDIA GPU** | Face recognition and AI image search (Phase 2) can run fast on the laptop's GPU, at no cost. |
+| Backup location | **The laptop, for now** | Library lives at `C:\Users\<you>\ImageMagic`, outside OneDrive. **Risk:** this is only one copy besides iCloud. If the laptop dies or is stolen, the local copy is gone. Add an external drive or cloud backup later (step 3 of 3-2-1). |
 | Paid AI | **Small cost OK** | Caption every photo once with a low-cost AI vision model (about $2–5 total, see Phase 2). |
 
 The plan has three phases. Each one is useful by itself, so you can stop after any of them
@@ -146,7 +148,9 @@ Ideas, roughly in order of effort:
 7. **M7 – Sharing:** links, export and the OPSEC scrub.
 
 ## Open questions
-1. What computer will run this: a Windows PC, Linux, a NAS/home server? Does it have an NVIDIA GPU?
-2. Where should the backup live: an external drive, a NAS, or a cloud provider?
-3. Is Advanced Data Protection turned on? (See "Decisions so far".)
-4. Who will you share with: family only, or wider (social media)?
+1. Who will you share with: family only, or wider (social media)?
+2. Later: which second backup do you want (an external drive or a cloud service)?
+
+## Status
+- **M1 – Backup: built.** See README.md for the Windows setup steps. Next, run it on the
+  laptop: a test sync of 20 items, then the full sync.
