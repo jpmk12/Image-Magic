@@ -37,7 +37,10 @@ jobs:
       - name: Bundle icloudpd
         shell: pwsh
         run: |
-          $src = (Get-Command icloudpd).Source
+          # The icloudpd wheel ships a standalone build at <site-packages>\icloudpd\icloudpd
+          # (no extension); Scripts\icloudpd.exe is only a launcher that needs Python.
+          $dir = python -c "import importlib.util as u; print(list(u.find_spec('icloudpd').submodule_search_locations)[0])"
+          $src = Join-Path $dir "icloudpd"
           $size = (Get-Item $src).Length
           Write-Host "icloudpd: $src ($size bytes)"
           # Must be the standalone build, not a tiny pip launcher that needs Python.
