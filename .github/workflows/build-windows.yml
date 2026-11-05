@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write   # needed to publish a Release when a v* tag is pushed
+  contents: write   # needed to publish the Release
 
 jobs:
   build:
@@ -72,6 +72,7 @@ jobs:
           $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
           if (-not (Test-Path $iscc)) { choco install innosetup --no-progress -y; }
           $version = (python -c "import image_magic; print(image_magic.__version__)")
+          "APP_VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Append
           & $iscc "/DAppVersion=$version" packaging\windows\installer.iss
           if ($LASTEXITCODE -ne 0) { throw "installer build failed" }
           Get-Item dist\ImageMagic-Setup.exe
@@ -81,8 +82,19 @@ jobs:
           name: ImageMagic-Setup
           path: dist/ImageMagic-Setup.exe
 
+      # Every push to master publishes (or refreshes) the release for the current
+      # version in pyproject/__init__, so the latest installer is always on the
+      # Releases page. Bump __version__ to start a new release.
       - name: Publish release
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: github.event_name == 'push' && (github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/v'))
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: v${{ env.APP_VERSION }}
+          name: Image Magic ${{ env.APP_VERSION }}
+          target_commitish: ${{ github.sha }}
+          make_latest: true
+          body: |
+            **Install:** download `ImageMagic-Setup.exe` below and double-click it.
+            If Windows shows "Windows protected your PC", click **More info → Run anyway**.
+            Image Magic only copies photos from iCloud. It never deletes anything in iCloud.
           files: dist/ImageMagic-Setup.exe

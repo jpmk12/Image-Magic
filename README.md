@@ -80,4 +80,5 @@ pip install -e ".[dev]"
 pytest
 ```
 The Windows installer is built by GitHub Actions (`.github/workflows/build-windows.yml`) on
-every push. Pushing a `v*` tag publishes it as a Release.
+every push. Each push to `master` publishes it on the Releases page under the version in
+`src/image_magic/__init__.py`.
