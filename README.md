@@ -63,6 +63,12 @@ program only. Your photos and settings are kept.
   Timeline, a milestone, or the viewer's "This day" link). The photos play in order on the
   right while the map on the left follows your route. Live Photos play their motion. Space
   pauses, arrows step, Esc closes. Choose Slow, Normal or Fast.
+- **AI descriptions (optional, paid):** with your own Anthropic API key (Settings), Claude
+  writes a one-sentence caption and keywords for each photo. Search then matches those words
+  too ("birthday cake", "snow on the flight line"). Only a small copy of each photo with all
+  metadata removed is sent; nothing else about you is. Mark a photo **Private** in the viewer
+  and it is never sent. Start with **Try on 25 photos**; the Home tab shows the estimated
+  cost before you describe everything (about $3–4 for 16,000 photos with Haiku).
 - **People:** turn it on once from the Home tab (about 290 MB of face models, verified by
   fingerprint). The app finds every face and groups them by person. On the **People** tab,
   click **"Who is this?"** to name a group, click the face to see all of that person's photos,
@@ -95,6 +101,9 @@ Place names are looked up **on your computer** from a bundled list of about 145,
 - Place names are worked out on your laptop. GPS locations are never sent anywhere.
 - Smart search runs on your laptop using OpenAI's open CLIP model (MIT License). Photos are
   analysed locally and never uploaded. The only network use is the one-time model download.
+- AI descriptions are the one opt-in feature that sends photo content off your laptop: a
+  1024 px JPEG copy with no EXIF (no GPS, camera or date) goes to Anthropic's API under your
+  own key, and the caption comes back. Your API key is stored in `%APPDATA%\ImageMagic\secrets.json`.
 - Face recognition uses InsightFace's open models, also on your laptop. Face data (a numeric
   signature per face, not a photo) is stored only in your library's catalog file.
 - The only outside connections are to **Apple** (downloading) and, if enabled,

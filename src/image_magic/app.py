@@ -80,6 +80,8 @@ def self_test(out_path: str, download: bool) -> int:
         from . import faces, places, search
         from .clip_tokenizer import Tokenizer
 
+        from . import describe
+        report["ai_client_ok"] = bool(describe.make_client("sk-ant-not-a-real-key"))   # SDK bundled, no network
         report["providers"] = ort.get_available_providers()
         report["tokens"] = Tokenizer().encode("a photo of a cat")
         report["place"] = places.lookup(30.3285, 35.4444).city
@@ -104,6 +106,7 @@ def self_test(out_path: str, download: bool) -> int:
             e = fm.embed([Image.new("RGB", (112, 112), (120, 100, 90))])
             report["face_embed_ok"] = bool(e.shape == (1, 512) and abs(float(np.linalg.norm(e[0])) - 1) < 1e-3)
         report["ok"] = report["tokens"] == [320, 1125, 539, 320, 2368] and report["place"] == "Petra" \
+            and report.get("ai_client_ok") \
             and report.get("search_ok", not download) \
             and report.get("face_embed_ok", not download) and report.get("faces_in_blank", 0) == 0
     except Exception as e:  # report, don't crash

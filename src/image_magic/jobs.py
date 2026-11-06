@@ -95,7 +95,8 @@ class JobRunner:
             self._cancel.clear()
             self.state = JobState(kind=kind, state="running", started=time.time())
             target = {"sync": self._run_sync, "scan": self._run_scan, "verify": self._run_verify,
-                      "index": self._run_index, "faces": self._run_faces}[kind]
+                      "index": self._run_index, "faces": self._run_faces,
+                      "describe": self._run_describe}[kind]
             threading.Thread(target=target, args=(mode,), daemon=True).start()
 
     def cancel(self) -> None:
@@ -247,6 +248,41 @@ class JobRunner:
                              {"scanned": n, **g})
         return n
 
+    def _run_describe(self, mode: str) -> None:
+        try:
+            self._describe(self._settings_provider(), standalone=True, limit=25 if mode == "test" else None)
+        except Exception as e:
+            self._finish("failed", f"AI descriptions failed: {e}")
+
+    def _describe(self, settings: Settings, standalone: bool, limit: int | None = None) -> dict:
+        from . import describe
+        key = describe.get_api_key()
+        if not key:
+            raise RuntimeError("No API key. Add your Anthropic API key in Settings.")
+        client = describe.make_client(key)
+        conn = catalog.connect(settings.db)
+        try:
+            todo = len(describe.pending(conn))
+            if limit:
+                todo = min(todo, limit)
+            self._add_log(f"Describing {todo:,} photos with {settings.ai_model} (downscaled copies, no location data)...")
+
+            def prog(done, total):
+                self.state.downloaded, self.state.total = done, total
+                self.state.message = f"Describing photos: {done:,} of {total:,}"
+            r = describe.run(conn, settings.originals, client, settings.ai_model,
+                             progress=prog, cancelled=self._cancel.is_set, limit=limit)
+            c = describe.counts(conn, settings.ai_model)
+        finally:
+            conn.close()
+        self._add_log(f"Described {r['described']:,} photos ({r['refused']} declined, {r['errors']} errors). "
+                      f"Total spent so far: about ${c['spent_usd']:.2f}.")
+        if standalone:
+            state = "cancelled" if self._cancel.is_set() else "done"
+            self._finish(state, f"AI descriptions: {r['described']:,} photos described"
+                         f"{' (stopped early)' if state == 'cancelled' else ''}. About ${c['spent_usd']:.2f} spent in total.", r)
+        return r
+
     def _run_verify(self, _mode: str) -> None:
         try:
             settings = self._settings_provider()
@@ -334,6 +370,11 @@ class JobRunner:
                 self._faces(settings, standalone=False)
             except Exception as e:
                 self._add_log(f"Finding faces failed: {e}")
+        if settings.ai_descriptions:
+            try:
+                self._describe(settings, standalone=False)
+            except Exception as e:
+                self._add_log(f"AI descriptions failed: {e}")
         self._finish("done",
                      f"Sync complete: {self.state.downloaded:,} downloaded, {r.total:,} items in your library, "
                      f"{r.trips:,} trips.",

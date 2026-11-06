@@ -254,4 +254,8 @@ Service features (flying log, squadron yearbook) slot into S2 (log) and S9 (year
   per year, first photo of each named person) with keep/dismiss that survives rebuilds.
 - **S3 – Replay: built** (v0.7.0). One player for trips, days and months: time-ordered
   photos with Live Photo motion, map route drawn as you go, fly-to on each stop.
-- Next: S4 – AI descriptions (opt-in, Claude vision), then S5 – stories and "Ask my life".
+- **S4 – AI descriptions: built** (v0.8.0). Claude (Haiku 5.5 by default, model selectable)
+  returns caption/keywords/setting/people count/text/quality as JSON per photo; downscaled,
+  metadata-stripped copies; Private flag; cost estimate and spend tracking; descriptions feed
+  the search box alongside smart search.
+- Next: S5 – Stories and "Ask my life".

@@ -53,6 +53,8 @@ class Settings:
     map_online: bool = True            # load map background tiles from OpenStreetMap
     smart_search: bool = False         # index photos for "search by description" after each sync
     people: bool = False               # find and group faces after each sync
+    ai_descriptions: bool = False      # describe new photos with Claude after each sync (paid)
+    ai_model: str = "claude-haiku-5-5"
 
     def __post_init__(self) -> None:
         if not self.library_path:
@@ -99,6 +101,8 @@ class Settings:
             else:
                 value = str(value).strip()
             setattr(s, f.name, value)
+        if s.ai_model not in ("claude-haiku-5-5", "claude-sonnet-5-5", "claude-opus-5-5"):
+            s.ai_model = "claude-haiku-5-5"
         if s.folder_structure not in FOLDER_STRUCTURES:
             s.folder_structure = "year_month"
         s.quick_sync_stop_after = max(1, min(s.quick_sync_stop_after, 10_000))

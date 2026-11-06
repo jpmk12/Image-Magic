@@ -56,6 +56,9 @@ class App:
             "search": self.search_counts(s),
             "people_on": s.people,
             "people": self.people_counts(s),
+            "ai_on": s.ai_descriptions,
+            "ai_model": s.ai_model,
+            "ai": self.ai_counts(s),
             "library": str(s.library),
             "stats": stats,
             "job": self.jobs.snapshot(),
@@ -73,6 +76,16 @@ class App:
                 conn.close()
         except ImportError:   # onnxruntime/numpy not installed
             return None
+
+    def ai_counts(self, s):
+        from . import describe
+        if not s.db.exists():
+            return {"has_key": bool(describe.get_api_key())}
+        conn = catalog.connect(s.db)
+        try:
+            return describe.counts(conn, s.ai_model)
+        finally:
+            conn.close()
 
     def people_counts(self, s):
         if not s.db.exists():
@@ -184,7 +197,9 @@ def make_handler(app: App):
                 if path == "/api/status":
                     return self._json(200, app.status())
                 if path == "/api/settings":
-                    return self._json(200, app.get_settings())
+                    from . import describe
+                    return self._json(200, {**app.get_settings(), "api_key_hint": describe.key_hint(),
+                                            "ai_models": {k: v[0] for k, v in describe.MODELS.items()}})
                 if path == "/api/log":
                     since = int(self._query().get("since") or 0)
                     return self._json(200, app.jobs.log_since(since))
@@ -239,8 +254,10 @@ def make_handler(app: App):
                 if kind == "/api/photo":
                     d = browse.photo_detail(conn, asset_id)
                     if d:
-                        from . import faces
+                        from . import describe, faces
                         d["faces"] = faces.faces_in_photo(conn, asset_id)
+                        d["description"] = describe.for_photo(conn, asset_id)
+                        d["private"] = bool(conn.execute("SELECT private FROM assets WHERE id = ?", (asset_id,)).fetchone()[0])
                     return self._json(200, d) if d else self._json(404, {"error": "not found"})
                 if kind == "/media/face":
                     from . import faces
@@ -307,15 +324,20 @@ def make_handler(app: App):
                 conn.close()
 
         def _search(self, conn, settings, q: dict) -> dict:
-            from . import search
-            if not search.model_ready():
-                raise ValueError("Smart search isn't set up yet. Turn it on from the Home tab.")
+            from . import describe, search
             text = q["q"].strip()[:200]
-            has_filters = any(q.get(k) for k in ("year", "country", "city", "trip", "kind"))
+            has_filters = any(q.get(k) for k in ("year", "country", "city", "trip", "kind", "person", "month", "day", "chapter"))
             allowed = None
             if has_filters:
                 allowed = {r["id"] for r in browse.photos(conn, q, 0, 10**9)["items"]}
-            hits = search.search(conn, str(settings.db), search.Model.get(), text, allowed)
+            # Word matches in AI descriptions come first, then smart-search matches.
+            hits = [(i, 1.0) for i in describe.text_search(conn, text, allowed)]
+            seen = {i for i, _ in hits}
+            if search.model_ready():
+                hits += [(i, s) for i, s in search.search(conn, str(settings.db), search.Model.get(), text, allowed)
+                         if i not in seen]
+            elif not hits and not describe.counts(conn)["described"]:
+                raise ValueError("Search isn't set up yet. Turn on smart search or AI descriptions from the Home tab.")
             offset, limit = int(q.get("offset") or 0), min(int(q.get("limit") or 200), 500)
             page = hits[offset:offset + limit]
             items = browse.by_ids(conn, [h[0] for h in page])
@@ -374,11 +396,14 @@ def make_handler(app: App):
             try:
                 data = self._body()
                 if path == "/api/settings":
+                    from . import describe
+                    if "anthropic_api_key" in data:
+                        describe.set_api_key(str(data.pop("anthropic_api_key")))
                     return self._json(200, app.save_settings(data))
                 if path == "/api/run":
                     kind = data.get("kind", "sync")
                     mode = data.get("mode", "full")
-                    if kind not in ("sync", "scan", "verify", "index", "faces") or mode not in ("full", "quick", "test"):
+                    if kind not in ("sync", "scan", "verify", "index", "faces", "describe") or mode not in ("full", "quick", "test"):
                         raise ValueError("unknown task")
                     if kind == "sync" and not app.settings_provider().apple_id:
                         raise ValueError("Enter your Apple ID in Settings first.")
@@ -395,6 +420,14 @@ def make_handler(app: App):
                     return self._people_action(path, data)
                 if path.startswith("/api/timeline/"):
                     return self._timeline_action(path, data)
+                if path == "/api/private":
+                    from . import describe
+                    settings, conn = app.db()
+                    try:
+                        describe.set_private(conn, int(data["id"]), bool(data.get("private", True)))
+                    finally:
+                        conn.close()
+                    return self._json(200, {"ok": True})
                 if path == "/api/open-folder":
                     _open_folder(app.settings_provider().library)
                     return self._json(200, {"ok": True})

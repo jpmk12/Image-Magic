@@ -240,6 +240,21 @@
       </div>
     </div>
 
+    <div class="panel" id="aipanel">
+      <div class="row" style="justify-content:space-between">
+        <h2 style="margin:0">AI descriptions</h2>
+        <span class="small muted">Optional. Uses your Anthropic API key; sends small copies with no location data.</span>
+      </div>
+      <p class="small">Claude writes a one-sentence caption and keywords for each photo, so you can search for
+        things like <i>"birthday cake"</i> or <i>"snow on the flight line"</i> by the words. Photos marked
+        <b>Private</b> in the viewer are never sent.</p>
+      <div class="row">
+        <button class="btn" id="ai-try">Try on 25 photos</button>
+        <button class="btn primary" id="ai-all">Describe all new photos</button>
+        <span class="small muted" id="ai-note"></span>
+      </div>
+    </div>
+
     <div class="panel">
       <h2>Your library</h2>
       <div class="stats" id="stats"><p class="muted">Nothing downloaded yet.</p></div>
@@ -367,6 +382,20 @@
           <input type="number" name="quick_sync_stop_after" min="1" max="10000" style="max-width:120px">
           <small>…this many photos in a row that you already have. Higher is more thorough but slower.</small>
         </label>
+      </div>
+
+      <div class="panel">
+        <h2>AI descriptions (optional, paid)</h2>
+        <label class="field"><span>Anthropic API key</span>
+          <input type="password" name="anthropic_api_key" placeholder="sk-ant-…" autocomplete="off">
+          <small id="key-hint">Get one at console.anthropic.com. Stored only on this computer, in your settings folder.</small>
+        </label>
+        <label class="field"><span>Model</span>
+          <select name="ai_model"></select>
+          <small>Haiku is plenty for captions and keywords. Costs are estimates.</small>
+        </label>
+        <label class="check"><input type="checkbox" name="ai_descriptions">
+          <span>Describe new photos after each sync</span></label>
       </div>
 
       <div class="panel">
@@ -521,7 +550,7 @@ function renderJob(j) {
   $$("[data-run]").forEach(b => b.disabled = busy);
   $("#job-msg").textContent = j.message || "Working...";
   const bar = $("#job-bar");
-  if (j.total && (j.kind === "sync" || j.kind === "index" || j.kind === "faces")) {
+  if (j.total && ["sync", "index", "faces", "describe"].includes(j.kind)) {
     bar.classList.remove("indeterminate");
     bar.firstElementChild.style.width = Math.min(100, 100 * j.downloaded / j.total) + "%";
   } else {
@@ -561,6 +590,7 @@ async function refresh() {
     renderJob(st.job);
     renderSmart(st);
     renderPeoplePanel(st);
+    renderAiPanel(st);
   } catch (e) { /* app may be quitting */ }
 }
 
@@ -656,6 +686,22 @@ async function mergePerson(p) {
   loadPeople(); refresh();
 }
 
+function renderAiPanel(st) {
+  const a = st.ai || {}, busy = ["running", "needs_password", "needs_code"].includes(st.job.state);
+  const todo = Math.max(0, (a.photos || 0) - (a.described || 0));
+  $("#ai-try").disabled = busy || !a.has_key || !todo; $("#ai-all").disabled = busy || !a.has_key || !todo;
+  if (!a.has_key) $("#ai-note").textContent = "Add your API key in Settings to use this.";
+  else if (!todo && a.described) $("#ai-note").textContent = `All ${fmt(a.described)} photos described. Spent about $${a.spent_usd.toFixed(2)} so far.`;
+  else $("#ai-note").textContent = `${fmt(a.described || 0)} of ${fmt(a.photos || 0)} described. Describing the remaining ${fmt(todo)} costs about $${(a.estimate_usd || 0).toFixed(2)}${a.spent_usd ? ` (spent $${a.spent_usd.toFixed(2)} so far)` : ""}.`;
+}
+$("#ai-try").onclick = () => api("/api/run", { kind: "describe", mode: "test" }).then(renderJob).catch(e => toast(e.message));
+$("#ai-all").onclick = async () => {
+  const st = await api("/api/status").catch(() => null);
+  const est = st && st.ai ? st.ai.estimate_usd.toFixed(2) : "?";
+  if (!confirm(`Describe all new photos with Claude? Estimated cost about $${est}. You can stop at any time.`)) return;
+  api("/api/run", { kind: "describe", mode: "full" }).then(renderJob).catch(e => toast(e.message));
+};
+
 // ---- actions
 $$("[data-run]").forEach(b => b.onclick = async () => {
   if (b.dataset.mode === "full" && !confirm(
@@ -683,6 +729,10 @@ $("#signin-form").onsubmit = async ev => {
 async function loadSettings() {
   const s = await api("/api/settings");
   const f = $("#settings-form");
+  const ms = f.elements.ai_model; ms.length = 0;
+  for (const [id, label] of Object.entries(s.ai_models || {})) ms.add(new Option(label, id));
+  f.elements.anthropic_api_key.value = "";
+  f.elements.anthropic_api_key.placeholder = s.api_key_hint ? `saved (${s.api_key_hint}) — paste a new key to replace` : "sk-ant-…";
   for (const [k, v] of Object.entries(s)) {
     const el = f.elements[k]; if (!el) continue;
     if (el.type === "checkbox") el.checked = !!v; else el.value = v;
@@ -694,6 +744,7 @@ $("#settings-form").onsubmit = async ev => {
   const f = ev.target, data = {};
   for (const el of f.elements) {
     if (!el.name) continue;
+    if (el.name === "anthropic_api_key") { if (el.value.trim()) data[el.name] = el.value.trim(); continue; }
     data[el.name] = el.type === "checkbox" ? el.checked : el.value;
   }
   try {
@@ -855,6 +906,11 @@ async function openLightbox(i, items) {
       if (onclick) v.onclick = onclick;
       div.append(v); info.append(div);
     };
+    if (d.description && d.description.status === "ok") {
+      add("About", d.description.caption);
+      add("Keywords", d.description.keywords.join(", "));
+      if (d.description.text) add("Text in photo", d.description.text);
+    }
     add("Taken", d.taken_at ? new Date(d.taken_at).toLocaleString() : "");
     add("Place", [d.city, d.region, d.country].filter(Boolean).join(", "));
     add("Trip", d.trip_title, () => { closeLightbox(); showTab("photos"); setFilters({ trip: d.trip_id, tripTitle: d.trip_title }); });
@@ -873,6 +929,8 @@ async function openLightbox(i, items) {
     add("Camera", [d.camera_make, d.camera_model].filter(Boolean).join(" "));
     add("Size", d.width ? `${d.width} × ${d.height} · ${bytes(d.size)}` : bytes(d.size));
     add("File", d.path);
+    add("Privacy", d.private ? "🔒 Private — never sent to AI or shared. Click to make normal." : "Normal — click to mark Private (never sent to AI or shared)",
+        async () => { await api("/api/private", { id: d.id, private: !d.private }).catch(e => toast(e.message)); openLightbox(lbIndex, lbItems === grid.items ? undefined : lbItems); });
     if (d.live_video_id) add("Live Photo", "Play motion", () => {
       stage.querySelectorAll("img,video").forEach(n => n.remove());
       const v = document.createElement("video"); v.src = media("view", d.live_video_id);
