@@ -113,6 +113,10 @@ program only. Your photos and settings are kept.
   through the years; **Save as GIF** exports it, and **Make the book** builds a printable PDF
   (cover, growing-up page, then the best photos of each year with captions). Exports land in
   the `exports` folder inside your library.
+- **Books:** **📖 Book** on a trip card makes a printable PDF (cover, your story, a page per
+  day with the best photos, dated and captioned); **📖 Year book** at the top of the Timeline
+  makes one for a year (a page per month and per trip, with the year's numbers); **📖** on an
+  event card makes a short one. Books land in the `exports` folder and download.
 - **Memories tab:** **Shuffle a memory** picks a random good moment (best-rated photos first,
   then photos of named people, then trips) with its date, place, trip and chapter. **On this
   day** shows photos from today's date in past years. **Then & now** pairs photos taken at the

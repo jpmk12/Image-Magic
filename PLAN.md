@@ -311,6 +311,8 @@ Service features (flying log, squadron yearbook) slot into S2 (log) and S9 (year
 - **Flying log** (v0.23.0): flying_photos table rebuilt from descriptions (aircraft term
   list), tails via `\d{2}-\d{4}|\d{5}`; `flying` filter; strict share removes photos with
   readable text or strict-term content (place names excluded from that test) and strips the page.
+- **Books** (v0.24.0): books.render (cover, story, sections of ≤ 6 best photos); trip book per
+  day, year book per month off-trip plus per trip with year-review lines, event book.
 
 ---
 
@@ -351,7 +353,7 @@ stories, Ask, memories, year review, books and share cover the "relive" side.
 - **Where was I on this day each year**: built (v0.22.0) as a map layer.
 - **Flying log**: built (v0.23.0). Bases, flying days, tail numbers (regex on readable
   text), strict share (auto-removal + no captions/places/names).
-- **Printables.** Trip books and year books (the person book exists): one PDF per trip or year.
+- **Printables**: built (v0.24.0). Trip, year and event books via a shared renderer.
 - **Second backup.** A one-click copy of the library to an external drive or S3/B2, with
   verification. The backup half of the plan is still single-copy.
 - **Phone access.** The app on the laptop, viewed from the phone on the same Wi-Fi (needs

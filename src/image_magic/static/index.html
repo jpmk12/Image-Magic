@@ -460,7 +460,7 @@
     <div class="panel" id="yr-panel">
       <div class="row" style="justify-content:space-between">
         <div class="row"><h2 style="margin:0">Your year in review</h2><select id="yr-year"></select></div>
-        <button class="btn primary" id="yr-play">▶ The year in 30 seconds</button>
+        <div class="row"><button class="btn" id="yr-book" title="A printable PDF: a page per month and per trip">📖 Year book</button><button class="btn primary" id="yr-play">▶ The year in 30 seconds</button></div>
       </div>
       <div class="yr" id="yr-stats"></div>
       <div id="yr-lines" class="small"></div>
@@ -1421,6 +1421,7 @@ async function loadReview(year) {
   $("#yr-lines").replaceChildren(...lines.map(t => { const p = document.createElement("div"); p.textContent = t; return p; }));
   $("#yr-best").replaceChildren(...s.best.map((it, i) => tileFor(it, s.best, i)));
   $("#yr-play").onclick = () => openReplay({ year: s.year, best: 1 }, s.year + " in 30 seconds");
+  $("#yr-book").onclick = () => downloadBook("year", s.year);
 }
 $("#yr-year").onchange = e => loadReview(e.target.value);
 async function loadTimeline() {
@@ -1825,6 +1826,18 @@ function showGrow(i, stop) {
 }
 $("#grow-play").onclick = () => { if (grow.playing) showGrow(grow.i, true); else { grow.playing = true; $("#grow-play").textContent = "❚❚"; showGrow(grow.i + 1); } };
 $("#grow-close").onclick = () => { clearTimeout(grow.timer); grow.playing = false; $("#grow").classList.add("hidden"); };
+async function downloadBook(kind, id, note) {
+  if (note) note.textContent = "Making the book… (a minute or two)";
+  toast("Making the book… it will download when ready.");
+  try {
+    const r = await api(`/api/book?kind=${kind}&id=${encodeURIComponent(id)}`);
+    const res = await fetch(`/media/export/${encodeURIComponent(r.file)}`, { headers: { "X-Token": TOKEN } });
+    const blob = await res.blob(), url = URL.createObjectURL(blob);
+    const a = document.createElement("a"); a.href = url; a.download = r.file; a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+    if (note) note.textContent = "Saved to the exports folder in your library."; toast("Book ready: " + r.file);
+  } catch (e) { toast(e.message); if (note) note.textContent = e.message; }
+}
 async function exportPerson(kind) {
   $("#grow-note").textContent = kind === "book" ? "Making the book… (a minute or two)" : "Saving GIF…";
   try {
@@ -2059,7 +2072,9 @@ async function loadTrips() {
     title.title = "Click to rename"; title.onclick = async ev => { ev.stopPropagation(); const name = prompt("Trip title:", t.title); if (name && name.trim()) { await api("/api/curate/trip-rename", { id: t.id, title: name }).catch(e => toast(e.message)); loadTrips(); } };
     const st = document.createElement("button"); st.className = "btn"; st.textContent = "✍ Story";
     st.style.margin = "0 14px 12px"; st.onclick = ev => { ev.stopPropagation(); openStory("trip", t.id, t.title); };
-    const rowb = document.createElement("div"); rowb.className = "row"; rowb.append(play, st, more);
+    const bk = document.createElement("button"); bk.className = "btn"; bk.textContent = "📖 Book"; bk.title = "A printable PDF: cover, story, a page per day";
+    bk.style.margin = "0 14px 12px"; bk.onclick = ev => { ev.stopPropagation(); downloadBook("trip", t.id); };
+    const rowb = document.createElement("div"); rowb.className = "row"; rowb.append(play, st, more, bk);
     b.append(rowb);
     return b;
   }));
@@ -2090,7 +2105,9 @@ async function loadEvents() {
     sh.style.margin = "0 14px 12px"; sh.onclick = ev => { ev.stopPropagation(); openShare({ event: e.id }, e.title); };
     const vn = document.createElement("button"); vn.className = "btn"; vn.textContent = "🎙 Note"; vn.title = "Record a voice note for this event";
     vn.style.margin = "0 14px 12px"; vn.onclick = ev => { ev.stopPropagation(); openVoice("event", e.id, e.title); };
-    const rowb = document.createElement("div"); rowb.className = "row"; rowb.append(play, sh, vn);
+    const bk = document.createElement("button"); bk.className = "btn"; bk.textContent = "📖"; bk.title = "Printable PDF of this event";
+    bk.style.margin = "0 14px 12px"; bk.onclick = ev => { ev.stopPropagation(); downloadBook("event", e.id); };
+    const rowb = document.createElement("div"); rowb.className = "row"; rowb.append(play, sh, vn, bk);
     b.append(rowb);
     return b;
   }));
