@@ -124,7 +124,7 @@ class JobRunner:
             target = {"sync": self._run_sync, "scan": self._run_scan, "verify": self._run_verify,
                       "index": self._run_index, "faces": self._run_faces,
                       "describe": self._run_describe, "import_check": self._run_import_check,
-                      "import": self._run_import, "quality": self._run_quality}[kind]
+                      "import": self._run_import, "quality": self._run_quality, "backup": self._run_backup}[kind]
             threading.Thread(target=target, args=(mode,), daemon=True).start()
 
     def cancel(self) -> None:
@@ -208,6 +208,27 @@ class JobRunner:
         self.state.message = "Finding events..."
         events.rebuild(conn)
         return n
+
+    def _run_backup(self, _mode: str) -> None:
+        from . import backup
+        try:
+            settings = self._settings_provider()
+            dest = Path(self.payload.get("dest") or "").expanduser() if self.payload.get("dest") else settings.backup
+            if not dest:
+                raise ValueError("Choose a backup folder in Settings first.")
+            self.state.message = "Comparing with the backup..."
+            conn = catalog.connect(settings.db)
+            try:
+                r = backup.run(conn, settings.library, dest, progress=self._progress("Copied"), cancelled=self._cancel.is_set)
+            finally:
+                conn.close()
+            for p in r.failed[:50]:
+                self._add_log(f"BACKUP FAILED  {p}")
+            self._finish("cancelled" if self._cancel.is_set() else ("failed" if r.failed else "done"),
+                         f"Backup {'stopped' if self._cancel.is_set() else 'finished'}: {r.copied:,} files copied and verified, "
+                         f"{r.skipped:,} already there, {len(r.failed)} failed.", r.as_dict())
+        except Exception as e:
+            self._finish("failed", f"Backup failed: {e}")
 
     def _run_quality(self, _mode: str) -> None:
         try:

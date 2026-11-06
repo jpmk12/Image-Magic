@@ -56,6 +56,7 @@ class Settings:
     people: bool = False               # find and group faces after each sync
     ai_descriptions: bool = False      # describe new photos with Claude after each sync (paid)
     ai_model: str = "claude-haiku-5-5"
+    backup_path: str = ""              # second copy of the library (external drive, NAS); empty = off
 
     def __post_init__(self) -> None:
         if not self.library_path:
@@ -127,3 +128,7 @@ class Settings:
     @property
     def db(self) -> Path:
         return self.library / DB_NAME
+
+    @property
+    def backup(self) -> Path | None:
+        return Path(self.backup_path).expanduser() if self.backup_path else None

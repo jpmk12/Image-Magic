@@ -57,14 +57,15 @@ class App:
                 try:
                     stats = catalog.stats(conn)
                     extra = {"search": self.search_counts_conn(conn), "people": self.people_counts_conn(conn),
-                             "ai": self.ai_counts_conn(conn, s), "quality": self.quality_counts_conn(conn)}
+                             "ai": self.ai_counts_conn(conn, s), "quality": self.quality_counts_conn(conn),
+                             "backup": self.backup_status_conn(conn, s)}
                 finally:
                     conn.close()
                 cached = {"stats": stats, **extra}
                 self._stats_cache = (time.time(), key, cached)
                 stats = cached["stats"]
         else:
-            cached = {"search": None, "people": None, "ai": {"has_key": False}, "quality": None}
+            cached = {"search": None, "people": None, "ai": {"has_key": False}, "quality": None, "backup": None}
             from . import describe
             cached["ai"] = {"has_key": bool(describe.get_api_key())}
         return {
@@ -79,6 +80,7 @@ class App:
             "ai_model": s.ai_model,
             "ai": cached["ai"],
             "quality": cached.get("quality"),
+            "backup": cached.get("backup"),
             "library": str(s.library),
             "stats": stats,
             "job": self.jobs.snapshot(),
@@ -94,6 +96,10 @@ class App:
     def ai_counts_conn(self, conn, s):
         from . import describe
         return describe.counts(conn, s.ai_model)
+
+    def backup_status_conn(self, conn, s):
+        from . import backup
+        return backup.status(conn, s.library, s.backup)
 
     def quality_counts_conn(self, conn):
         from . import quality
@@ -585,7 +591,7 @@ def make_handler(app: App):
                 if path == "/api/run":
                     kind = data.get("kind", "sync")
                     mode = data.get("mode", "full")
-                    if kind not in ("sync", "scan", "verify", "index", "faces", "describe", "quality") or mode not in ("full", "quick", "test"):
+                    if kind not in ("sync", "scan", "verify", "index", "faces", "describe", "quality", "backup") or mode not in ("full", "quick", "test"):
                         raise ValueError("unknown task")
                     if kind == "sync" and not app.settings_provider().apple_id:
                         raise ValueError("Enter your Apple ID in Settings first.")

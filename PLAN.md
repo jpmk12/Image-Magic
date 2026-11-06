@@ -313,6 +313,9 @@ Service features (flying log, squadron yearbook) slot into S2 (log) and S9 (year
   readable text or strict-term content (place names excluded from that test) and strips the page.
 - **Books** (v0.24.0): books.render (cover, story, sections of ≤ 6 best photos); trip book per
   day, year book per month off-trip plus per trip with year-review lines, event book.
+- **Second backup** (v0.25.0): backup.run mirrors originals/ and voice/ (skip by size+mtime,
+  copy to .part, SHA-256 against the catalog or source, rename), sqlite backup() snapshot of
+  the catalog, marker file, free-space and overlap checks; job + Home panel + setting.
 
 ---
 
@@ -354,8 +357,9 @@ stories, Ask, memories, year review, books and share cover the "relive" side.
 - **Flying log**: built (v0.23.0). Bases, flying days, tail numbers (regex on readable
   text), strict share (auto-removal + no captions/places/names).
 - **Printables**: built (v0.24.0). Trip, year and event books via a shared renderer.
-- **Second backup.** A one-click copy of the library to an external drive or S3/B2, with
-  verification. The backup half of the plan is still single-copy.
+- **Second backup**: built (v0.25.0) to a folder on another drive, verified by checksum. Cloud
+  targets (S3/B2) would need credentials and a client; a synced folder (OneDrive, Dropbox,
+  Backblaze's folder backup) as the destination covers most of that today.
 - **Phone access.** The app on the laptop, viewed from the phone on the same Wi-Fi (needs
   TLS + a pairing code; today it is loopback-only on purpose).
 - **Family edition.** A shared library with contributions from several people needs hosting;

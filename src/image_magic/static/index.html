@@ -396,6 +396,18 @@
       </div>
     </div>
 
+    <div class="panel" id="backuppanel">
+      <div class="row" style="justify-content:space-between">
+        <h2 style="margin:0">Second copy</h2>
+        <span class="small muted">3-2-1: iCloud, this laptop, and one more drive.</span>
+      </div>
+      <p class="small" id="backup-text">Copy the whole library to another drive and verify every file by checksum. Only new or changed files are copied each time.</p>
+      <div class="row">
+        <button class="btn primary" id="backup-run">Back up now</button>
+        <span class="small muted" id="backup-note"></span>
+      </div>
+    </div>
+
     <div class="panel" id="qualitypanel">
       <div class="row" style="justify-content:space-between">
         <h2 style="margin:0">Best photos</h2>
@@ -586,6 +598,10 @@
             <option value="year">Year only (2019)</option>
           </select>
           <small id="layout-warn">Pick this before your first full download. Changing it later downloads everything again into the new layout.</small>
+        </label>
+        <label class="field"><span>Second copy (backup folder)</span>
+          <input type="text" name="backup_path" placeholder="E:\ImageMagic-backup">
+          <small>An empty folder on another drive (external disk, NAS). <b>Back up now</b> on the Home tab copies every photo there and verifies each copy by checksum. Nothing is ever deleted from it.</small>
         </label>
       </div>
 
@@ -892,7 +908,7 @@ function renderJob(j) {
   $$("[data-run]").forEach(b => b.disabled = busy);
   $("#job-msg").textContent = j.message || "Working...";
   const bar = $("#job-bar");
-  if (j.total && ["sync", "index", "faces", "describe", "import_check", "import"].includes(j.kind)) {
+  if (j.total && ["sync", "index", "faces", "describe", "import_check", "import", "backup", "quality"].includes(j.kind)) {
     bar.classList.remove("indeterminate");
     bar.firstElementChild.style.width = Math.min(100, 100 * j.downloaded / j.total) + "%";
   } else {
@@ -934,6 +950,7 @@ async function refresh() {
     renderPeoplePanel(st);
     renderAiPanel(st);
     renderQualityPanel(st);
+    renderBackupPanel(st);
     renderImport(st.job);
   } catch (e) { /* app may be quitting */ }
 }
@@ -962,6 +979,15 @@ $("#smart-on").onclick = async () => {
   } catch (e) { toast(e.message); }
 };
 $("#smart-update").onclick = () => api("/api/run", { kind: "index" }).then(renderJob).catch(e => toast(e.message));
+
+function renderBackupPanel(st) {
+  const b = st.backup, busy = ["running", "needs_password", "needs_code"].includes(st.job.state);
+  $("#backup-run").disabled = busy || !b || !b.configured;
+  $("#backup-note").textContent = !b || !b.configured ? "Choose a backup folder in Settings first."
+    : !b.present ? "The backup drive is not plugged in."
+    : (b.last ? `Last backup ${when(b.last)}${b.last_failed ? ` (${b.last_failed} files failed)` : ""}.` : "Never backed up.") + (b.free_gb != null ? ` ${b.free_gb} GB free there.` : "");
+}
+$("#backup-run").onclick = () => api("/api/run", { kind: "backup" }).then(renderJob).catch(e => toast(e.message));
 
 function renderQualityPanel(st) {
   const q = st.quality, busy = ["running", "needs_password", "needs_code"].includes(st.job.state);

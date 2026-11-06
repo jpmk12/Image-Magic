@@ -151,6 +151,11 @@ program only. Your photos and settings are kept.
   exact copies are skipped, look-alikes (the same picture resized or re-saved) are listed with
   the library photo they match, and the rest are new. Click **Import** to copy the new ones into
   `originals/imported/<year>/<month>/`. Your files are copied, never moved.
+- **Second copy:** set a backup folder on another drive in Settings, then **Back up now** on
+  the Home tab. Every file under `originals` and `voice` is copied (only new or changed files
+  on later runs), read back and checked against its SHA-256 in the catalog, and a consistent
+  snapshot of the catalog goes with it. Nothing is ever deleted from the backup folder; an
+  unplugged drive or a folder with other files in it is refused.
 - **Best photos:** every photo gets a local quality rating (sharpness, exposure, contrast,
   computed on your laptop from the thumbnail, free) and bursts of near-identical shots are
   grouped so one keeper stands for the burst. Tick **Best only** on the Photos tab, and the
@@ -257,6 +262,7 @@ Place names are looked up **on your computer** from a bundled list of about 145,
 | Map background | Turn off to keep map views from going to OpenStreetMap |
 | Auto sync | Get new photos every hour, every 6 hours or daily while the app is open |
 | "Get new photos" stops after | How many already-downloaded photos in a row before a quick sync stops |
+| Second copy (backup folder) | An empty folder on another drive; **Back up now** on the Home tab mirrors the library there with checksum verification |
 
 Settings are stored in `%APPDATA%\ImageMagic\settings.json`. Your Apple ID password is
 **never** stored by Image Magic. The iCloud sign-in session is kept by icloudpd in
