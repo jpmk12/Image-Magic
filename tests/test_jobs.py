@@ -58,3 +58,11 @@ def _alive(pid: int) -> bool:
             return not any(line.startswith("State:") and "Z" in line for line in f)
     except FileNotFoundError:
         return False
+
+
+def test_icloudpd_failures_are_explained():
+    from image_magic.jobs import _explain_icloudpd_failure
+    msg = _explain_icloudpd_failure(1, ["ERROR Apple iCloud setup is not complete. Please log into https://icloud.com/"])
+    assert "icloud.com" in msg and "exit code" not in msg
+    assert "Advanced Data Protection" in _explain_icloudpd_failure(1, ["enable Access iCloud Data on the Web"])
+    assert "exit code 7" in _explain_icloudpd_failure(7, ["something else"])

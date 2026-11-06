@@ -19,6 +19,30 @@ _TOTAL_RE = re.compile(r"Downloading (?:the first )?([\d,]+) ")
 _DONE_RE = re.compile(r"\bDownloaded \S")
 
 
+KNOWN_FAILURES = [
+    ("setup is not complete", "Apple wants you to sign in at icloud.com once in a browser first (this happens after a "
+     "sign-in from a new device). Open https://www.icloud.com on this computer, sign in with the same Apple ID, accept "
+     "any prompts, open Photos there once, then click Get new photos again."),
+    ("Access iCloud Data on the Web", "Your account uses Advanced Data Protection. On your iPhone: Settings → your name → "
+     "iCloud → Advanced Data Protection → turn on 'Access iCloud Data on the Web'. Then tick the ADP box in Image Magic's "
+     "Settings and try again."),
+    ("ADP", "Your account may use Advanced Data Protection. On your iPhone turn on 'Access iCloud Data on the Web' "
+     "(Settings → your name → iCloud → Advanced Data Protection), tick the ADP box in Settings here, and try again."),
+    ("Invalid email/password", "Apple rejected the password. Check the Apple ID in Settings and try again."),
+    ("locked", "Apple has temporarily locked sign-in attempts for this account. Wait a while, then try again."),
+    ("Two-factor authentication is required", "The iPhone code wasn't accepted in time. Click Get new photos again and "
+     "enter the new code as soon as it appears."),
+]
+
+
+def _explain_icloudpd_failure(code: int, recent_log: list[str]) -> str:
+    text = "\n".join(recent_log)
+    for needle, advice in KNOWN_FAILURES:
+        if needle.lower() in text.lower():
+            return f"Sync did not finish. {advice}"
+    return f"Sync did not finish (icloudpd exit code {code}). See the Activity log for details."
+
+
 def _kill_tree(proc: subprocess.Popen) -> None:
     """Stop icloudpd and its child processes.
 
@@ -379,7 +403,7 @@ class JobRunner:
             self._finish("cancelled", "Sync stopped. Run it again any time; it picks up where it left off.")
             return
         if code != 0:
-            self._finish("failed", f"Sync did not finish (icloudpd exit code {code}). See the log for details.")
+            self._finish("failed", _explain_icloudpd_failure(code, [line for _, line in list(self.log)[-80:]]))
             return
         conn = catalog.connect(settings.db)
         catalog.set_meta(conn, "last_sync", catalog.now_iso())
