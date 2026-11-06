@@ -297,6 +297,9 @@ Service features (flying log, squadron yearbook) slot into S2 (log) and S9 (year
   clustering (3 h gap, 2 km, ≥ 4 photos), stable keys, auto titles (weekday, part of day,
   place or "at home", top caption keyword), rename survives rebuilds, event filter, replay
   and share.
+- **Home story** (v0.19.0): per chapter, photos within ~5 km of home and off trips; seasons
+  per year (December rolls into the next winter) with best-of per season; same-spot series
+  (55 m cells seen in ≥ 3 years); people at home; "a year at home" replay.
 
 ---
 
@@ -318,7 +321,7 @@ stories, Ask, memories, year review, books and share cover the "relive" side.
 2. **Events, not just days.** Life happens in events (a birthday party, a hike, a sortie):
    clusters of photos within a few hours and a few hundred metres. Trips are the big version;
    events are the small one. Events become the unit for stories, replay and sharing.
-3. **The home story.** Trips get all the attention; most of life is at home. "A year at home"
+3. **The home story** (built, v0.19.0). Trips get all the attention; most of life is at home. "A year at home"
    views: seasons, the backyard through the years, the kitchen table, first days of school.
 4. **Narration and voice.** Stories are read aloud by the browser voice today. A recorded
    voice note per photo or event ("their voices" from the plan) is the most personal layer

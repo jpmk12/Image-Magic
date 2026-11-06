@@ -717,6 +717,16 @@
   </div>
 </div>
 
+<div class="story hidden" id="home-dlg">
+  <div class="card" style="width:min(960px,100%)">
+    <div class="row" style="justify-content:space-between">
+      <h2 id="home-title" style="margin:0"></h2>
+      <button class="btn" id="home-close">✕</button>
+    </div>
+    <p class="muted small" id="home-meta"></p>
+    <div id="home-body"></div>
+  </div>
+</div>
 <div class="story hidden" id="story">
   <div class="card">
     <div class="row" style="justify-content:space-between">
@@ -1398,7 +1408,9 @@ async function loadTimeline() {
     sub.textContent = `${fmtDate(ch.start_at)} – ${fmtDate(ch.end_at)} · ${fmt(ch.photo_count)} photos${ch.auto === 0 ? " · edited" : ""}`;
     const stb = document.createElement("button"); stb.className = "btn"; stb.textContent = "✍ Story"; stb.style.marginLeft = "auto";
     stb.onclick = () => openStory("chapter", ch.id, ch.title);
-    txt.append(title, sub); head.append(img, txt); if (ch.id) head.append(stb); sec.append(head);
+    const hb = document.createElement("button"); hb.className = "btn"; hb.textContent = "🏠 At home"; hb.title = "A year at home, season by season";
+    hb.onclick = () => openHome(ch);
+    txt.append(title, sub); head.append(img, txt); if (ch.id) head.append(stb, hb); sec.append(head);
     const y0 = +ch.start_at.slice(0, 4), y1 = +ch.end_at.slice(0, 4);
     for (let y = y1; y >= y0; y--) {
       const inRange = m => m >= ch.start_at.slice(0, 7) && m <= ch.end_at.slice(0, 7);
@@ -1459,7 +1471,7 @@ const rp = { items: [], i: -1, timer: null, playing: false, map: null, line: nul
 $("#f-replay").onclick = () => openReplay(grid.filters, $("#f-trip").textContent.replace("✕", ""));
 async function openReplay(filters, title) {
   const q = new URLSearchParams();
-  for (const k of ["trip", "day", "month", "person", "chapter", "year", "country", "city", "best", "event", "n"]) if (filters[k]) q.set(k, filters[k]);
+  for (const k of ["trip", "day", "month", "person", "chapter", "year", "country", "city", "best", "event", "n", "home"]) if (filters[k]) q.set(k, filters[k]);
   let items;
   try { items = await api("/api/replay?" + q); } catch (e) { return toast(e.message); }
   if (!items.length) return toast("Nothing to replay here.");
@@ -1695,6 +1707,37 @@ $("#grow-book").onclick = () => exportPerson("book");
 
 // ---- stories
 const story = { kind: "", id: 0 };
+async function openHome(ch) {
+  $("#home-title").textContent = "At home: " + ch.title; $("#home-meta").textContent = "Loading…";
+  $("#home-body").replaceChildren(); $("#home-dlg").classList.remove("hidden");
+  let h; try { h = await api("/api/home?chapter=" + ch.id); } catch (e) { $("#home-meta").textContent = e.message; return; }
+  $("#home-meta").textContent = h.photos ? `${fmt(h.photos)} photos at home, not counting trips.` + (h.people.length ? " Most often with " + h.people.map(p => p.name).join(", ") + "." : "")
+    : "No photos near this home yet (photos need a location).";
+  const body = $("#home-body"), el = (t, c, txt) => { const d = document.createElement(t); if (c) d.className = c; if (txt) d.textContent = txt; return d; };
+  if (h.spots.length) {
+    body.append(el("h3", "", "The same spot through the years"));
+    for (const sp of h.spots.slice(0, 4)) {
+      const row = el("div", "yr-best");
+      const items = sp.frames.map(f => f.item);
+      sp.frames.forEach((f, i) => { const w = el("div"); w.style.textAlign = "center"; const t = tileFor(f.item, items, i); w.append(t, el("div", "small muted", f.year)); row.append(w); });
+      body.append(row);
+    }
+  }
+  for (const y of [...h.years].reverse()) {
+    const head = el("div", "row"); head.style.justifyContent = "space-between"; head.style.marginTop = "14px";
+    head.append(el("h3", "", `${y.year} at home · ${fmt(y.count)} photos`));
+    const play = el("button", "btn primary", "▶ A year at home"); play.onclick = () => openReplay({ chapter: ch.id, home: 1, year: y.year }, `${y.year} at home`);
+    head.append(play); body.append(head);
+    for (const sn of y.seasons) {
+      const r = el("div", "row"); r.style.alignItems = "flex-start";
+      const lab = el("div", "small muted", `${sn.name[0].toUpperCase() + sn.name.slice(1)} · ${fmt(sn.count)}`); lab.style.width = "110px"; lab.style.flex = "none";
+      const strip = el("div", "yr-best"); sn.best.forEach((it, i) => strip.append(tileFor(it, sn.best, i)));
+      r.append(lab, strip); body.append(r);
+    }
+  }
+}
+$("#home-close").onclick = () => $("#home-dlg").classList.add("hidden");
+
 async function openStory(kind, id, title) {
   story.kind = kind; story.id = id;
   $("#story-title").textContent = title; $("#story").classList.remove("hidden");

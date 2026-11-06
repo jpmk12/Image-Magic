@@ -146,6 +146,10 @@ program only. Your photos and settings are kept.
   afternoon at home"* (the keyword comes from AI captions when they are on). The **Trips &
   events** tab lists them by year; click one to see its photos, **▶ Replay** it, **↗ Share**
   it, or click the title to rename it. Renames survive rebuilds.
+- **At home:** on the Timeline, each chapter has a **🏠 At home** button: a year at home season by
+  season (the best photos of each winter, spring, summer and autumn, with **▶ A year at home**
+  replays), the spots you photographed again and again through the years (the backyard, the
+  front door), and who was there most. Trips are left out so home gets its own story.
 - **Fixing mistakes:** everything the app works out can be corrected, and your corrections
   stick through rebuilds. In the viewer: **Trip ✎ change** moves a photo to another trip, a
   new trip, or no trip, and **Find more photos from this trip** suggests other photos that

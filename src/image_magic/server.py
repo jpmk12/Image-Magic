@@ -243,7 +243,7 @@ def make_handler(app: App):
                     return self._json(200, app.jobs.log_since(since))
                 if path.startswith(("/api/photos", "/api/photo/", "/api/facets", "/api/trips", "/api/replay",
                                     "/api/map", "/api/people", "/api/timeline", "/api/story", "/api/memories",
-                                    "/api/shuffle", "/api/similar/", "/api/review", "/api/context/", "/api/curate/", "/api/events", "/media/")):
+                                    "/api/shuffle", "/api/similar/", "/api/review", "/api/context/", "/api/curate/", "/api/events", "/api/home", "/media/")):
                     return self._browse(path, self._query())
             except Exception as e:
                 return self._json(500, {"error": str(e)})
@@ -275,6 +275,9 @@ def make_handler(app: App):
                     return self._json(200, browse.photos(
                         conn, q, int(q.get("offset") or 0), min(int(q.get("limit") or 200), 500)))
                 if path == "/api/replay":
+                    if q.get("home") and q.get("chapter"):
+                        from . import home
+                        return self._json(200, browse.replay_items(conn, home.replay_ids(conn, int(q["chapter"]), q.get("year"))))
                     if q.get("best"):
                         from . import quality
                         where, args = browse._filters({k: v for k, v in q.items() if k != "best"}, alias="a.")
@@ -285,6 +288,9 @@ def make_handler(app: App):
                     return self._json(200, browse.facets(conn))
                 if path == "/api/trips":
                     return self._json(200, browse.trips(conn))
+                if path == "/api/home":
+                    from . import home
+                    return self._json(200, home.story(conn, int(q.get("chapter") or 0)))
                 if path == "/api/events":
                     from . import events
                     return self._json(200, events.events(conn, q.get("year"), int(q["trip"]) if q.get("trip") else None))
