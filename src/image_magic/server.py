@@ -54,6 +54,8 @@ class App:
             "map_online": s.map_online,
             "smart_search": s.smart_search,
             "search": self.search_counts(s),
+            "people_on": s.people,
+            "people": self.people_counts(s),
             "library": str(s.library),
             "stats": stats,
             "job": self.jobs.snapshot(),
@@ -70,6 +72,19 @@ class App:
             finally:
                 conn.close()
         except ImportError:   # onnxruntime/numpy not installed
+            return None
+
+    def people_counts(self, s):
+        if not s.db.exists():
+            return None
+        try:
+            from . import faces
+            conn = catalog.connect(s.db)
+            try:
+                return faces.counts(conn)
+            finally:
+                conn.close()
+        except ImportError:
             return None
 
     def db(self):
@@ -174,7 +189,7 @@ def make_handler(app: App):
                     since = int(self._query().get("since") or 0)
                     return self._json(200, app.jobs.log_since(since))
                 if path.startswith(("/api/photos", "/api/photo/", "/api/facets", "/api/trips",
-                                    "/api/map", "/media/")):
+                                    "/api/map", "/api/people", "/media/")):
                     return self._browse(path, self._query())
             except Exception as e:
                 return self._json(500, {"error": str(e)})
@@ -209,13 +224,25 @@ def make_handler(app: App):
                     return self._json(200, browse.facets(conn))
                 if path == "/api/trips":
                     return self._json(200, browse.trips(conn))
+                if path == "/api/people":
+                    from . import faces
+                    return self._json(200, faces.people(conn, include_hidden=q.get("hidden") == "1"))
                 if path == "/api/map":
                     return self._json(200, browse.map_points(conn, q))
                 kind, _, ident = path.rpartition("/")
                 asset_id = int(ident)
                 if kind == "/api/photo":
                     d = browse.photo_detail(conn, asset_id)
+                    if d:
+                        from . import faces
+                        d["faces"] = faces.faces_in_photo(conn, asset_id)
                     return self._json(200, d) if d else self._json(404, {"error": "not found"})
+                if kind == "/media/face":
+                    from . import faces
+                    f = faces.face_crop(conn, settings.originals, settings.library, asset_id)
+                    if not f:
+                        return self._json(404, {"error": "not found"})
+                    return self._file(f, "image/jpeg", cache=True)
                 row = conn.execute("SELECT path, sha256, kind FROM assets WHERE id = ? AND missing = 0",
                                    (asset_id,)).fetchone()
             finally:
@@ -231,6 +258,28 @@ def make_handler(app: App):
                 f, ctype = media.viewable(settings.library, settings.originals, row["path"], row["sha256"])
                 return self._file(f, ctype, cache=True)
             return self._json(404, {"error": "not found"})
+
+        def _people_action(self, path: str, data: dict):
+            from . import faces
+            settings, conn = app.db()
+            try:
+                action = path.rsplit("/", 1)[1]
+                if action == "rename":
+                    faces.rename_person(conn, int(data["id"]), str(data.get("name", ""))[:80])
+                elif action == "hide":
+                    faces.hide_person(conn, int(data["id"]), bool(data.get("hidden", True)))
+                elif action == "merge":
+                    faces.merge_people(conn, int(data["from"]), int(data["into"]))
+                elif action == "move-face":
+                    pid = data.get("person")
+                    faces.move_face(conn, int(data["face"]), int(pid) if pid else None)
+                elif action == "regroup":
+                    faces.group_faces(conn)
+                else:
+                    return self._json(404, {"error": "not found"})
+                return self._json(200, {"ok": True})
+            finally:
+                conn.close()
 
         def _search(self, conn, settings, q: dict) -> dict:
             from . import search
@@ -304,7 +353,7 @@ def make_handler(app: App):
                 if path == "/api/run":
                     kind = data.get("kind", "sync")
                     mode = data.get("mode", "full")
-                    if kind not in ("sync", "scan", "verify", "index") or mode not in ("full", "quick", "test"):
+                    if kind not in ("sync", "scan", "verify", "index", "faces") or mode not in ("full", "quick", "test"):
                         raise ValueError("unknown task")
                     if kind == "sync" and not app.settings_provider().apple_id:
                         raise ValueError("Enter your Apple ID in Settings first.")
@@ -317,6 +366,8 @@ def make_handler(app: App):
                     field = data.get("field", "")
                     ok = app.jobs.submit_auth(field, str(data.get("value", "")))
                     return self._json(200 if ok else 400, {"ok": ok})
+                if path.startswith("/api/people/"):
+                    return self._people_action(path, data)
                 if path == "/api/open-folder":
                     _open_folder(app.settings_provider().library)
                     return self._json(200, {"ok": True})

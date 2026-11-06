@@ -246,4 +246,7 @@ Service features (flying log, squadron yearbook) slot into S2 (log) and S9 (year
   DirectML, or on the CPU. One-time model download of about 600 MB, verified by SHA-256.
   Search combines with the year, place and trip filters.
 - Phase 3 is folded into Phase 4 (above), which is the roadmap from here.
-- Next: Phase 4, S1 – People.
+- **S1 – People: built** (v0.5.0). SCRFD detection + ArcFace signatures (InsightFace
+  buffalo_l, ONNX, GPU via DirectML or CPU). Faces grouped by person; name, merge, hide,
+  per-person filter; names shown in the viewer. Grouping keeps your decisions on re-runs.
+- Next: S2 – Life timeline and chapters.

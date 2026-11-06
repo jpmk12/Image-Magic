@@ -39,7 +39,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ${{ runner.temp }}/im-selftest/models
-          key: clip-vit-b-16-52d329a1-e2bb83fb
+          key: clip-vit-b-16-52d329a1-e2bb83fb-buffalo_l-80ffe37d
 
       - name: Self-test packaged app (place lookup, AI runtime, model download and real search)
         shell: pwsh

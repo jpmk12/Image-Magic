@@ -80,6 +80,19 @@
   .tile .badge { position: absolute; left: 6px; bottom: 6px; background: rgba(0,0,0,.6); color: #fff;
                  font-size: 11px; padding: 1px 6px; border-radius: 4px; }
   .tile.video { display: grid; place-items: center; color: var(--muted); font-size: 32px; }
+  .people { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 14px; }
+  .person { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 12px;
+            text-align: center; font: inherit; color: inherit; }
+  .person img { width: 110px; height: 110px; border-radius: 50%; object-fit: cover; background: var(--line);
+                cursor: pointer; display: block; margin: 0 auto 8px; }
+  .person .n { font-weight: 650; cursor: pointer; }
+  .person .n.unnamed { color: var(--muted); font-weight: 500; font-style: italic; }
+  .person .c { color: var(--muted); font-size: 13px; }
+  .person .acts { margin-top: 6px; display: flex; gap: 4px; justify-content: center; }
+  .person .acts button { background: none; border: 0; color: var(--muted); cursor: pointer; font-size: 12px; padding: 2px 4px; }
+  .person .acts button:hover { color: var(--text); }
+  .lb .tag { display: inline-block; background: #2a2f3a; border-radius: 99px; padding: 3px 10px; margin: 0 6px 6px 0; font-size: 13px; cursor: pointer; }
+  .lb .tag.unnamed { color: #9aa0a9; font-style: italic; }
   .trips { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; }
   .trip { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; overflow: hidden;
           cursor: pointer; text-align: left; padding: 0; font: inherit; color: inherit; }
@@ -109,6 +122,7 @@
   <nav>
     <button data-tab="home" class="active">Home</button>
     <button data-tab="photos">Photos</button>
+    <button data-tab="people">People</button>
     <button data-tab="trips">Trips</button>
     <button data-tab="map">Map</button>
     <button data-tab="settings">Settings</button>
@@ -176,6 +190,19 @@
       </div>
     </div>
 
+    <div class="panel" id="peoplepanel">
+      <div class="row" style="justify-content:space-between">
+        <h2 style="margin:0">People</h2>
+        <span class="small muted">Runs on this computer. Photos never leave it.</span>
+      </div>
+      <p class="small">Find the faces in your photos and group them by person. Name a group once, then
+        filter your whole library by that person.</p>
+      <div class="row">
+        <button class="btn primary" id="people-on">Turn on People</button>
+        <span class="small muted" id="people-note">One-time download of about 290 MB.</span>
+      </div>
+    </div>
+
     <div class="panel">
       <h2>Your library</h2>
       <div class="stats" id="stats"><p class="muted">Nothing downloaded yet.</p></div>
@@ -200,6 +227,19 @@
     <div class="grid" id="grid"></div>
     <p class="muted" id="grid-empty" style="display:none">No photos here yet. Download some from the Home tab.</p>
     <div id="grid-more" style="height:40px"></div>
+  </section>
+
+  <!-- PEOPLE -->
+  <section id="tab-people" class="hidden">
+    <div class="row" style="justify-content:space-between;margin-bottom:12px">
+      <p class="muted small" style="margin:0">Faces are found and grouped on this computer. Click a name to rename, a photo to see that person's pictures.</p>
+      <div class="row">
+        <label class="small muted"><input type="checkbox" id="people-hidden"> Show hidden</label>
+        <button class="btn" id="people-update">Find new faces</button>
+      </div>
+    </div>
+    <div class="people" id="people"></div>
+    <p class="muted" id="people-empty" style="display:none">No people yet. Turn on <b>People</b> from the Home tab.</p>
   </section>
 
   <!-- TRIPS -->
@@ -272,6 +312,9 @@
         <label class="check"><input type="checkbox" name="smart_search">
           <span>Prepare new photos for smart search after each sync
           <small>Turned on automatically when you set up smart search on the Home tab.</small></span></label>
+        <label class="check"><input type="checkbox" name="people">
+          <span>Find faces in new photos after each sync
+          <small>Turned on automatically when you set up People on the Home tab.</small></span></label>
         <label class="field"><span>"Get new photos" stops after</span>
           <input type="number" name="quick_sync_stop_after" min="1" max="10000" style="max-width:120px">
           <small>…this many photos in a row that you already have. Higher is more thorough but slower.</small>
@@ -371,6 +414,7 @@ function showTab(name) {
   if (name === "settings") loadSettings();
   if (name === "photos") ensurePhotos();
   if (name === "trips") loadTrips();
+  if (name === "people") loadPeople();
   if (name === "map") loadMap();
 }
 $$("nav button").forEach(b => b.onclick = () => showTab(b.dataset.tab));
@@ -412,7 +456,7 @@ function renderJob(j) {
   $$("[data-run]").forEach(b => b.disabled = busy);
   $("#job-msg").textContent = j.message || "Working...";
   const bar = $("#job-bar");
-  if (j.total && (j.kind === "sync" || j.kind === "index")) {
+  if (j.total && (j.kind === "sync" || j.kind === "index" || j.kind === "faces")) {
     bar.classList.remove("indeterminate");
     bar.firstElementChild.style.width = Math.min(100, 100 * j.downloaded / j.total) + "%";
   } else {
@@ -451,6 +495,7 @@ async function refresh() {
     renderStats(st.stats);
     renderJob(st.job);
     renderSmart(st);
+    renderPeoplePanel(st);
   } catch (e) { /* app may be quitting */ }
 }
 
@@ -478,6 +523,73 @@ $("#smart-on").onclick = async () => {
   } catch (e) { toast(e.message); }
 };
 $("#smart-update").onclick = () => api("/api/run", { kind: "index" }).then(renderJob).catch(e => toast(e.message));
+
+function renderPeoplePanel(st) {
+  const c = st.people, busy = ["running", "needs_password", "needs_code"].includes(st.job.state);
+  const ready = c && c.model_ready && st.people_on;
+  $("#people-on").classList.toggle("hidden", !!ready);
+  $("#people-on").disabled = busy || !st.configured;
+  $("#people-update").disabled = busy;
+  if (ready) {
+    $("#people-note").textContent = c.scanned >= c.photos
+      ? `Ready: ${fmt(c.faces)} faces in ${fmt(c.people)} people (${fmt(c.named)} named). See the People tab.`
+      : `${fmt(c.scanned)} of ${fmt(c.photos)} photos scanned. Click "Find new faces" on the People tab to continue.`;
+  } else {
+    $("#people-note").textContent = c && c.model_ready ? "Models already downloaded." : "One-time download of about 290 MB.";
+  }
+}
+$("#people-on").onclick = async () => {
+  try {
+    const cur = await api("/api/settings");
+    await api("/api/settings", { ...cur, people: true });
+    renderJob(await api("/api/run", { kind: "faces" }));
+  } catch (e) { toast(e.message); }
+};
+$("#people-update").onclick = () => api("/api/run", { kind: "faces" }).then(j => { renderJob(j); showTab("home"); }).catch(e => toast(e.message));
+$("#people-hidden").onchange = loadPeople;
+
+let peopleCache = [];
+async function loadPeople() {
+  const hidden = $("#people-hidden").checked ? "?hidden=1" : "";
+  const list = await api("/api/people" + hidden).catch(e => { toast(e.message); return []; });
+  peopleCache = list;
+  $("#people-empty").style.display = list.length ? "none" : "";
+  $("#people").replaceChildren(...list.map(p => {
+    const card = document.createElement("div"); card.className = "person";
+    const img = document.createElement("img"); img.alt = ""; img.loading = "lazy";
+    if (p.cover_face) img.src = media("face", p.cover_face);
+    img.onclick = () => { showTab("photos"); setFilters({ person: p.id, personName: p.name || "Unnamed person" }); };
+    const n = document.createElement("div"); n.className = "n" + (p.name ? "" : " unnamed");
+    n.textContent = p.name || "Who is this?"; n.title = "Click to name";
+    n.onclick = () => renamePerson(p);
+    const c = document.createElement("div"); c.className = "c"; c.textContent = fmt(p.photo_count) + " photos";
+    const acts = document.createElement("div"); acts.className = "acts";
+    const same = document.createElement("button"); same.textContent = "Same as…"; same.title = "This is the same person as another group";
+    same.onclick = () => mergePerson(p);
+    const hide = document.createElement("button"); hide.textContent = p.hidden ? "Unhide" : "Hide";
+    hide.onclick = () => api("/api/people/hide", { id: p.id, hidden: !p.hidden }).then(loadPeople).catch(e => toast(e.message));
+    acts.append(same, hide);
+    card.append(img, n, c, acts);
+    return card;
+  }));
+}
+async function renamePerson(p) {
+  const name = prompt("Name for this person:", p.name || "");
+  if (name === null) return;
+  await api("/api/people/rename", { id: p.id, name }).catch(e => toast(e.message));
+  loadPeople(); refresh();
+}
+async function mergePerson(p) {
+  const others = peopleCache.filter(o => o.id !== p.id);
+  if (!others.length) return toast("No other people to merge with yet.");
+  const named = others.filter(o => o.name);
+  const choice = prompt("Merge into which person? Type their name" + (named.length ? ` (${named.map(o => o.name).join(", ")})` : "") + ":");
+  if (!choice) return;
+  const target = others.find(o => (o.name || "").toLowerCase() === choice.trim().toLowerCase());
+  if (!target) return toast("No person named " + choice + ". Name them first.");
+  await api("/api/people/merge", { from: p.id, into: target.id }).catch(e => toast(e.message));
+  loadPeople(); refresh();
+}
 
 // ---- actions
 $$("[data-run]").forEach(b => b.onclick = async () => {
@@ -577,11 +689,11 @@ function setFilters(f) {
   $("#f-q").value = f.q || ""; $("#f-q-clear").classList.toggle("hidden", !f.q);
   fillCities();
   const chip = $("#f-trip");
-  chip.classList.toggle("hidden", !f.trip);
-  if (f.trip) {
-    chip.replaceChildren(document.createTextNode("Trip: " + (f.tripTitle || "")));
+  chip.classList.toggle("hidden", !f.trip && !f.person);
+  if (f.trip || f.person) {
+    chip.replaceChildren(document.createTextNode(f.trip ? "Trip: " + (f.tripTitle || "") : "Person: " + (f.personName || "")));
     const x = document.createElement("button"); x.textContent = "✕"; x.title = "Show all photos";
-    x.onclick = () => setFilters({}); chip.append(x);
+    x.onclick = () => setFilters({ ...f, trip: "", person: "" }); chip.append(x);
   }
   loadMorePhotos();
 }
@@ -606,7 +718,7 @@ async function loadMorePhotos() {
   grid.loading = true;
   const mine = grid;
   const q = new URLSearchParams({ offset: grid.offset, limit: PAGE });
-  for (const k of ["q", "year", "country", "city", "trip", "kind"]) if (grid.filters[k]) q.set(k, grid.filters[k]);
+  for (const k of ["q", "year", "country", "city", "trip", "kind", "person"]) if (grid.filters[k]) q.set(k, grid.filters[k]);
   try {
     const res = await api("/api/photos?" + q);
     if (mine !== grid) return;  // filters changed meanwhile
@@ -677,6 +789,17 @@ async function openLightbox(i, items) {
     add("Taken", d.taken_at ? new Date(d.taken_at).toLocaleString() : "");
     add("Place", [d.city, d.region, d.country].filter(Boolean).join(", "));
     add("Trip", d.trip_title, () => { closeLightbox(); showTab("photos"); setFilters({ trip: d.trip_id, tripTitle: d.trip_title }); });
+    const known = (d.faces || []).filter(f => f.person_id && !f.hidden);
+    if (known.length) {
+      const div = document.createElement("div"), b = document.createElement("b"); b.textContent = "People"; div.append(b);
+      for (const f of known) {
+        const t = document.createElement("span"); t.className = "tag" + (f.name ? "" : " unnamed");
+        t.textContent = f.name || "Unnamed"; t.title = "Show this person's photos";
+        t.onclick = () => { closeLightbox(); showTab("photos"); setFilters({ person: f.person_id, personName: f.name || "Unnamed person" }); };
+        div.append(t);
+      }
+      info.append(div);
+    }
     add("Camera", [d.camera_make, d.camera_model].filter(Boolean).join(" "));
     add("Size", d.width ? `${d.width} × ${d.height} · ${bytes(d.size)}` : bytes(d.size));
     add("File", d.path);

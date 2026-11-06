@@ -52,6 +52,7 @@ class Settings:
     auto_sync_hours: int = 0           # 0 = off; otherwise quick sync every N hours while open
     map_online: bool = True            # load map background tiles from OpenStreetMap
     smart_search: bool = False         # index photos for "search by description" after each sync
+    people: bool = False               # find and group faces after each sync
 
     def __post_init__(self) -> None:
         if not self.library_path:

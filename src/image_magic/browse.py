@@ -23,6 +23,9 @@ def _filters(params: dict) -> tuple[str, list]:
     if params.get("trip"):
         where.append("trip_id = ?")
         args.append(int(params["trip"]))
+    if params.get("person"):
+        where.append("id IN (SELECT asset_id FROM faces WHERE person_id = ?)")
+        args.append(int(params["person"]))
     if params.get("kind") in ("photo", "video"):
         where.append("kind = ?")
         args.append(params["kind"])

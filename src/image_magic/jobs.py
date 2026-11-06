@@ -95,7 +95,7 @@ class JobRunner:
             self._cancel.clear()
             self.state = JobState(kind=kind, state="running", started=time.time())
             target = {"sync": self._run_sync, "scan": self._run_scan, "verify": self._run_verify,
-                      "index": self._run_index}[kind]
+                      "index": self._run_index, "faces": self._run_faces}[kind]
             threading.Thread(target=target, args=(mode,), daemon=True).start()
 
     def cancel(self) -> None:
@@ -200,6 +200,53 @@ class JobRunner:
                 self._finish("done", f"Smart search is ready: {n:,} photos added.", {"indexed": n})
         return n
 
+    def _run_faces(self, _mode: str) -> None:
+        try:
+            self._faces(self._settings_provider(), standalone=True)
+        except Exception as e:
+            self._finish("failed", f"People setup failed: {e}")
+
+    def _faces(self, settings: Settings, standalone: bool) -> int:
+        """Download the face models if needed, scan new photos, then group faces."""
+        from . import faces
+        if not faces.model_ready():
+            self.state.message = "Downloading face models (one time, about 290 MB)..."
+            self._add_log(self.state.message)
+
+            def dl(done, total):
+                self.state.downloaded, self.state.total = done, total
+                self.state.message = f"Downloading face models: {done / 1e6:,.0f} of {total / 1e6:,.0f} MB"
+            faces.download_model(dl, cancelled=self._cancel.is_set)
+            if self._cancel.is_set():
+                self._finish("cancelled", "Stopped. The download resumes where it left off next time.")
+                return 0
+        self.state.downloaded, self.state.total = 0, None
+        self.state.message = "Loading face models..."
+        model = faces.FaceModel.get()
+        self._add_log(f"Face models loaded on {model.device}.")
+        conn = catalog.connect(settings.db)
+        try:
+            todo = len(faces.pending(conn))
+            self._add_log(f"Looking for faces in {todo:,} photos...")
+
+            def prog(done, total):
+                self.state.downloaded, self.state.total = done, total
+                self.state.message = f"Finding faces: {done:,} of {total:,} photos ({model.device})"
+            n = faces.scan_photos(conn, settings.originals, model, progress=prog, cancelled=self._cancel.is_set)
+            self.state.message = "Grouping faces by person..."
+            g = faces.group_faces(conn)
+            c = faces.counts(conn)
+        finally:
+            conn.close()
+        self._add_log(f"Scanned {n:,} photos; {c['faces']:,} faces in {c['people']:,} people.")
+        if standalone:
+            if self._cancel.is_set():
+                self._finish("cancelled", f"Stopped after {n:,} photos. Run it again to continue.")
+            else:
+                self._finish("done", f"People ready: {c['faces']:,} faces grouped into {c['people']:,} people.",
+                             {"scanned": n, **g})
+        return n
+
     def _run_verify(self, _mode: str) -> None:
         try:
             settings = self._settings_provider()
@@ -282,6 +329,11 @@ class JobRunner:
                 self._index(settings, standalone=False)
             except Exception as e:
                 self._add_log(f"Smart search indexing failed: {e}")
+        if settings.people:
+            try:
+                self._faces(settings, standalone=False)
+            except Exception as e:
+                self._add_log(f"Finding faces failed: {e}")
         self._finish("done",
                      f"Sync complete: {self.state.downloaded:,} downloaded, {r.total:,} items in your library, "
                      f"{r.trips:,} trips.",

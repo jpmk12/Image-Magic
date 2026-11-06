@@ -54,6 +54,13 @@ program only. Your photos and settings are kept.
   30 minutes per 16,000 photos on a CPU, and is a one-time job. New photos are prepared
   after each sync.
 
+- **People:** turn it on once from the Home tab (about 290 MB of face models, verified by
+  fingerprint). The app finds every face and groups them by person. On the **People** tab,
+  click **"Who is this?"** to name a group, click the face to see all of that person's photos,
+  use **Same as…** when two groups are the same person, and **Hide** for people you don't
+  care about (strangers in the background). Photos show who's in them in the viewer. New
+  photos are scanned after each sync.
+
 Place names are looked up **on your computer** from a bundled list of about 145,000 places
 (GeoNames, CC BY 4.0). Your locations are never sent anywhere.
 
@@ -79,6 +86,8 @@ Place names are looked up **on your computer** from a bundled list of about 145,
 - Place names are worked out on your laptop. GPS locations are never sent anywhere.
 - Smart search runs on your laptop using OpenAI's open CLIP model (MIT License). Photos are
   analysed locally and never uploaded. The only network use is the one-time model download.
+- Face recognition uses InsightFace's open models, also on your laptop. Face data (a numeric
+  signature per face, not a photo) is stored only in your library's catalog file.
 - The only outside connections are to **Apple** (downloading) and, if enabled,
   **OpenStreetMap** for the map background. OpenStreetMap sees which map areas you view,
   not your photos. You can turn the map background off in Settings → Privacy.

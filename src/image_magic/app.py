@@ -77,7 +77,7 @@ def self_test(out_path: str, download: bool) -> int:
         import numpy as np
         import onnxruntime as ort
         from PIL import Image
-        from . import places, search
+        from . import faces, places, search
         from .clip_tokenizer import Tokenizer
 
         report["providers"] = ort.get_available_providers()
@@ -94,8 +94,18 @@ def self_test(out_path: str, download: bool) -> int:
             q = search.query_vector(model, "something bright red")
             report["red_vs_green"] = [round(float(x), 4) for x in vecs @ q]
             report["search_ok"] = bool(np.argmax(vecs @ q) == 0)
+        if download:
+            faces.download_model()
+        if faces.model_ready():
+            fm = faces.FaceModel()
+            report["face_device"] = fm.device
+            # A synthetic 'face': the detector should find nothing in a flat image and not crash.
+            report["faces_in_blank"] = len(fm.detect(Image.new("RGB", (640, 480), (90, 90, 90))))
+            e = fm.embed([Image.new("RGB", (112, 112), (120, 100, 90))])
+            report["face_embed_ok"] = bool(e.shape == (1, 512) and abs(float(np.linalg.norm(e[0])) - 1) < 1e-3)
         report["ok"] = report["tokens"] == [320, 1125, 539, 320, 2368] and report["place"] == "Petra" \
-            and report.get("search_ok", not download)
+            and report.get("search_ok", not download) \
+            and report.get("face_embed_ok", not download) and report.get("faces_in_blank", 0) == 0
     except Exception as e:  # report, don't crash
         import traceback
         report["error"] = traceback.format_exc()
