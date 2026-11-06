@@ -316,6 +316,11 @@ Service features (flying log, squadron yearbook) slot into S2 (log) and S9 (year
 - **Second backup** (v0.25.0): backup.run mirrors originals/ and voice/ (skip by size+mtime,
   copy to .part, SHA-256 against the catalog or source, rename), sqlite backup() snapshot of
   the catalog, marker file, free-space and overlap checks; job + Home panel + setting.
+- **Confidence + review queue** (v0.26.0): trip confidence from distance to the trip centre
+  vs the trip's median spread (0.5 for date-only joins), face confidence from cosine
+  similarity to cached person centres, chapter confidence from the home share of the first
+  four months; reviews table; confirm locks (trip_manual / faces.locked / chapters.auto=0 /
+  milestone kept), dismiss undoes; shown in the viewer.
 
 ---
 
@@ -367,5 +372,5 @@ stories, Ask, memories, year review, books and share cover the "relive" side.
 
 ### Accuracy and trust
 - Confidence shown for automatic things (trip membership, chapter boundaries, face groups) with
-  one-click confirm/dismiss, so the story is reviewed, not assumed.
-- A "review queue": the ten least-certain decisions each week, in one screen.
+  one-click confirm/dismiss, so the story is reviewed, not assumed. **Built (v0.26.0).**
+- A "review queue": the ten least-certain decisions each week, in one screen. **Built (v0.26.0).**

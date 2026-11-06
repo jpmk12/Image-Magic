@@ -514,6 +514,8 @@ def group_faces(conn: sqlite3.Connection) -> dict:
             conn.execute("DELETE FROM persons WHERE id = ?", (pid,))
     refresh_covers(conn)
     conn.commit()
+    from . import confidence
+    confidence.refresh_face_centres(conn)
     return {"people": conn.execute("SELECT COUNT(*) FROM persons").fetchone()[0], "assigned": assigned}
 
 
@@ -575,6 +577,8 @@ def move_face(conn: sqlite3.Connection, face_id: int, pid: int | None) -> None:
     conn.execute("UPDATE faces SET person_id = ?, locked = 1 WHERE id = ?", (pid, face_id))
     refresh_covers(conn)
     conn.commit()
+    from . import confidence
+    confidence.refresh_face_centres(conn)
 
 
 def faces_in_photo(conn: sqlite3.Connection, asset_id: int) -> list[dict]:

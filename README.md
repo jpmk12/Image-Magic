@@ -151,6 +151,12 @@ program only. Your photos and settings are kept.
   exact copies are skipped, look-alikes (the same picture resized or re-saved) are listed with
   the library photo they match, and the rest are new. Click **Import** to copy the new ones into
   `originals/imported/<year>/<month>/`. Your files are copied, never moved.
+- **Review queue:** on the Home tab, the app's least-certain guesses, ten at a time: a photo that
+  joined a trip by date alone or was taken far from the rest, a face that only loosely matches
+  its group, a chapter whose first months are spread over several places, and new milestones.
+  **Yes** locks the decision so rebuilds keep it; **No** undoes it the way the viewer's
+  corrections do. The viewer shows how sure the app is about a photo's trip, and marks
+  loosely matched faces with "?".
 - **Second copy:** set a backup folder on another drive in Settings, then **Back up now** on
   the Home tab. Every file under `originals` and `voice` is copied (only new or changed files
   on later runs), read back and checked against its SHA-256 in the catalog, and a consistent

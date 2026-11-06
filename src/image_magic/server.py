@@ -249,7 +249,7 @@ def make_handler(app: App):
                     return self._json(200, app.jobs.log_since(since))
                 if path.startswith(("/api/photos", "/api/photo/", "/api/facets", "/api/trips", "/api/replay",
                                     "/api/map", "/api/people", "/api/timeline", "/api/story", "/api/memories",
-                                    "/api/shuffle", "/api/similar/", "/api/review", "/api/context/", "/api/curate/", "/api/events", "/api/home", "/api/voice/", "/api/compare/", "/api/flying", "/api/book", "/media/")):
+                                    "/api/shuffle", "/api/similar/", "/api/review", "/api/context/", "/api/curate/", "/api/events", "/api/home", "/api/voice/", "/api/compare/", "/api/flying", "/api/book", "/api/review-queue", "/media/")):
                     return self._browse(path, self._query())
             except Exception as e:
                 return self._json(500, {"error": str(e)})
@@ -337,6 +337,9 @@ def make_handler(app: App):
                     return self._json(200, {"file": f.name})
                 if path == "/api/map":
                     return self._json(200, browse.map_points(conn, q))
+                if path == "/api/review-queue":
+                    from . import confidence
+                    return self._json(200, confidence.queue(conn))
                 if path == "/api/book":
                     from . import books
                     f = books.make(conn, settings.originals, settings.library, str(q.get("kind")), str(q.get("id") or ""))
@@ -382,6 +385,8 @@ def make_handler(app: App):
                         d["event"] = events.event_for(conn, asset_id)
                         from . import notes
                         d["voice"] = notes.list_for(conn, "photo", asset_id)
+                        from . import confidence
+                        d["confidence"] = confidence.photo_confidence(conn, asset_id)
                     return self._json(200, d) if d else self._json(404, {"error": "not found"})
                 if kind == "/media/voice":
                     from . import notes
@@ -667,6 +672,16 @@ def make_handler(app: App):
                         conn.close()
                 if path in ("/api/story/write", "/api/story/save", "/api/ask"):
                     return self._ai_action(path, data)
+                if path == "/api/review-queue/decide":
+                    from . import confidence
+                    settings, conn = app.db()
+                    try:
+                        confidence.decide(conn, str(data.get("key", "")), str(data.get("decision", "")))
+                        from . import chapters
+                        chapters.rebuild_milestones(conn)
+                    finally:
+                        conn.close()
+                    return self._json(200, {"ok": True})
                 if path == "/api/compare":
                     from . import compare
                     settings, conn = app.db()

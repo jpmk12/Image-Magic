@@ -396,6 +396,15 @@
       </div>
     </div>
 
+    <div class="panel" id="reviewpanel">
+      <div class="row" style="justify-content:space-between">
+        <h2 style="margin:0">Review queue</h2>
+        <span class="small muted" id="review-note"></span>
+      </div>
+      <p class="small">The app's least-certain guesses (a photo joined to a trip by date only, a face that only loosely matches, a chapter that might not be a move). A minute a week keeps the story reviewed rather than assumed.</p>
+      <div id="review-list"></div>
+    </div>
+
     <div class="panel" id="backuppanel">
       <div class="row" style="justify-content:space-between">
         <h2 style="margin:0">Second copy</h2>
@@ -951,6 +960,7 @@ async function refresh() {
     renderAiPanel(st);
     renderQualityPanel(st);
     renderBackupPanel(st);
+    if (!refresh.queued || Date.now() - refresh.queued > 60000) { refresh.queued = Date.now(); loadReviewQueue(); }
     renderImport(st.job);
   } catch (e) { /* app may be quitting */ }
 }
@@ -980,6 +990,27 @@ $("#smart-on").onclick = async () => {
 };
 $("#smart-update").onclick = () => api("/api/run", { kind: "index" }).then(renderJob).catch(e => toast(e.message));
 
+async function loadReviewQueue() {
+  const q = await api("/api/review-queue").catch(() => null);
+  const box = $("#review-list"); if (!q) return;
+  $("#review-note").textContent = q.pending ? `${fmt(q.pending)} to look at · ${fmt(q.reviewed_week)} reviewed this week` : `Nothing to review${q.reviewed ? ` · ${fmt(q.reviewed)} reviewed so far` : ""}.`;
+  box.replaceChildren();
+  for (const it of q.items) {
+    const row = document.createElement("div"); row.className = "row"; row.style.margin = "6px 0"; row.style.alignItems = "center";
+    const t = tileFor({ id: it.asset_id, kind: "photo" }, [{ id: it.asset_id, kind: "photo" }], 0); t.style.width = "64px";
+    if (it.kind === "face" && it.face_id) { t.replaceChildren(); const im = document.createElement("img"); im.src = media("face", it.face_id); im.alt = ""; t.append(im); }
+    const txt = document.createElement("div"); txt.style.flex = "1";
+    const title = document.createElement("div"); title.textContent = it.title;
+    const d = document.createElement("div"); d.className = "small muted"; d.textContent = `${it.detail} ${Math.round(it.confidence * 100)}% sure.`;
+    txt.append(title, d);
+    const yes = document.createElement("button"); yes.className = "btn primary"; yes.textContent = it.kind === "milestone" ? "Keep" : "Yes";
+    const no = document.createElement("button"); no.className = "btn"; no.textContent = it.kind === "chapter" ? "Not sure" : it.kind === "milestone" ? "Dismiss" : "No";
+    no.title = it.kind === "chapter" ? "Leaves the chapter as it is; edit it on the Timeline" : "";
+    const decide = async dec => { await api("/api/review-queue/decide", { key: it.key, decision: dec }).catch(e => toast(e.message)); loadReviewQueue(); };
+    yes.onclick = () => decide("confirmed"); no.onclick = () => decide(it.kind === "chapter" ? "confirmed" : "dismissed");
+    row.append(t, txt, yes, no); box.append(row);
+  }
+}
 function renderBackupPanel(st) {
   const b = st.backup, busy = ["running", "needs_password", "needs_code"].includes(st.job.state);
   $("#backup-run").disabled = busy || !b || !b.configured;
@@ -1353,7 +1384,8 @@ async function openLightbox(i, items) {
     add("Place", [d.city, d.region, d.country].filter(Boolean).join(", "));
     {
       const div = document.createElement("div"), b = document.createElement("b"); b.textContent = "Trip"; div.append(b);
-      const v = document.createElement("a"); v.textContent = d.trip_title || "Not part of a trip";
+      const tc = d.confidence && d.confidence.trip;
+      const v = document.createElement("a"); v.textContent = (d.trip_title || "Not part of a trip") + (d.trip_title && tc != null && tc < 1 ? ` · ${Math.round(tc * 100)}% sure` : "");
       v.onclick = () => { if (d.trip_id) { closeLightbox(); showTab("photos"); setFilters({ trip: d.trip_id, tripTitle: d.trip_title }); } else tripMenu(v, d); };
       const e = document.createElement("a"); e.className = "edit"; e.textContent = "✎ change"; e.onclick = ev => { ev.stopPropagation(); tripMenu(e, d); };
       div.append(v, e); info.append(div);
@@ -1371,7 +1403,8 @@ async function openLightbox(i, items) {
       const div = document.createElement("div"), b = document.createElement("b"); b.textContent = "People"; div.append(b);
       for (const f of known) {
         const t = document.createElement("span"); t.className = "tag" + (f.name ? "" : " unnamed");
-        t.textContent = f.name || "Unnamed"; t.title = "Click for options";
+        const fc = d.confidence && d.confidence.faces ? d.confidence.faces[f.id] : null;
+        t.textContent = (f.name || "Unnamed") + (fc != null && fc < 0.7 ? " ?" : ""); t.title = fc != null ? `${Math.round(fc * 100)}% sure · click for options` : "Click for options";
         t.onclick = ev => { ev.stopPropagation(); personMenu(t, f, d); };
         div.append(t);
       }

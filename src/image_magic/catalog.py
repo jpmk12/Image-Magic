@@ -100,8 +100,8 @@ def connect(db_file: Path) -> sqlite3.Connection:
         pass
     run_script(conn, SCHEMA)
     # Every feature's tables exist from the start, so request handlers never run DDL.
-    from . import ask, chapters, describe, events, faces, flying, notes, review, search
-    for mod in (faces, describe, search, chapters, ask, notes, flying):
+    from . import ask, chapters, confidence, describe, events, faces, flying, notes, review, search
+    for mod in (faces, describe, search, chapters, ask, notes, flying, confidence):
         run_script(conn, mod.SCHEMA if mod is not describe else describe.DB_SCHEMA)
     run_script(conn, review.SCHEMA)
     conn.commit()
