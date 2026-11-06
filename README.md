@@ -54,6 +54,11 @@ program only. Your photos and settings are kept.
   30 minutes per 16,000 photos on a CPU, and is a one-time job. New photos are prepared
   after each sync.
 
+- **Timeline:** your life in chapters. A chapter is a period with one home, found from where
+  you took most photos (ignoring trips), so each move starts a new chapter. Click a chapter
+  title to rename it. Each year shows month bars (click one to see that month), trips, and
+  **milestones** the app found: your first photo, each move, the biggest trip and busiest day
+  of each year, and the first photo of each named person. Click ✕ on a milestone to dismiss it.
 - **People:** turn it on once from the Home tab (about 290 MB of face models, verified by
   fingerprint). The app finds every face and groups them by person. On the **People** tab,
   click **"Who is this?"** to name a group, click the face to see all of that person's photos,

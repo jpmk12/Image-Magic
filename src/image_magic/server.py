@@ -189,7 +189,7 @@ def make_handler(app: App):
                     since = int(self._query().get("since") or 0)
                     return self._json(200, app.jobs.log_since(since))
                 if path.startswith(("/api/photos", "/api/photo/", "/api/facets", "/api/trips",
-                                    "/api/map", "/api/people", "/media/")):
+                                    "/api/map", "/api/people", "/api/timeline", "/media/")):
                     return self._browse(path, self._query())
             except Exception as e:
                 return self._json(500, {"error": str(e)})
@@ -224,6 +224,9 @@ def make_handler(app: App):
                     return self._json(200, browse.facets(conn))
                 if path == "/api/trips":
                     return self._json(200, browse.trips(conn))
+                if path == "/api/timeline":
+                    from . import chapters
+                    return self._json(200, chapters.timeline(conn))
                 if path == "/api/people":
                     from . import faces
                     return self._json(200, faces.people(conn, include_hidden=q.get("hidden") == "1"))
@@ -259,6 +262,23 @@ def make_handler(app: App):
                 return self._file(f, ctype, cache=True)
             return self._json(404, {"error": "not found"})
 
+        def _timeline_action(self, path: str, data: dict):
+            from . import chapters
+            settings, conn = app.db()
+            try:
+                action = path.rsplit("/", 1)[1]
+                if action == "chapter":
+                    chapters.update_chapter(conn, int(data["id"]), data)
+                elif action == "milestone":
+                    chapters.set_milestone_state(conn, int(data["id"]), str(data.get("state", "kept")))
+                elif action == "rebuild":
+                    chapters.rebuild(conn)
+                else:
+                    return self._json(404, {"error": "not found"})
+                return self._json(200, {"ok": True})
+            finally:
+                conn.close()
+
         def _people_action(self, path: str, data: dict):
             from . import faces
             settings, conn = app.db()
@@ -275,6 +295,9 @@ def make_handler(app: App):
                     faces.move_face(conn, int(data["face"]), int(pid) if pid else None)
                 elif action == "regroup":
                     faces.group_faces(conn)
+                if action in ("rename", "merge", "regroup"):
+                    from . import chapters
+                    chapters.rebuild_milestones(conn)
                 else:
                     return self._json(404, {"error": "not found"})
                 return self._json(200, {"ok": True})
@@ -368,6 +391,8 @@ def make_handler(app: App):
                     return self._json(200 if ok else 400, {"ok": ok})
                 if path.startswith("/api/people/"):
                     return self._people_action(path, data)
+                if path.startswith("/api/timeline/"):
+                    return self._timeline_action(path, data)
                 if path == "/api/open-folder":
                     _open_folder(app.settings_provider().library)
                     return self._json(200, {"ok": True})

@@ -14,6 +14,16 @@ def _filters(params: dict) -> tuple[str, list]:
     if params.get("year"):
         where.append("substr(taken_at, 1, 4) = ?")
         args.append(str(params["year"]))
+    if params.get("month"):
+        where.append("substr(taken_at, 1, 7) = ?")
+        args.append(str(params["month"])[:7])
+    if params.get("day"):
+        where.append("substr(taken_at, 1, 10) = ?")
+        args.append(str(params["day"])[:10])
+    if params.get("chapter"):
+        where.append("taken_at >= (SELECT start_at FROM chapters WHERE id = ?) "
+                     "AND taken_at < (SELECT date(end_at, '+1 day') FROM chapters WHERE id = ?)")
+        args += [int(params["chapter"]), int(params["chapter"])]
     if params.get("country"):
         where.append("country_code = ?")
         args.append(params["country"])

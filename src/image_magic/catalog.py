@@ -196,6 +196,8 @@ def scan(conn: sqlite3.Connection, originals: Path, progress=None) -> ScanResult
     conn.commit()
     from . import places  # local import: places is optional data-heavy code
     result.places_added, result.trips = places.refresh(conn)
+    from . import chapters
+    chapters.rebuild(conn)
     set_meta(conn, "last_scan", now_iso())
     conn.commit()
     return result

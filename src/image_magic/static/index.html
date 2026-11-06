@@ -80,6 +80,26 @@
   .tile .badge { position: absolute; left: 6px; bottom: 6px; background: rgba(0,0,0,.6); color: #fff;
                  font-size: 11px; padding: 1px 6px; border-radius: 4px; }
   .tile.video { display: grid; place-items: center; color: var(--muted); font-size: 32px; }
+  .tl-chapter { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; margin-bottom: 18px; overflow: hidden; }
+  .tl-chapter > header { display: flex; gap: 16px; align-items: center; padding: 14px 18px; background: var(--soft); border: 0; }
+  .tl-chapter > header img { width: 72px; height: 72px; object-fit: cover; border-radius: 8px; background: var(--line); flex: none; cursor: pointer; }
+  .tl-chapter > header .t { font-size: 18px; font-weight: 700; cursor: pointer; }
+  .tl-chapter > header .s { color: var(--muted); font-size: 13px; }
+  .tl-year { display: grid; grid-template-columns: 70px 1fr; gap: 12px; padding: 10px 18px; border-top: 1px solid var(--line); align-items: start; }
+  .tl-year .y { font-weight: 650; font-size: 16px; cursor: pointer; }
+  .tl-year .y small { display: block; color: var(--muted); font-weight: 400; font-size: 12px; }
+  .bars { display: grid; grid-template-columns: repeat(12, 1fr); gap: 3px; height: 44px; align-items: end; }
+  .bars button { background: var(--accent); opacity: .75; border: 0; border-radius: 3px 3px 0 0; min-height: 2px; cursor: pointer; padding: 0; }
+  .bars button:hover { opacity: 1; }
+  .bars button.empty { background: var(--line); opacity: 1; cursor: default; }
+  .tl-items { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .tl-items .it { display: inline-flex; gap: 6px; align-items: center; border: 1px solid var(--line); border-radius: 99px;
+                  padding: 3px 10px 3px 4px; font-size: 13px; background: var(--panel); cursor: pointer; }
+  .tl-items .it img { width: 24px; height: 24px; border-radius: 50%; object-fit: cover; background: var(--line); }
+  .tl-items .it.ms { border-color: var(--accent); }
+  .tl-items .it.ms .x { color: var(--muted); margin-left: 2px; font-size: 14px; }
+  .tl-items .it.ms .x:hover { color: var(--bad); }
+  .tl-items .it.ppl { border-style: dashed; }
   .people { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 14px; }
   .person { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 12px;
             text-align: center; font: inherit; color: inherit; }
@@ -122,6 +142,7 @@
   <nav>
     <button data-tab="home" class="active">Home</button>
     <button data-tab="photos">Photos</button>
+    <button data-tab="timeline">Timeline</button>
     <button data-tab="people">People</button>
     <button data-tab="trips">Trips</button>
     <button data-tab="map">Map</button>
@@ -227,6 +248,16 @@
     <div class="grid" id="grid"></div>
     <p class="muted" id="grid-empty" style="display:none">No photos here yet. Download some from the Home tab.</p>
     <div id="grid-more" style="height:40px"></div>
+  </section>
+
+  <!-- TIMELINE -->
+  <section id="tab-timeline" class="hidden">
+    <div class="row" style="justify-content:space-between;margin-bottom:12px">
+      <p class="muted small" style="margin:0">Your life in chapters, found from where you lived. Click a chapter title to rename it, a bar to see that month, a pin to open it.</p>
+      <button class="btn" id="tl-rebuild" title="Recompute chapters and milestones from your photos">Rebuild</button>
+    </div>
+    <div id="timeline"></div>
+    <p class="muted" id="tl-empty" style="display:none">Nothing here yet. Chapters appear once photos with dates and locations are downloaded.</p>
   </section>
 
   <!-- PEOPLE -->
@@ -415,6 +446,7 @@ function showTab(name) {
   if (name === "photos") ensurePhotos();
   if (name === "trips") loadTrips();
   if (name === "people") loadPeople();
+  if (name === "timeline") loadTimeline();
   if (name === "map") loadMap();
 }
 $$("nav button").forEach(b => b.onclick = () => showTab(b.dataset.tab));
@@ -689,11 +721,13 @@ function setFilters(f) {
   $("#f-q").value = f.q || ""; $("#f-q-clear").classList.toggle("hidden", !f.q);
   fillCities();
   const chip = $("#f-trip");
-  chip.classList.toggle("hidden", !f.trip && !f.person);
-  if (f.trip || f.person) {
-    chip.replaceChildren(document.createTextNode(f.trip ? "Trip: " + (f.tripTitle || "") : "Person: " + (f.personName || "")));
+  const label = f.trip ? "Trip: " + (f.tripTitle || "") : f.person ? "Person: " + (f.personName || "")
+    : f.chapter ? "Chapter: " + (f.chapterTitle || "") : (f.month || f.day) ? (f.monthTitle || f.month || f.day) : "";
+  chip.classList.toggle("hidden", !label);
+  if (label) {
+    chip.replaceChildren(document.createTextNode(label));
     const x = document.createElement("button"); x.textContent = "✕"; x.title = "Show all photos";
-    x.onclick = () => setFilters({ ...f, trip: "", person: "" }); chip.append(x);
+    x.onclick = () => setFilters({ ...f, trip: "", person: "", chapter: "", month: "", day: "" }); chip.append(x);
   }
   loadMorePhotos();
 }
@@ -708,7 +742,7 @@ $("#search-form").onsubmit = ev => {
   setFilters({ ...grid.filters, q });
 };
 $("#f-q-clear").onclick = () => setFilters({ ...grid.filters, q: "" });
-$("#f-year").onchange = e => setFilters({ ...grid.filters, year: e.target.value, trip: "" });
+$("#f-year").onchange = e => setFilters({ ...grid.filters, year: e.target.value, trip: "", month: "", day: "", chapter: "" });
 $("#f-country").onchange = e => setFilters({ ...grid.filters, country: e.target.value, city: "", trip: "" });
 $("#f-city").onchange = e => setFilters({ ...grid.filters, city: e.target.value, trip: "" });
 $("#f-kind").onchange = e => setFilters({ ...grid.filters, kind: e.target.value });
@@ -718,7 +752,7 @@ async function loadMorePhotos() {
   grid.loading = true;
   const mine = grid;
   const q = new URLSearchParams({ offset: grid.offset, limit: PAGE });
-  for (const k of ["q", "year", "country", "city", "trip", "kind", "person"]) if (grid.filters[k]) q.set(k, grid.filters[k]);
+  for (const k of ["q", "year", "country", "city", "trip", "kind", "person", "month", "day", "chapter"]) if (grid.filters[k]) q.set(k, grid.filters[k]);
   try {
     const res = await api("/api/photos?" + q);
     if (mine !== grid) return;  // filters changed meanwhile
@@ -823,6 +857,92 @@ document.addEventListener("keydown", e => {
   if (e.key === "ArrowLeft") $("#lb-prev").click();
   if (e.key === "ArrowRight") $("#lb-next").click();
 });
+
+// ---- timeline
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+function fmtDate(iso) { return new Date(iso.slice(0, 10) + "T00:00:00").toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }); }
+function goPhotos(filters) { showTab("photos"); setFilters(filters); }
+async function loadTimeline() {
+  const t = await api("/api/timeline").catch(e => { toast(e.message); return null; });
+  if (!t) return;
+  const box = $("#timeline");
+  const months = Object.keys(t.months).sort();
+  $("#tl-empty").style.display = months.length ? "none" : "";
+  if (!months.length) { box.replaceChildren(); return; }
+  const maxN = Math.max(...Object.values(t.months));
+  const firstY = +months[0].slice(0, 4), lastY = +months[months.length - 1].slice(0, 4);
+  // Chapters cover year ranges; years outside any chapter go in an "Other" group.
+  const chapters = t.chapters.length ? t.chapters : [{ id: 0, title: "All photos", subtitle: "", start_at: months[0] + "-01", end_at: months[months.length - 1] + "-28", photo_count: 0 }];
+  const frag = document.createDocumentFragment();
+  const yearOf = y => `${y}`;
+  for (const ch of chapters) {
+    const sec = document.createElement("section"); sec.className = "tl-chapter";
+    const head = document.createElement("header");
+    const img = document.createElement("img"); img.alt = ""; if (ch.cover_id) img.src = media("thumb", ch.cover_id);
+    img.onclick = () => goPhotos({ chapter: ch.id, tripTitle: "", personName: "", chapterTitle: ch.title });
+    const txt = document.createElement("div");
+    const title = document.createElement("div"); title.className = "t"; title.textContent = ch.title; title.title = "Click to rename";
+    title.onclick = async () => {
+      const name = prompt("Chapter title:", ch.title); if (name === null || !name.trim()) return;
+      await api("/api/timeline/chapter", { id: ch.id, title: name }).catch(e => toast(e.message)); loadTimeline();
+    };
+    const sub = document.createElement("div"); sub.className = "s";
+    sub.textContent = `${fmtDate(ch.start_at)} – ${fmtDate(ch.end_at)} · ${fmt(ch.photo_count)} photos${ch.auto === 0 ? " · edited" : ""}`;
+    txt.append(title, sub); head.append(img, txt); sec.append(head);
+    const y0 = +ch.start_at.slice(0, 4), y1 = +ch.end_at.slice(0, 4);
+    for (let y = y1; y >= y0; y--) {
+      const inRange = m => m >= ch.start_at.slice(0, 7) && m <= ch.end_at.slice(0, 7);
+      const row = document.createElement("div"); row.className = "tl-year";
+      const yl = document.createElement("div"); yl.className = "y";
+      const total = MONTHS.reduce((s, _, i) => s + (inRange(`${y}-${String(i + 1).padStart(2, "0")}`) ? (t.months[`${y}-${String(i + 1).padStart(2, "0")}`] || 0) : 0), 0);
+      if (!total) continue;   // skip empty years
+      yl.innerHTML = `${y}<small>${fmt(total)} photos</small>`;
+      yl.onclick = () => goPhotos({ year: String(y) });
+      const right = document.createElement("div");
+      const bars = document.createElement("div"); bars.className = "bars";
+      MONTHS.forEach((name, i) => {
+        const key = `${y}-${String(i + 1).padStart(2, "0")}`;
+        const n = inRange(key) ? (t.months[key] || 0) : 0;
+        const b = document.createElement("button"); b.title = `${name} ${y}: ${fmt(n)} photos`;
+        b.style.height = n ? Math.max(4, 44 * n / maxN) + "px" : "2px";
+        if (!n) b.classList.add("empty"); else b.onclick = () => goPhotos({ month: key, monthTitle: `${name} ${y}` });
+        bars.append(b);
+      });
+      const items = document.createElement("div"); items.className = "tl-items";
+      for (const tr of t.trips.filter(tr => +tr.start_at.slice(0, 4) === y && inRange(tr.start_at.slice(0, 7)))) {
+        const it = document.createElement("span"); it.className = "it";
+        const im = document.createElement("img"); if (tr.cover_id) im.src = media("thumb", tr.cover_id);
+        it.append(im, document.createTextNode(`✈ ${tr.title} · ${fmt(tr.photo_count)}`));
+        it.onclick = () => goPhotos({ trip: tr.id, tripTitle: tr.title }); items.append(it);
+      }
+      for (const m of t.milestones.filter(m => +m.date.slice(0, 4) === y && inRange(m.date.slice(0, 7)))) {
+        const it = document.createElement("span"); it.className = "it ms";
+        const im = document.createElement("img"); if (m.asset_id) im.src = media("thumb", m.asset_id);
+        it.append(im, document.createTextNode(`★ ${m.title}${m.detail ? " · " + m.detail : ""}`));
+        it.title = fmtDate(m.date);
+        it.onclick = () => {
+          if (m.kind === "trip" && m.trip_id) goPhotos({ trip: m.trip_id, tripTitle: m.title });
+          else if (m.kind === "person" && m.person_id) goPhotos({ person: m.person_id, personName: m.title });
+          else if (m.kind === "move") goPhotos({ month: m.date.slice(0, 7), monthTitle: m.title });
+          else goPhotos({ day: m.date, monthTitle: fmtDate(m.date) });
+        };
+        const x = document.createElement("span"); x.className = "x"; x.textContent = "✕"; x.title = "Not a milestone";
+        x.onclick = async ev => { ev.stopPropagation(); await api("/api/timeline/milestone", { id: m.id, state: "dismissed" }).catch(e => toast(e.message)); loadTimeline(); };
+        it.append(x); items.append(it);
+      }
+      for (const p of t.people.filter(p => +p.first_at.slice(0, 4) === y && inRange(p.first_at.slice(0, 7)))) {
+        const it = document.createElement("span"); it.className = "it ppl";
+        it.textContent = `👤 ${p.name} appears`;
+        it.onclick = () => goPhotos({ person: p.id, personName: p.name }); items.append(it);
+      }
+      right.append(bars); if (items.children.length) right.append(items);
+      row.append(yl, right); sec.append(row);
+    }
+    frag.append(sec);
+  }
+  box.replaceChildren(frag);
+}
+$("#tl-rebuild").onclick = () => api("/api/timeline/rebuild", {}).then(loadTimeline).catch(e => toast(e.message));
 
 // ---- trips
 async function loadTrips() {
