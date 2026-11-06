@@ -139,3 +139,20 @@ def test_status_is_cached_briefly(tmp_path, monkeypatch):
     monkeypatch.setattr(catalog, "stats", lambda conn: (calls.append(1), real(conn))[1])
     app.status(); app.status(); app.status()
     assert len(calls) == 1
+
+
+def test_fresh_library_can_be_opened_from_two_threads_at_once(tmp_path):
+    """Regression: 'duplicate column name' when a job and the status poll both migrated."""
+    import threading
+    errors = []
+    for n in range(10):
+        db = tmp_path / f"lib{n}" / "library.db"
+
+        def open_it():
+            try:
+                catalog.connect(db).close()
+            except Exception as e:  # noqa: BLE001
+                errors.append(e)
+        ts = [threading.Thread(target=open_it) for _ in range(4)]
+        [t.start() for t in ts]; [t.join() for t in ts]
+    assert errors == []

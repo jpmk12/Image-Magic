@@ -95,14 +95,12 @@ def connect(db_file: Path) -> sqlite3.Connection:
     except sqlite3.OperationalError:
         pass
     run_script(conn, SCHEMA)
-    have = {row["name"] for row in conn.execute("PRAGMA table_info(assets)")}
-    for col, typ in MIGRATIONS.items():
-        if col not in have:
-            conn.execute(f"ALTER TABLE assets ADD COLUMN {col} {typ}")
-    have_t = {row["name"] for row in conn.execute("PRAGMA table_info(trips)")}
-    for col, typ in TRIP_MIGRATIONS.items():
-        if col not in have_t:
-            conn.execute(f"ALTER TABLE trips ADD COLUMN {col} {typ}")
+    # Two connections can open a fresh library at the same moment (the page's status
+    # poll and a job); take the write lock for the migrations and tolerate a column
+    # the other connection added first.
+    conn.execute("BEGIN IMMEDIATE")
+    _add_columns(conn, "assets", MIGRATIONS)
+    _add_columns(conn, "trips", TRIP_MIGRATIONS)
     conn.execute("CREATE INDEX IF NOT EXISTS idx_assets_country ON assets(country_code)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_assets_trip ON assets(trip_id)")
     # Every feature's tables exist from the start, so request handlers never run DDL.
@@ -110,11 +108,21 @@ def connect(db_file: Path) -> sqlite3.Connection:
     for mod in (faces, describe, search, chapters, ask):
         run_script(conn, mod.SCHEMA if mod is not describe else describe.DB_SCHEMA)
     run_script(conn, review.SCHEMA)
-    have_p = {row["name"] for row in conn.execute("PRAGMA table_info(persons)")}
-    if "birthday" not in have_p:
-        conn.execute("ALTER TABLE persons ADD COLUMN birthday TEXT")
+    _add_columns(conn, "persons", {"birthday": "TEXT"})
     conn.commit()
     return conn
+
+
+def _add_columns(conn: sqlite3.Connection, table: str, columns: dict[str, str]) -> None:
+    have = {row["name"] for row in conn.execute(f"PRAGMA table_info({table})")}
+    for col, typ in columns.items():
+        if col in have:
+            continue
+        try:
+            conn.execute(f"ALTER TABLE {table} ADD COLUMN {col} {typ}")
+        except sqlite3.OperationalError as e:
+            if "duplicate column" not in str(e).lower():
+                raise
 
 
 def set_meta(conn: sqlite3.Connection, key: str, value: str) -> None:
