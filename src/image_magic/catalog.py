@@ -55,6 +55,7 @@ MIGRATIONS = {
     "city": "TEXT",
     "place_km": "REAL",      # distance to the matched place; NULL = not looked up yet
     "trip_id": "INTEGER",
+    "private": "INTEGER NOT NULL DEFAULT 0",   # never sent to AI, never shared
 }
 
 LIVE_SUFFIXES = ("_HEVC",)  # icloudpd's default live-photo video suffix

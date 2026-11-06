@@ -300,6 +300,10 @@ def load_for_faces(path: Path) -> Image.Image:
 
 def ensure_schema(conn: sqlite3.Connection) -> None:
     conn.executescript(SCHEMA)
+    have = {r["name"] for r in conn.execute("PRAGMA table_info(persons)")}
+    if "birthday" not in have:
+        conn.execute("ALTER TABLE persons ADD COLUMN birthday TEXT")
+        conn.commit()
 
 
 def pending(conn: sqlite3.Connection) -> list[sqlite3.Row]:
@@ -506,7 +510,7 @@ def refresh_covers(conn: sqlite3.Connection) -> None:
 def people(conn: sqlite3.Connection, include_hidden: bool = False) -> list[dict]:
     ensure_schema(conn)
     rows = conn.execute(
-        f"""SELECT p.id, p.name, p.hidden, p.cover_face,
+        f"""SELECT p.id, p.name, p.hidden, p.cover_face, p.birthday,
                    (SELECT COUNT(DISTINCT f.asset_id) FROM faces f JOIN assets a ON a.id = f.asset_id
                      WHERE f.person_id = p.id AND a.missing = 0) AS photo_count
             FROM persons p {'' if include_hidden else 'WHERE p.hidden = 0'}
@@ -565,7 +569,7 @@ def face_crop(conn: sqlite3.Connection, originals: Path, library: Path, face_id:
                        "JOIN assets a ON a.id = f.asset_id WHERE f.id = ?", (face_id,)).fetchone()
     if not row:
         return None
-    dest = library / "derived" / "faces" / f"{face_id}.jpg"
+    dest = library / "derived" / "faces" / (f"{face_id}.jpg" if size == 160 else f"{face_id}-{size}.jpg")
     if dest.exists():
         return dest
     im = load_for_faces(originals / row["path"])

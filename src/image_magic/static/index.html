@@ -126,6 +126,14 @@
   .story .card { background: var(--panel); color: var(--text); border-radius: 14px; width: min(760px, 100%); max-height: 90vh; overflow: auto; padding: 22px 24px; }
   .story textarea { width: 100%; min-height: 260px; font: inherit; line-height: 1.6; padding: 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--text); resize: vertical; }
   .story .text { white-space: pre-wrap; line-height: 1.7; font-size: 16px; }
+  .grow { position: fixed; inset: 0; background: rgba(0,0,0,.85); z-index: 2050; display: grid; place-items: center; padding: 20px; color: #e8eaed; }
+  .grow .card { width: min(900px, 100%); text-align: center; }
+  .grow .big { width: 320px; height: 320px; border-radius: 16px; object-fit: cover; background: #222; }
+  .grow .lbl { font-size: 20px; margin: 10px 0 16px; }
+  .grow .strip { display: flex; gap: 4px; overflow-x: auto; padding: 6px 0; }
+  .grow .strip img { width: 56px; height: 56px; border-radius: 6px; object-fit: cover; cursor: pointer; opacity: .6; flex: none; }
+  .grow .strip img.on { opacity: 1; outline: 2px solid var(--accent); }
+  .person .acts { flex-wrap: wrap; }
   .people { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 14px; }
   .person { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 12px;
             text-align: center; font: inherit; color: inherit; }
@@ -468,6 +476,22 @@
   </div>
 </div>
 
+<div class="grow hidden" id="grow">
+  <div class="card">
+    <h2 id="grow-title" style="margin:0 0 12px"></h2>
+    <img class="big" id="grow-img" alt="">
+    <div class="lbl" id="grow-lbl"></div>
+    <div class="strip" id="grow-strip"></div>
+    <div class="row" style="justify-content:center;margin-top:14px">
+      <button class="btn primary" id="grow-play">❚❚</button>
+      <button class="btn" id="grow-gif">Save as GIF</button>
+      <button class="btn" id="grow-book">Make the book (PDF)</button>
+      <button class="btn" id="grow-close">✕ Close</button>
+      <span class="small muted" id="grow-note"></span>
+    </div>
+  </div>
+</div>
+
 <div class="story hidden" id="story">
   <div class="card">
     <div class="row" style="justify-content:space-between">
@@ -700,6 +724,15 @@ async function loadPeople() {
     n.onclick = () => renamePerson(p);
     const c = document.createElement("div"); c.className = "c"; c.textContent = fmt(p.photo_count) + " photos";
     const acts = document.createElement("div"); acts.className = "acts";
+    const grow = document.createElement("button"); grow.textContent = "Growing up"; grow.title = "Time-lapse of their face over the years, GIF and book";
+    grow.onclick = () => openGrowing(p);
+    const bday = document.createElement("button"); bday.textContent = p.birthday ? "🎂 " + p.birthday : "Set birthday";
+    bday.onclick = async () => {
+      const v = prompt("Birthday (YYYY-MM-DD), or empty to clear:", p.birthday || "");
+      if (v === null) return;
+      await api("/api/people/birthday", { id: p.id, birthday: v.trim() }).catch(e => toast(e.message)); loadPeople();
+    };
+    acts.append(grow, bday);
     const same = document.createElement("button"); same.textContent = "Same as…"; same.title = "This is the same person as another group";
     same.onclick = () => mergePerson(p);
     const hide = document.createElement("button"); hide.textContent = p.hidden ? "Unhide" : "Hide";
@@ -1158,6 +1191,39 @@ document.addEventListener("keydown", e => {
   if (e.key === "ArrowLeft") $("#rp-prev").click();
   if (e.key === "ArrowRight") $("#rp-next").click();
 });
+
+// ---- growing up
+const grow = { frames: [], i: 0, timer: null, pid: 0, playing: false };
+async function openGrowing(p) {
+  const g = await api("/api/people/growing?id=" + p.id).catch(e => { toast(e.message); return null; });
+  if (!g || !g.frames.length) return toast("No dated photos of this person yet.");
+  grow.frames = g.frames; grow.pid = p.id; grow.i = 0;
+  $("#grow-title").textContent = (p.name || "Growing up") + (p.birthday ? "" : "  (set a birthday to see ages)");
+  $("#grow-strip").replaceChildren(...g.frames.map((f, i) => { const im = document.createElement("img"); im.src = media("face", f.face_id); im.onclick = () => showGrow(i, true); return im; }));
+  $("#grow-note").textContent = ""; $("#grow").classList.remove("hidden");
+  grow.playing = true; $("#grow-play").textContent = "❚❚"; showGrow(0);
+}
+function showGrow(i, stop) {
+  clearTimeout(grow.timer); if (stop) { grow.playing = false; $("#grow-play").textContent = "▶"; }
+  grow.i = (i + grow.frames.length) % grow.frames.length;
+  const f = grow.frames[grow.i];
+  $("#grow-img").src = media("face", f.face_id);
+  $("#grow-lbl").textContent = f.age ? `${f.age} · ${f.date}` : f.date;
+  $$("#grow-strip img").forEach((im, k) => im.classList.toggle("on", k === grow.i));
+  if (grow.playing) grow.timer = setTimeout(() => showGrow(grow.i + 1), 600);
+}
+$("#grow-play").onclick = () => { if (grow.playing) showGrow(grow.i, true); else { grow.playing = true; $("#grow-play").textContent = "❚❚"; showGrow(grow.i + 1); } };
+$("#grow-close").onclick = () => { clearTimeout(grow.timer); grow.playing = false; $("#grow").classList.add("hidden"); };
+async function exportPerson(kind) {
+  $("#grow-note").textContent = kind === "book" ? "Making the book… (a minute or two)" : "Saving GIF…";
+  try {
+    const r = await api(`/api/people/${kind}?id=${grow.pid}`);
+    $("#grow-note").textContent = "Saved to the exports folder in your library.";
+    window.open(`/media/export/${encodeURIComponent(r.file)}?t=${encodeURIComponent(TOKEN)}`, "_blank");
+  } catch (e) { $("#grow-note").textContent = e.message; }
+}
+$("#grow-gif").onclick = () => exportPerson("gif");
+$("#grow-book").onclick = () => exportPerson("book");
 
 // ---- stories
 const story = { kind: "", id: 0 };

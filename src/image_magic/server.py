@@ -277,9 +277,24 @@ def make_handler(app: App):
                 if path == "/api/people":
                     from . import faces
                     return self._json(200, faces.people(conn, include_hidden=q.get("hidden") == "1"))
+                if path == "/api/people/growing":
+                    from . import kids
+                    return self._json(200, kids.growing_up(conn, int(q.get("id") or 0)))
+                if path in ("/api/people/book", "/api/people/gif"):
+                    from . import kids
+                    fn = kids.make_book if path.endswith("book") else kids.make_gif
+                    f = fn(conn, settings.originals, settings.library, int(q.get("id") or 0))
+                    return self._json(200, {"file": f.name})
                 if path == "/api/map":
                     return self._json(200, browse.map_points(conn, q))
                 kind, _, ident = path.rpartition("/")
+                if kind == "/media/export":
+                    conn.close()
+                    f = settings.library / "exports" / Path(ident).name
+                    if not f.is_file():
+                        return self._json(404, {"error": "not found"})
+                    ctype = "application/pdf" if f.suffix == ".pdf" else "image/gif" if f.suffix == ".gif" else "application/octet-stream"
+                    return self._file(f, ctype)
                 asset_id = int(ident)
                 if kind == "/api/photo":
                     d = browse.photo_detail(conn, asset_id)
@@ -371,9 +386,12 @@ def make_handler(app: App):
                 elif action == "move-face":
                     pid = data.get("person")
                     faces.move_face(conn, int(data["face"]), int(pid) if pid else None)
+                elif action == "birthday":
+                    from . import kids
+                    kids.set_birthday(conn, int(data["id"]), str(data.get("birthday") or "") or None)
                 elif action == "regroup":
                     faces.group_faces(conn)
-                if action in ("rename", "merge", "regroup"):
+                if action in ("rename", "merge", "regroup", "birthday"):
                     from . import chapters
                     chapters.rebuild_milestones(conn)
                 else:

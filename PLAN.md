@@ -262,4 +262,7 @@ Service features (flying log, squadron yearbook) slot into S2 (log) and S9 (year
   stories from a compact text context (days → places, people, sampled captions, milestones),
   editable and persisted; Ask uses three tools (library_summary, search_photos, show_photos)
   in a bounded loop, with per-session conversation history.
-- Next: S6 – Kids' stories (growing-up time-lapse, birthday reel, PDF book).
+- **S6 – Kids' stories: built** (v0.10.0). Birthday per person with age labels; growing-up
+  time-lapse (best face per period, in-app player and GIF export); birthday milestones; per-person
+  PDF book with reportlab.
+- Next: S7 – Memories: on this day, then & now, similar moments, shuffle.

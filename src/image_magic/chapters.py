@@ -239,6 +239,8 @@ def rebuild_milestones(conn: sqlite3.Connection) -> int:
                       "title": f"Busiest day of {b['y']}: {nice}", "detail": f"{b['n']} photos",
                       "asset_id": aid[0] if aid else None})
 
+    from . import kids
+    found += kids.birthday_milestones(conn)
     keys = {m["key"] for m in found}
     conn.execute("DELETE FROM milestones WHERE key NOT IN (%s)" % ",".join("?" * len(keys)) if keys
                  else "DELETE FROM milestones", list(keys))

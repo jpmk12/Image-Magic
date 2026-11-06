@@ -75,6 +75,11 @@ program only. Your photos and settings are kept.
 - **Ask:** the **Ask** tab answers questions about your own life ("When did we last go to the
   beach?", "How many countries have the kids been to?") and shows the photos it found. Claude
   reads the catalog through a few tools; it never sees the photos. Needs your API key.
+- **Growing up, birthdays and the book:** on a person's card, **Set birthday** adds ages
+  everywhere and "Emma turns 3" milestones to the Timeline. **Growing up** plays their face
+  through the years; **Save as GIF** exports it, and **Make the book** builds a printable PDF
+  (cover, growing-up page, then the best photos of each year with captions). Exports land in
+  the `exports` folder inside your library.
 - **People:** turn it on once from the Home tab (about 290 MB of face models, verified by
   fingerprint). The app finds every face and groups them by person. On the **People** tab,
   click **"Who is this?"** to name a group, click the face to see all of that person's photos,
