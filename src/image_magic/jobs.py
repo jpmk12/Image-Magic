@@ -124,7 +124,7 @@ class JobRunner:
             target = {"sync": self._run_sync, "scan": self._run_scan, "verify": self._run_verify,
                       "index": self._run_index, "faces": self._run_faces,
                       "describe": self._run_describe, "import_check": self._run_import_check,
-                      "import": self._run_import}[kind]
+                      "import": self._run_import, "quality": self._run_quality}[kind]
             threading.Thread(target=target, args=(mode,), daemon=True).start()
 
     def cancel(self) -> None:
@@ -192,10 +192,37 @@ class JobRunner:
         self.state.message = "Cataloging files..."
         conn = catalog.connect(settings.db)
         try:
-            return catalog.scan(conn, settings.originals, progress=self._progress("Cataloged"),
-                                cancelled=self._cancel.is_set)
+            r = catalog.scan(conn, settings.originals, progress=self._progress("Cataloged"),
+                             cancelled=self._cancel.is_set)
+            self._quality(conn, settings)
+            return r
         finally:
             conn.close()
+
+    def _quality(self, conn, settings: Settings) -> int:
+        """Score new photos and group bursts (local, free); then refresh events."""
+        from . import events, quality
+        self.state.message = "Rating photos..."
+        n = quality.score_pending(conn, settings.library, settings.originals,
+                                  progress=self._progress("Rated"), cancelled=self._cancel.is_set)
+        self.state.message = "Finding events..."
+        events.rebuild(conn)
+        return n
+
+    def _run_quality(self, _mode: str) -> None:
+        try:
+            settings = self._settings_provider()
+            conn = catalog.connect(settings.db)
+            try:
+                n = self._quality(conn, settings)
+                from . import quality
+                c = quality.counts(conn)
+            finally:
+                conn.close()
+            self._finish("cancelled" if self._cancel.is_set() else "done",
+                         f"Rated {n:,} photos: {c['good']:,} keepers, {c['bursts']:,} bursts.", c)
+        except Exception as e:
+            self._finish("failed", f"Rating failed: {e}")
 
     def _run_index(self, _mode: str) -> None:
         try:
@@ -360,6 +387,7 @@ class JobRunner:
                 r = importer.run_import(conn, plan, settings.library, settings.originals,
                                         include_near=bool(self.payload.get("include_near")),
                                         progress=self._progress("Copied"), cancelled=self._cancel.is_set)
+                self._quality(conn, settings)
             finally:
                 conn.close()
             self.import_plan = None

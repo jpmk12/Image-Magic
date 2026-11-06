@@ -134,6 +134,18 @@ program only. Your photos and settings are kept.
   exact copies are skipped, look-alikes (the same picture resized or re-saved) are listed with
   the library photo they match, and the rest are new. Click **Import** to copy the new ones into
   `originals/imported/<year>/<month>/`. Your files are copied, never moved.
+- **Best photos:** every photo gets a local quality rating (sharpness, exposure, contrast,
+  computed on your laptop from the thumbnail, free) and bursts of near-identical shots are
+  grouped so one keeper stands for the burst. Tick **Best only** on the Photos tab, and the
+  year review, replays marked "best", books and the shuffle all prefer keepers. The viewer
+  shows the rating and lets you open the whole burst. Rating runs after each sync; **Rate
+  photos** on the Home tab rates older ones.
+- **Events:** the small unit of life, next to trips: photos taken within a few hours and a
+  couple of kilometres of each other (a party, a hike, a day at the beach). They are found
+  automatically with titles like *"Saturday morning in Lewes"* or *"Birthday cake: Sunday
+  afternoon at home"* (the keyword comes from AI captions when they are on). The **Trips &
+  events** tab lists them by year; click one to see its photos, **▶ Replay** it, **↗ Share**
+  it, or click the title to rename it. Renames survive rebuilds.
 - **Fixing mistakes:** everything the app works out can be corrected, and your corrections
   stick through rebuilds. In the viewer: **Trip ✎ change** moves a photo to another trip, a
   new trip, or no trip, and **Find more photos from this trip** suggests other photos that

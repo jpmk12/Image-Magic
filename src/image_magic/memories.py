@@ -53,7 +53,8 @@ def shuffle(conn: sqlite3.Connection, rng: random.Random | None = None) -> dict 
     """A random good moment: prefer photos rated well, else with people, else on a trip."""
     rng = rng or random.Random()
     pools = [
-        f"SELECT a.id FROM assets a JOIN descriptions d ON d.asset_id = a.id WHERE a.{VISIBLE.replace(' AND ', ' AND a.')} AND d.quality >= 4",
+        f"SELECT a.id FROM assets a JOIN descriptions d ON d.asset_id = a.id WHERE a.{VISIBLE.replace(' AND ', ' AND a.')} AND d.quality >= 4 AND a.burst_best = 1",
+        f"SELECT id FROM assets WHERE {VISIBLE} AND quality_score >= 70 AND burst_best = 1",
         f"SELECT DISTINCT a.id FROM assets a JOIN faces f ON f.asset_id = a.id JOIN persons p ON p.id = f.person_id "
         f"WHERE a.{VISIBLE.replace(' AND ', ' AND a.')} AND p.name IS NOT NULL",
         f"SELECT id FROM assets WHERE {VISIBLE} AND trip_id IS NOT NULL",

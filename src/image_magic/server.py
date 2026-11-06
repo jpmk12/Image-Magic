@@ -57,14 +57,14 @@ class App:
                 try:
                     stats = catalog.stats(conn)
                     extra = {"search": self.search_counts_conn(conn), "people": self.people_counts_conn(conn),
-                             "ai": self.ai_counts_conn(conn, s)}
+                             "ai": self.ai_counts_conn(conn, s), "quality": self.quality_counts_conn(conn)}
                 finally:
                     conn.close()
                 cached = {"stats": stats, **extra}
                 self._stats_cache = (time.time(), key, cached)
                 stats = cached["stats"]
         else:
-            cached = {"search": None, "people": None, "ai": {"has_key": False}}
+            cached = {"search": None, "people": None, "ai": {"has_key": False}, "quality": None}
             from . import describe
             cached["ai"] = {"has_key": bool(describe.get_api_key())}
         return {
@@ -78,6 +78,7 @@ class App:
             "ai_on": s.ai_descriptions,
             "ai_model": s.ai_model,
             "ai": cached["ai"],
+            "quality": cached.get("quality"),
             "library": str(s.library),
             "stats": stats,
             "job": self.jobs.snapshot(),
@@ -93,6 +94,10 @@ class App:
     def ai_counts_conn(self, conn, s):
         from . import describe
         return describe.counts(conn, s.ai_model)
+
+    def quality_counts_conn(self, conn):
+        from . import quality
+        return quality.counts(conn)
 
     def people_counts_conn(self, conn):
         from . import faces
@@ -133,7 +138,7 @@ def find_photos(conn, settings, q: dict) -> list[tuple[int, float]]:
     """Text query + filters -> [(asset_id, score)]: AI-description word matches first, then smart search."""
     from . import describe, search
     text = (q.get("q") or "").strip()[:200]
-    has_filters = any(q.get(k) for k in ("year", "country", "city", "trip", "kind", "person", "month", "day", "chapter"))
+    has_filters = any(q.get(k) for k in ("year", "country", "city", "trip", "kind", "person", "month", "day", "chapter", "event", "best"))
     allowed = None
     if has_filters:
         allowed = browse.ids(conn, q)
@@ -238,7 +243,7 @@ def make_handler(app: App):
                     return self._json(200, app.jobs.log_since(since))
                 if path.startswith(("/api/photos", "/api/photo/", "/api/facets", "/api/trips", "/api/replay",
                                     "/api/map", "/api/people", "/api/timeline", "/api/story", "/api/memories",
-                                    "/api/shuffle", "/api/similar/", "/api/review", "/api/context/", "/api/curate/", "/media/")):
+                                    "/api/shuffle", "/api/similar/", "/api/review", "/api/context/", "/api/curate/", "/api/events", "/media/")):
                     return self._browse(path, self._query())
             except Exception as e:
                 return self._json(500, {"error": str(e)})
@@ -270,14 +275,19 @@ def make_handler(app: App):
                     return self._json(200, browse.photos(
                         conn, q, int(q.get("offset") or 0), min(int(q.get("limit") or 200), 500)))
                 if path == "/api/replay":
-                    if q.get("best") and q.get("year"):
-                        from . import review
-                        return self._json(200, browse.replay_items(conn, [i["id"] for i in review.best_of_year(conn, q["year"], 30)]))
+                    if q.get("best"):
+                        from . import quality
+                        where, args = browse._filters({k: v for k, v in q.items() if k != "best"}, alias="a.")
+                        n = max(5, min(int(q.get("n") or 30), 300))
+                        return self._json(200, browse.replay_items(conn, quality.best_of(conn, where + " AND a.private = 0", args, n)))
                     return self._json(200, browse.replay(conn, q))
                 if path == "/api/facets":
                     return self._json(200, browse.facets(conn))
                 if path == "/api/trips":
                     return self._json(200, browse.trips(conn))
+                if path == "/api/events":
+                    from . import events
+                    return self._json(200, events.events(conn, q.get("year"), int(q["trip"]) if q.get("trip") else None))
                 if path == "/api/curate/suggest":
                     from . import curate
                     return self._json(200, curate.suggest_for_trip(conn, str(settings.db), int(q.get("trip") or 0),
@@ -337,6 +347,10 @@ def make_handler(app: App):
                         d["faces"] = faces.faces_in_photo(conn, asset_id)
                         d["description"] = describe.for_photo(conn, asset_id)
                         d["private"] = bool(conn.execute("SELECT private FROM assets WHERE id = ?", (asset_id,)).fetchone()[0])
+                        from . import quality
+                        d["quality"] = quality.detail(conn, asset_id)
+                        from . import events
+                        d["event"] = events.event_for(conn, asset_id)
                     return self._json(200, d) if d else self._json(404, {"error": "not found"})
                 if kind == "/media/face":
                     from . import faces
@@ -512,7 +526,7 @@ def make_handler(app: App):
                 if path == "/api/run":
                     kind = data.get("kind", "sync")
                     mode = data.get("mode", "full")
-                    if kind not in ("sync", "scan", "verify", "index", "faces", "describe") or mode not in ("full", "quick", "test"):
+                    if kind not in ("sync", "scan", "verify", "index", "faces", "describe", "quality") or mode not in ("full", "quick", "test"):
                         raise ValueError("unknown task")
                     if kind == "sync" and not app.settings_provider().apple_id:
                         raise ValueError("Enter your Apple ID in Settings first.")
@@ -553,6 +567,10 @@ def make_handler(app: App):
                             from . import chapters
                             chapters.rebuild_milestones(conn)
                             return self._json(200, {"trip": tid})
+                        if action == "event-rename":
+                            from . import events
+                            events.rename(conn, int(data["id"]), str(data.get("title", "")))
+                            return self._json(200, {"ok": True})
                         if action == "trip-rename":
                             curate.rename_trip(conn, int(data["id"]), str(data.get("title", "")))
                             return self._json(200, {"ok": True})
@@ -567,7 +585,7 @@ def make_handler(app: App):
                     settings, conn = app.db()
                     try:
                         filters = {k: v for k, v in dict(data.get("filters") or {}).items() if k in
-                                   ("trip", "chapter", "person", "year", "month", "day", "country", "city", "q")}
+                                   ("trip", "chapter", "person", "year", "month", "day", "country", "city", "q", "event", "best")}
                         if path.endswith("check"):
                             return self._json(200, share.check(conn, filters))
                         folder = share.export(conn, settings.originals, settings.library, filters,

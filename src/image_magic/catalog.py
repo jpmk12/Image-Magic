@@ -58,6 +58,10 @@ MIGRATIONS = {
     "private": "INTEGER NOT NULL DEFAULT 0",   # never sent to AI, never shared
     "trip_manual": "INTEGER NOT NULL DEFAULT 0",   # 1 = you chose this photo's trip
     "phash": "INTEGER",                            # perceptual hash for look-alike detection
+    "quality_score": "REAL",                       # local 0-100 quality (quality.py)
+    "burst_id": "INTEGER",                         # first photo of a burst of look-alikes
+    "burst_best": "INTEGER NOT NULL DEFAULT 1",    # the keeper of its burst
+    "event_id": "INTEGER",                         # small cluster of photos: a party, a hike (events.py)
 }
 TRIP_MIGRATIONS = {"manual": "INTEGER NOT NULL DEFAULT 0", "title_locked": "INTEGER NOT NULL DEFAULT 0"}
 
@@ -96,7 +100,7 @@ def connect(db_file: Path) -> sqlite3.Connection:
         pass
     run_script(conn, SCHEMA)
     # Every feature's tables exist from the start, so request handlers never run DDL.
-    from . import ask, chapters, describe, faces, review, search
+    from . import ask, chapters, describe, events, faces, review, search
     for mod in (faces, describe, search, chapters, ask):
         run_script(conn, mod.SCHEMA if mod is not describe else describe.DB_SCHEMA)
     run_script(conn, review.SCHEMA)
@@ -110,6 +114,7 @@ def connect(db_file: Path) -> sqlite3.Connection:
         for t, cols in wanted.items():
             _add_columns(conn, t, cols)
         conn.commit()
+    run_script(conn, events.SCHEMA)      # indexes a migrated column, so after the migrations
     conn.execute("CREATE INDEX IF NOT EXISTS idx_assets_country ON assets(country_code)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_assets_trip ON assets(trip_id)")
     conn.commit()
@@ -260,8 +265,9 @@ def scan(conn: sqlite3.Connection, originals: Path, progress=None, cancelled=lam
     conn.commit()
     from . import places  # local import: places is optional data-heavy code
     result.places_added, result.trips = places.refresh(conn)
-    from . import chapters
+    from . import chapters, events
     chapters.rebuild(conn)
+    events.rebuild(conn)
     set_meta(conn, "last_scan", now_iso())
     conn.commit()
     return result

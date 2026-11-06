@@ -299,7 +299,7 @@
     <button data-tab="timeline"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Timeline</button>
     <button data-tab="memories"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l1.8 4.6L18.5 9l-4.7 1.4L12 15l-1.8-4.6L5.5 9l4.7-1.4z"/><path d="M19 15l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8z"/></svg>Memories</button>
     <button data-tab="people"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><circle cx="17" cy="9" r="2.5"/><path d="M15.5 14.5a5 5 0 0 1 6 4.5"/></svg>People</button>
-    <button data-tab="trips"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10.5 13.5 3 11l1.5-1.5 7 1 5-5a1.6 1.6 0 0 1 2.3 2.3l-5 5 1 7L13 21l-2.5-7.5z"/></svg>Trips</button>
+    <button data-tab="trips"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10.5 13.5 3 11l1.5-1.5 7 1 5-5a1.6 1.6 0 0 1 2.3 2.3l-5 5 1 7L13 21l-2.5-7.5z"/></svg>Trips &amp; events</button>
     <button data-tab="map"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s6-6.2 6-11a6 6 0 0 0-12 0c0 4.8 6 11 6 11z"/><circle cx="12" cy="10" r="2.2"/></svg>Map</button>
     <button data-tab="ask"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v11H9l-5 4z"/><path d="M9.5 9.2a2.5 2.5 0 1 1 3.5 2.3c-.7.3-1 .8-1 1.5"/><circle cx="12" cy="15" r=".4"/></svg>Ask</button>
     <button data-tab="settings"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>Settings</button>
@@ -396,6 +396,20 @@
       </div>
     </div>
 
+    <div class="panel" id="qualitypanel">
+      <div class="row" style="justify-content:space-between">
+        <h2 style="margin:0">Best photos</h2>
+        <span class="small muted">Runs on this computer, free.</span>
+      </div>
+      <p class="small">Every photo gets a local quality rating (sharpness, exposure, contrast) and bursts of
+        near-identical shots are grouped so only the best one shows up in replays, books and the year review.
+        Rating happens after each sync; use this to rate older photos now.</p>
+      <div class="row">
+        <button class="btn" id="quality-run">Rate photos</button>
+        <span class="small muted" id="quality-note"></span>
+      </div>
+    </div>
+
     <div class="panel" id="importpanel">
       <h2>Import from a folder</h2>
       <p class="small">Add photos you have elsewhere (your desktop, an old phone, a camera card). The app checks each
@@ -426,6 +440,7 @@
       <select id="f-country"><option value="">All places</option></select>
       <select id="f-city" class="hidden"><option value="">All cities</option></select>
       <select id="f-kind"><option value="">Photos &amp; videos</option><option value="photo">Photos only</option><option value="video">Videos only</option></select>
+      <label class="chip" title="Only well-exposed, sharp photos; one per burst"><input type="checkbox" id="f-best"> Best only</label>
       <span id="f-trip" class="chip hidden"></span>
       <button class="btn hidden" id="f-replay" title="Watch these photos in order, on the map">▶ Replay</button>
       <button class="btn hidden" id="f-share" title="Export a page with these photos, metadata removed">↗ Share</button>
@@ -506,6 +521,13 @@
     <p class="muted small">Trips are found automatically: photos taken more than 100 km from home, grouped by date.</p>
     <div class="trips" id="trips"></div>
     <p class="muted" id="trips-empty" style="display:none">No trips found yet. Trips appear once photos with locations are downloaded.</p>
+    <div class="row" style="justify-content:space-between;margin-top:28px">
+      <h2 style="margin:0">Events</h2>
+      <div class="row"><select id="events-year"><option value="">All years</option></select>
+        <span class="muted small">A party, a hike, a day out: photos a few hours and a couple of kilometres apart. Click a title to rename.</span></div>
+    </div>
+    <div class="trips" id="events"></div>
+    <p class="muted" id="events-empty" style="display:none">No events yet. They appear after the catalog is updated.</p>
   </section>
 
   <!-- MAP -->
@@ -777,7 +799,7 @@ function showTab(name) {
   document.querySelector("main").classList.toggle("wide", ["photos", "trips", "map"].includes(name));
   if (name === "settings") loadSettings();
   if (name === "photos") ensurePhotos();
-  if (name === "trips") loadTrips();
+  if (name === "trips") { loadTrips(); loadEvents(); }
   if (name === "people") loadPeople();
   if (name === "timeline") loadTimeline();
   if (name === "memories") loadMemories();
@@ -863,6 +885,7 @@ async function refresh() {
     renderSmart(st);
     renderPeoplePanel(st);
     renderAiPanel(st);
+    renderQualityPanel(st);
     renderImport(st.job);
   } catch (e) { /* app may be quitting */ }
 }
@@ -891,6 +914,14 @@ $("#smart-on").onclick = async () => {
   } catch (e) { toast(e.message); }
 };
 $("#smart-update").onclick = () => api("/api/run", { kind: "index" }).then(renderJob).catch(e => toast(e.message));
+
+function renderQualityPanel(st) {
+  const q = st.quality, busy = ["running", "needs_password", "needs_code"].includes(st.job.state);
+  $("#quality-run").disabled = busy || !q;
+  $("#quality-note").textContent = !q ? "" : q.pending ? `${fmt(q.pending)} photos not rated yet.`
+    : `${fmt(q.scored)} photos rated: ${fmt(q.good)} keepers, ${fmt(q.bursts)} bursts.`;
+}
+$("#quality-run").onclick = () => api("/api/run", { kind: "quality" }).then(renderJob).catch(e => toast(e.message));
 
 function renderPeoplePanel(st) {
   const c = st.people, busy = ["running", "needs_password", "needs_code"].includes(st.job.state);
@@ -1117,20 +1148,21 @@ function fillCities() {
 function setFilters(f) {
   grid = { filters: f, offset: 0, total: 0, items: [], loading: false, lastMonth: "", loaded: true };
   $("#grid").replaceChildren();
-  $("#f-year").value = f.year || ""; $("#f-country").value = f.country || ""; $("#f-kind").value = f.kind || "";
+  $("#f-year").value = f.year || ""; $("#f-country").value = f.country || ""; $("#f-kind").value = f.kind || ""; $("#f-best").checked = !!f.best;
   $("#f-q").value = f.q || ""; $("#f-q-clear").classList.toggle("hidden", !f.q);
   fillCities();
   const chip = $("#f-trip");
   const label = f.trip ? "Trip: " + (f.tripTitle || "") : f.person ? "Person: " + (f.personName || "")
-    : f.chapter ? "Chapter: " + (f.chapterTitle || "") : (f.month || f.day) ? (f.monthTitle || f.month || f.day) : "";
+    : f.chapter ? "Chapter: " + (f.chapterTitle || "") : f.event ? "Event: " + (f.eventTitle || "") : f.burst ? (f.burstTitle || "Burst")
+    : (f.month || f.day) ? (f.monthTitle || f.month || f.day) : "";
   chip.classList.toggle("hidden", !label);
-  $("#f-replay").classList.toggle("hidden", !(f.trip || f.day || f.month));
-  $("#f-share").classList.toggle("hidden", !(f.trip || f.day || f.month || f.person || f.chapter || f.year));
-  $("#f-replay").textContent = f.trip ? "▶ Replay trip" : f.day ? "▶ Replay this day" : "▶ Replay this month";
+  $("#f-replay").classList.toggle("hidden", !(f.trip || f.day || f.month || f.event));
+  $("#f-share").classList.toggle("hidden", !(f.trip || f.day || f.month || f.person || f.chapter || f.year || f.event));
+  $("#f-replay").textContent = f.trip ? "▶ Replay trip" : f.event ? "▶ Replay event" : f.day ? "▶ Replay this day" : "▶ Replay this month";
   if (label) {
     chip.replaceChildren(document.createTextNode(label));
     const x = document.createElement("button"); x.textContent = "✕"; x.title = "Show all photos";
-    x.onclick = () => setFilters({ ...f, trip: "", person: "", chapter: "", month: "", day: "" }); chip.append(x);
+    x.onclick = () => setFilters({ ...f, trip: "", person: "", chapter: "", month: "", day: "", event: "", burst: "" }); chip.append(x);
   }
   loadMorePhotos();
 }
@@ -1149,13 +1181,14 @@ $("#f-year").onchange = e => setFilters({ ...grid.filters, year: e.target.value,
 $("#f-country").onchange = e => setFilters({ ...grid.filters, country: e.target.value, city: "", trip: "" });
 $("#f-city").onchange = e => setFilters({ ...grid.filters, city: e.target.value, trip: "" });
 $("#f-kind").onchange = e => setFilters({ ...grid.filters, kind: e.target.value });
+$("#f-best").onchange = e => setFilters({ ...grid.filters, best: e.target.checked ? "1" : "" });
 
 async function loadMorePhotos() {
   if (grid.loading || (grid.offset && grid.offset >= grid.total)) return;
   grid.loading = true;
   const mine = grid;
   const q = new URLSearchParams({ offset: grid.offset, limit: PAGE });
-  for (const k of ["q", "year", "country", "city", "trip", "kind", "person", "month", "day", "chapter"]) if (grid.filters[k]) q.set(k, grid.filters[k]);
+  for (const k of ["q", "year", "country", "city", "trip", "kind", "person", "month", "day", "chapter", "event", "best", "burst"]) if (grid.filters[k]) q.set(k, grid.filters[k]);
   try {
     const res = await api("/api/photos?" + q);
     if (mine !== grid) return;  // filters changed meanwhile
@@ -1251,7 +1284,8 @@ async function openLightbox(i, items) {
       const e = document.createElement("a"); e.className = "edit"; e.textContent = "✎ change"; e.onclick = ev => { ev.stopPropagation(); tripMenu(e, d); };
       div.append(v, e); info.append(div);
     }
-    if (d.taken_at) add("Replay", "▶ This day", () => { closeLightbox(); openReplay({ day: d.taken_at.slice(0, 10) }, fmtDate(d.taken_at)); });
+    if (d.event) add("Event", `${d.event.title} (${d.event.photo_count} photos)`, () => { closeLightbox(); showTab("photos"); setFilters({ event: d.event.id, eventTitle: d.event.title }); });
+    if (d.taken_at) add("Replay", d.event ? "▶ This event" : "▶ This day", () => { closeLightbox(); d.event ? openReplay({ event: d.event.id }, d.event.title) : openReplay({ day: d.taken_at.slice(0, 10) }, fmtDate(d.taken_at)); });
     const known = (d.faces || []).filter(f => f.person_id && !f.hidden);
     if (known.length) {
       const div = document.createElement("div"), b = document.createElement("b"); b.textContent = "People"; div.append(b);
@@ -1262,6 +1296,12 @@ async function openLightbox(i, items) {
         div.append(t);
       }
       info.append(div);
+    }
+    if (d.quality && d.quality.score != null) {
+      const q = d.quality, stars = Math.max(1, Math.min(5, Math.round(q.score / 20)));
+      add("Quality", "★".repeat(stars) + "☆".repeat(5 - stars) + ` ${Math.round(q.score)}/100` +
+        (q.burst_size > 1 ? ` · ${q.burst_best ? "best of" : "one of"} a burst of ${q.burst_size}` : ""),
+        q.burst_size > 1 ? () => { closeLightbox(); showTab("photos"); setFilters({ burst: q.burst_id, burstTitle: `Burst of ${q.burst_size}` }); } : null);
     }
     add("Camera", [d.camera_make, d.camera_model].filter(Boolean).join(" "));
     add("Size", d.width ? `${d.width} × ${d.height} · ${bytes(d.size)}` : bytes(d.size));
@@ -1419,7 +1459,7 @@ const rp = { items: [], i: -1, timer: null, playing: false, map: null, line: nul
 $("#f-replay").onclick = () => openReplay(grid.filters, $("#f-trip").textContent.replace("✕", ""));
 async function openReplay(filters, title) {
   const q = new URLSearchParams();
-  for (const k of ["trip", "day", "month", "person", "chapter", "year", "country", "city", "best"]) if (filters[k]) q.set(k, filters[k]);
+  for (const k of ["trip", "day", "month", "person", "chapter", "year", "country", "city", "best", "event", "n"]) if (filters[k]) q.set(k, filters[k]);
   let items;
   try { items = await api("/api/replay?" + q); } catch (e) { return toast(e.message); }
   if (!items.length) return toast("Nothing to replay here.");
@@ -1839,6 +1879,36 @@ async function loadTrips() {
     return b;
   }));
 }
+
+async function loadEvents() {
+  const year = $("#events-year").value;
+  const list = await api("/api/events" + (year ? "?year=" + year : "")).catch(e => { toast(e.message); return []; });
+  const sel = $("#events-year");
+  if (sel.options.length <= 1) {
+    const years = [...new Set(list.map(e => e.start_at.slice(0, 4)))];
+    years.forEach(y => sel.append(new Option(y, y)));
+  }
+  $("#events-empty").style.display = list.length ? "none" : "";
+  $("#events").replaceChildren(...list.map(e => {
+    const b = document.createElement("button"); b.className = "trip";
+    const img = document.createElement("img"); img.loading = "lazy"; img.alt = "";
+    if (e.cover_id) img.src = media("thumb", e.cover_id);
+    const body = document.createElement("div"); body.className = "body";
+    const title = document.createElement("div"); title.className = "t"; title.textContent = e.title;
+    const sub = document.createElement("div"); sub.className = "muted small"; sub.textContent = e.subtitle || "";
+    body.append(title, sub); b.append(img, body);
+    b.onclick = () => { showTab("photos"); setFilters({ event: e.id, eventTitle: e.title }); };
+    title.title = "Click to rename"; title.onclick = async ev => { ev.stopPropagation(); const name = prompt("Event title:", e.title); if (name && name.trim()) { await api("/api/curate/event-rename", { id: e.id, title: name }).catch(x => toast(x.message)); loadEvents(); } };
+    const play = document.createElement("button"); play.className = "btn primary"; play.textContent = "▶ Replay";
+    play.style.margin = "0 14px 12px"; play.onclick = ev => { ev.stopPropagation(); openReplay({ event: e.id }, e.title); };
+    const sh = document.createElement("button"); sh.className = "btn"; sh.textContent = "↗ Share";
+    sh.style.margin = "0 14px 12px"; sh.onclick = ev => { ev.stopPropagation(); openShare({ event: e.id }, e.title); };
+    const rowb = document.createElement("div"); rowb.className = "row"; rowb.append(play, sh);
+    b.append(rowb);
+    return b;
+  }));
+}
+$("#events-year").onchange = loadEvents;
 
 // ---- map
 let map = null, cluster = null;

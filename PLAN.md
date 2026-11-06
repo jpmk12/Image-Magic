@@ -287,8 +287,16 @@ Service features (flying log, squadron yearbook) slot into S2 (log) and S9 (year
   transactions, cancellable scan/verify, unplugged-library guard, scalable face grouping with
   locked faces carried through merges, stable chapter ids, retry of failed descriptions,
   unreadable files recorded, batched queries, status cache, grid cap.
-- Phase 4 complete. Next: real-library feedback, then tuning (trip and chapter heuristics,
-  face thresholds on children), and a signed installer.
+- Phase 4 complete.
+- **Import** (v0.17.0): SHA-256 exact duplicates, dHash look-alikes, copies into
+  originals/imported/. Migration race fixed (v0.17.3).
+- **Phase 5, quality + events** (v0.18.0): local 0-100 quality score (Laplacian sharpness,
+  exposure, contrast) from thumbnails, burst grouping (≤ 8 s apart, dHash ≤ 12 bits) with one
+  keeper per burst; a shared ranking (local score + AI rating + named people + trip) feeds
+  best-of-year, "best" replays and the shuffle; "Best only" filter. Events: time/distance
+  clustering (3 h gap, 2 km, ≥ 4 photos), stable keys, auto titles (weekday, part of day,
+  place or "at home", top caption keyword), rename survives rebuilds, event filter, replay
+  and share.
 
 ---
 
@@ -321,9 +329,8 @@ stories, Ask, memories, year review, books and share cover the "relive" side.
 ### New features, by value
 - **Import from folders**: built (v0.17.0). SHA-256 exact duplicates, dHash look-alikes
   (≤ 6 bits, flat images excluded), copies into originals/imported/<year>/<month>/.
-- **Events** (above) with automatic titles ("Saturday at the beach, July 2019") and an
-  event replay.
-- **Photo quality + best-of selection** (above).
+- **Events**: built (v0.18.0). Automatic titles, event filter, replay and share, renames kept.
+- **Photo quality + best-of selection**: built (v0.18.0).
 - **Ask → do.** Let Ask act: "make a book of Emma's first year", "replay our Jordan trip",
   "share the best 20 from Christmas with Mom". The tools exist; wire them to the Ask loop.
 - **Comparison stories.** "Emma at 3 vs Jack at 3", "Christmas 2017 vs 2023" side-by-side pages.

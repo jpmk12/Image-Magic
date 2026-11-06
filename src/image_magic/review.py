@@ -87,27 +87,10 @@ def year_stats(conn: sqlite3.Connection, year: str) -> dict:
 
 
 def best_of_year(conn: sqlite3.Connection, year: str, n: int = 30) -> list[dict]:
-    """About n photos spread across the year: the best-rated one per slot."""
-    rows = conn.execute(
-        f"""SELECT a.id, a.taken_at, COALESCE(d.quality, 0) AS quality,
-                   (SELECT COUNT(*) FROM faces f WHERE f.asset_id = a.id AND f.person_id IS NOT NULL) AS faces,
-                   (a.trip_id IS NOT NULL) AS on_trip
-            FROM assets a LEFT JOIN descriptions d ON d.asset_id = a.id
-            WHERE a.{VISIBLE.replace(' AND ', ' AND a.')} AND a.kind = 'photo' AND substr(a.taken_at, 1, 4) = ?
-            ORDER BY a.taken_at""", (str(year),)).fetchall() if _has(conn, "descriptions") and _has(conn, "faces") else \
-        conn.execute(f"SELECT id, taken_at, 0 AS quality, 0 AS faces, (trip_id IS NOT NULL) AS on_trip FROM assets "
-                     f"WHERE {VISIBLE} AND kind = 'photo' AND substr(taken_at, 1, 4) = ? ORDER BY taken_at", (str(year),)).fetchall()
-    if not rows:
-        return []
-    slots = max(1, min(n, len(rows)))
-    per = len(rows) / slots
-    picked = []
-    for s in range(slots):
-        chunk = rows[int(s * per): int((s + 1) * per)] or rows[-1:]
-        best = max(chunk, key=lambda r: (r["quality"], r["faces"], r["on_trip"], r["taken_at"]))
-        if not picked or picked[-1] != best["id"]:
-            picked.append(best["id"])
-    return browse.by_ids(conn, picked)
+    """About n photos spread across the year: the best one per slot (local quality + AI rating + people)."""
+    from . import quality
+    return browse.by_ids(conn, quality.best_of(
+        conn, f"a.{VISIBLE.replace(' AND ', ' AND a.')} AND substr(a.taken_at, 1, 4) = ?", [str(year)], n))
 
 
 def _has(conn: sqlite3.Connection, table: str) -> bool:

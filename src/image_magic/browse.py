@@ -9,35 +9,45 @@ import sqlite3
 VISIBLE = "missing = 0 AND duplicate_of IS NULL AND kind != 'live_video'"
 
 
-def _filters(params: dict) -> tuple[str, list]:
-    where, args = [VISIBLE], []
+def _filters(params: dict, alias: str = "") -> tuple[str, list]:
+    """WHERE clause + args for the gallery filters. `alias` ("a.") qualifies the asset columns."""
+    a = alias
+    where, args = [f"{a}missing = 0 AND {a}duplicate_of IS NULL AND {a}kind != 'live_video'"], []
     if params.get("year"):
-        where.append("substr(taken_at, 1, 4) = ?")
+        where.append(f"substr({a}taken_at, 1, 4) = ?")
         args.append(str(params["year"]))
     if params.get("month"):
-        where.append("substr(taken_at, 1, 7) = ?")
+        where.append(f"substr({a}taken_at, 1, 7) = ?")
         args.append(str(params["month"])[:7])
     if params.get("day"):
-        where.append("substr(taken_at, 1, 10) = ?")
+        where.append(f"substr({a}taken_at, 1, 10) = ?")
         args.append(str(params["day"])[:10])
     if params.get("chapter"):
-        where.append("taken_at >= (SELECT start_at FROM chapters WHERE id = ?) "
-                     "AND taken_at < (SELECT date(end_at, '+1 day') FROM chapters WHERE id = ?)")
+        where.append(f"{a}taken_at >= (SELECT start_at FROM chapters WHERE id = ?) "
+                     f"AND {a}taken_at < (SELECT date(end_at, '+1 day') FROM chapters WHERE id = ?)")
         args += [int(params["chapter"]), int(params["chapter"])]
     if params.get("country"):
-        where.append("country_code = ?")
+        where.append(f"{a}country_code = ?")
         args.append(params["country"])
     if params.get("city"):
-        where.append("city = ?")
+        where.append(f"{a}city = ?")
         args.append(params["city"])
     if params.get("trip"):
-        where.append("trip_id = ?")
+        where.append(f"{a}trip_id = ?")
         args.append(int(params["trip"]))
+    if params.get("event"):
+        where.append(f"{a}event_id = ?")
+        args.append(int(params["event"]))
     if params.get("person"):
-        where.append("id IN (SELECT asset_id FROM faces WHERE person_id = ?)")
+        where.append(f"{a}id IN (SELECT asset_id FROM faces WHERE person_id = ?)")
         args.append(int(params["person"]))
+    if params.get("burst"):
+        where.append(f"{a}burst_id = ?")
+        args.append(int(params["burst"]))
+    if params.get("best"):
+        where.append(f"({a}burst_id IS NULL OR {a}burst_best = 1) AND COALESCE({a}quality_score, 60) >= 55 AND {a}kind = 'photo'")
     if params.get("kind") in ("photo", "video"):
-        where.append("kind = ?")
+        where.append(f"{a}kind = ?")
         args.append(params["kind"])
     return " AND ".join(where), args
 
@@ -62,12 +72,6 @@ def photos(conn: sqlite3.Connection, params: dict, offset: int = 0, limit: int =
             it["live"] = it["id"] in live
             it.pop("live_pair_id", None)
     return {"total": total, "items": items}
-
-
-def ids(conn: sqlite3.Connection, params: dict) -> set[int]:
-    """Just the ids that match the filters (for intersecting with search results)."""
-    where, args = _filters(params)
-    return {r[0] for r in conn.execute(f"SELECT id FROM assets WHERE {where}", args)}
 
 
 def ids(conn: sqlite3.Connection, params: dict) -> set[int]:
