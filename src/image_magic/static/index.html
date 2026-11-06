@@ -100,6 +100,22 @@
   .tl-items .it.ms .x { color: var(--muted); margin-left: 2px; font-size: 14px; }
   .tl-items .it.ms .x:hover { color: var(--bad); }
   .tl-items .it.ppl { border-style: dashed; }
+  .rp { position: fixed; inset: 0; background: #0b0d10; z-index: 2100; display: grid; grid-template-rows: 1fr auto; color: #e8eaed; }
+  .rp .body { display: grid; grid-template-columns: 1fr 1fr; min-height: 0; }
+  .rp #rp-map { background: #1b1e23; }
+  .rp .stage { display: grid; place-items: center; background: #000; min-width: 0; position: relative; }
+  .rp .stage img, .rp .stage video { max-width: 100%; max-height: 100%; width: 100%; height: 100%; object-fit: contain; }
+  .rp .cap { position: absolute; left: 0; right: 0; bottom: 0; padding: 14px 18px; font-size: 15px;
+             background: linear-gradient(transparent, rgba(0,0,0,.75)); }
+  .rp .cap b { display: block; font-size: 20px; }
+  .rp .bar { display: flex; gap: 10px; align-items: center; padding: 10px 14px; background: #15171a; }
+  .rp .bar button { background: rgba(255,255,255,.1); color: #fff; border: 0; border-radius: 8px; padding: 8px 12px; font: inherit; cursor: pointer; }
+  .rp .bar button.primary { background: var(--accent); color: var(--accent-text); min-width: 56px; font-weight: 700; }
+  .rp .bar select { background: #22262d; color: #fff; border: 0; border-radius: 8px; padding: 8px; font: inherit; }
+  .rp .prog { flex: 1; height: 6px; background: rgba(255,255,255,.15); border-radius: 99px; cursor: pointer; }
+  .rp .prog > div { height: 100%; width: 0; background: var(--accent); border-radius: 99px; }
+  .rp .count { font-variant-numeric: tabular-nums; color: #9aa0a9; font-size: 13px; }
+  @media (max-width: 760px) { .rp .body { grid-template-columns: 1fr; grid-template-rows: 40% 1fr; } }
   .people { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 14px; }
   .person { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 12px;
             text-align: center; font: inherit; color: inherit; }
@@ -114,7 +130,7 @@
   .lb .tag { display: inline-block; background: #2a2f3a; border-radius: 99px; padding: 3px 10px; margin: 0 6px 6px 0; font-size: 13px; cursor: pointer; }
   .lb .tag.unnamed { color: #9aa0a9; font-style: italic; }
   .trips { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; }
-  .trip { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; overflow: hidden;
+  .trip { display: flex; flex-direction: column; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; overflow: hidden;
           cursor: pointer; text-align: left; padding: 0; font: inherit; color: inherit; }
   .trip img { width: 100%; aspect-ratio: 16/10; object-fit: cover; display: block; background: var(--line); }
   .trip .body { padding: 12px 14px; }
@@ -243,6 +259,7 @@
       <select id="f-city" class="hidden"><option value="">All cities</option></select>
       <select id="f-kind"><option value="">Photos &amp; videos</option><option value="photo">Photos only</option><option value="video">Videos only</option></select>
       <span id="f-trip" class="chip hidden"></span>
+      <button class="btn hidden" id="f-replay" title="Watch these photos in order, on the map">▶ Replay</button>
       <span class="muted small" id="f-count"></span>
     </div>
     <div class="grid" id="grid"></div>
@@ -382,6 +399,22 @@
 </main>
 
 <div class="toast hidden" id="toast"></div>
+
+<div class="rp hidden" id="rp">
+  <div class="body">
+    <div id="rp-map"></div>
+    <div class="stage" id="rp-stage"><div class="cap" id="rp-cap"></div></div>
+  </div>
+  <div class="bar">
+    <button id="rp-prev" title="Previous (←)">‹</button>
+    <button id="rp-play" class="primary" title="Play/pause (space)">❚❚</button>
+    <button id="rp-next" title="Next (→)">›</button>
+    <div class="prog" id="rp-prog"><div></div></div>
+    <span class="count" id="rp-count"></span>
+    <select id="rp-speed" title="Seconds per photo"><option value="5">Slow</option><option value="3" selected>Normal</option><option value="1.5">Fast</option></select>
+    <button id="rp-close" title="Close (Esc)">✕ Close</button>
+  </div>
+</div>
 
 <div class="lb hidden" id="lb">
   <div class="stage" id="lb-stage">
@@ -724,6 +757,8 @@ function setFilters(f) {
   const label = f.trip ? "Trip: " + (f.tripTitle || "") : f.person ? "Person: " + (f.personName || "")
     : f.chapter ? "Chapter: " + (f.chapterTitle || "") : (f.month || f.day) ? (f.monthTitle || f.month || f.day) : "";
   chip.classList.toggle("hidden", !label);
+  $("#f-replay").classList.toggle("hidden", !(f.trip || f.day || f.month));
+  $("#f-replay").textContent = f.trip ? "▶ Replay trip" : f.day ? "▶ Replay this day" : "▶ Replay this month";
   if (label) {
     chip.replaceChildren(document.createTextNode(label));
     const x = document.createElement("button"); x.textContent = "✕"; x.title = "Show all photos";
@@ -823,6 +858,7 @@ async function openLightbox(i, items) {
     add("Taken", d.taken_at ? new Date(d.taken_at).toLocaleString() : "");
     add("Place", [d.city, d.region, d.country].filter(Boolean).join(", "));
     add("Trip", d.trip_title, () => { closeLightbox(); showTab("photos"); setFilters({ trip: d.trip_id, tripTitle: d.trip_title }); });
+    if (d.taken_at) add("Replay", "▶ This day", () => { closeLightbox(); openReplay({ day: d.taken_at.slice(0, 10) }, fmtDate(d.taken_at)); });
     const known = (d.faces || []).filter(f => f.person_id && !f.hidden);
     if (known.length) {
       const div = document.createElement("div"), b = document.createElement("b"); b.textContent = "People"; div.append(b);
@@ -944,6 +980,84 @@ async function loadTimeline() {
 }
 $("#tl-rebuild").onclick = () => api("/api/timeline/rebuild", {}).then(loadTimeline).catch(e => toast(e.message));
 
+// ---- replay player
+const rp = { items: [], i: -1, timer: null, playing: false, map: null, line: null, done: null, marker: null, title: "" };
+$("#f-replay").onclick = () => openReplay(grid.filters, $("#f-trip").textContent.replace("✕", ""));
+async function openReplay(filters, title) {
+  const q = new URLSearchParams();
+  for (const k of ["trip", "day", "month", "person", "chapter", "year", "country", "city"]) if (filters[k]) q.set(k, filters[k]);
+  let items;
+  try { items = await api("/api/replay?" + q); } catch (e) { return toast(e.message); }
+  if (!items.length) return toast("Nothing to replay here.");
+  rp.items = items; rp.title = title || ""; rp.i = -1;
+  $("#rp").classList.remove("hidden");
+  if (typeof L !== "undefined") {
+    if (!rp.map) {
+      rp.map = L.map("rp-map", { zoomControl: false, attributionControl: false });
+      L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 18 }).addTo(rp.map);
+    }
+    [rp.line, rp.done, rp.marker].forEach(l => l && rp.map.removeLayer(l));
+    const pts = items.filter(it => it.lat != null).map(it => [it.lat, it.lon]);
+    rp.line = L.polyline(pts, { color: "#93c5fd", weight: 3, opacity: .5, dashArray: "6 8" }).addTo(rp.map);
+    rp.done = L.polyline([], { color: "#2563eb", weight: 4 }).addTo(rp.map);
+    rp.marker = null;
+    rp.map.invalidateSize();
+    if (pts.length) rp.map.fitBounds(L.latLngBounds(pts), { padding: [40, 40], maxZoom: 13 });
+    else rp.map.setView([20, 10], 2);
+    setTimeout(() => rp.map.invalidateSize(), 100);
+  }
+  rp.playing = true; $("#rp-play").textContent = "❚❚";
+  showReplay(0);
+}
+function showReplay(i) {
+  if (i < 0 || i >= rp.items.length) { if (i >= rp.items.length) pauseReplay(); return; }
+  clearTimeout(rp.timer);
+  rp.i = i;
+  const it = rp.items[i], stage = $("#rp-stage");
+  stage.querySelectorAll("img,video").forEach(n => n.remove());
+  let el;
+  if (it.kind === "video") { el = document.createElement("video"); el.autoplay = true; el.muted = true; el.controls = true; el.src = media("view", it.id); }
+  else if (it.live_video_id) { el = document.createElement("video"); el.autoplay = true; el.muted = true; el.loop = true; el.playsInline = true; el.src = media("view", it.live_video_id);
+    el.onerror = () => { const im = document.createElement("img"); im.src = media("view", it.id); el.replaceWith(im); }; }
+  else { el = document.createElement("img"); el.src = media("view", it.id); }
+  stage.prepend(el);
+  if (i + 1 < rp.items.length) { const pre = new Image(); pre.src = media("view", rp.items[i + 1].id); }
+  const d = new Date(it.taken_at);
+  const place = [it.city, it.country].filter(Boolean).join(", ");
+  $("#rp-cap").innerHTML = `<b></b><span></span>`;
+  $("#rp-cap b").textContent = rp.title || place || d.toLocaleDateString();
+  $("#rp-cap span").textContent = [d.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric", year: "numeric" }),
+    d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" }), place].filter(Boolean).join(" · ");
+  $("#rp-count").textContent = `${i + 1} / ${rp.items.length}`;
+  $("#rp-prog > div").style.width = (100 * (i + 1) / rp.items.length) + "%";
+  if (rp.map && it.lat != null) try {
+    const ll = [it.lat, it.lon];
+    if (!rp.marker) rp.marker = L.circleMarker(ll, { radius: 9, color: "#fff", weight: 2, fillColor: "#2563eb", fillOpacity: 1 }).addTo(rp.map);
+    else rp.marker.setLatLng(ll);
+    rp.done.setLatLngs(rp.items.slice(0, i + 1).filter(x => x.lat != null).map(x => [x.lat, x.lon]));
+    const far = !rp.map.getBounds().pad(-0.3).contains(ll);
+    rp.map.flyTo(ll, far ? Math.min(rp.map.getZoom(), 12) : rp.map.getZoom(), { duration: 1.2 });
+  } catch (e) { /* map not ready: keep playing */ }
+  if (rp.playing) {
+    const secs = parseFloat($("#rp-speed").value) * (it.kind === "video" ? 3 : 1);
+    rp.timer = setTimeout(() => showReplay(i + 1), secs * 1000);
+  }
+}
+function pauseReplay() { rp.playing = false; clearTimeout(rp.timer); $("#rp-play").textContent = "▶"; }
+function closeReplay() { pauseReplay(); $("#rp").classList.add("hidden"); $("#rp-stage").querySelectorAll("img,video").forEach(n => n.remove()); }
+$("#rp-play").onclick = () => { if (rp.playing) pauseReplay(); else { rp.playing = true; $("#rp-play").textContent = "❚❚"; showReplay(rp.i + 1 < rp.items.length ? rp.i + (rp.i < 0 ? 1 : 0) : 0); } };
+$("#rp-prev").onclick = () => showReplay(Math.max(0, rp.i - 1));
+$("#rp-next").onclick = () => showReplay(Math.min(rp.items.length - 1, rp.i + 1));
+$("#rp-close").onclick = closeReplay;
+$("#rp-prog").onclick = ev => { const r = ev.currentTarget.getBoundingClientRect(); showReplay(Math.floor((ev.clientX - r.left) / r.width * rp.items.length)); };
+document.addEventListener("keydown", e => {
+  if ($("#rp").classList.contains("hidden")) return;
+  if (e.key === "Escape") closeReplay();
+  if (e.key === " ") { e.preventDefault(); $("#rp-play").click(); }
+  if (e.key === "ArrowLeft") $("#rp-prev").click();
+  if (e.key === "ArrowRight") $("#rp-next").click();
+});
+
 // ---- trips
 async function loadTrips() {
   const list = await api("/api/trips").catch(e => { toast(e.message); return []; });
@@ -962,6 +1076,9 @@ async function loadTrips() {
     when.textContent = `${start.toLocaleDateString(undefined, opts)} – ${end.toLocaleDateString(undefined, opts)} · ${fmt(t.photo_count)} items`;
     body.append(title, sub, when); b.append(img, body);
     b.onclick = () => { showTab("photos"); setFilters({ trip: t.id, tripTitle: `${t.title}, ${start.toLocaleDateString(undefined, { month: "short", year: "numeric" })}` }); };
+    const play = document.createElement("button"); play.className = "btn primary"; play.textContent = "▶ Replay";
+    play.style.margin = "0 14px 12px"; play.onclick = ev => { ev.stopPropagation(); openReplay({ trip: t.id }, t.title); };
+    b.append(play);
     return b;
   }));
 }

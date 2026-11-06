@@ -64,6 +64,18 @@ def photos(conn: sqlite3.Connection, params: dict, offset: int = 0, limit: int =
     return {"total": total, "items": items}
 
 
+def replay(conn: sqlite3.Connection, params: dict, limit: int = 2000) -> list[dict]:
+    """Items for the replay player: the filtered set in time order, with Live Photo clips."""
+    where, args = _filters(params)
+    rows = conn.execute(
+        f"""SELECT id, kind, taken_at, lat, lon, city, country, width, height,
+                   (SELECT v.id FROM assets v WHERE v.live_pair_id = assets.id AND v.kind = 'live_video'
+                      AND v.missing = 0 LIMIT 1) AS live_video_id
+            FROM assets WHERE {where} AND taken_at IS NOT NULL
+            ORDER BY taken_at, id LIMIT ?""", [*args, max(1, min(limit, 5000))]).fetchall()
+    return [dict(r) for r in rows]
+
+
 def by_ids(conn: sqlite3.Connection, ids: list[int]) -> list[dict]:
     """Rows for the given ids, in the given order (e.g. search ranking)."""
     if not ids:

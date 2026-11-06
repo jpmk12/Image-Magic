@@ -59,6 +59,10 @@ program only. Your photos and settings are kept.
   title to rename it. Each year shows month bars (click one to see that month), trips, and
   **milestones** the app found: your first photo, each move, the biggest trip and busiest day
   of each year, and the first photo of each named person. Click ✕ on a milestone to dismiss it.
+- **Replay:** click **▶ Replay** on a trip, or **▶ Replay this day** from any day (from the
+  Timeline, a milestone, or the viewer's "This day" link). The photos play in order on the
+  right while the map on the left follows your route. Live Photos play their motion. Space
+  pauses, arrows step, Esc closes. Choose Slow, Normal or Fast.
 - **People:** turn it on once from the Home tab (about 290 MB of face models, verified by
   fingerprint). The app finds every face and groups them by person. On the **People** tab,
   click **"Who is this?"** to name a group, click the face to see all of that person's photos,

@@ -252,4 +252,6 @@ Service features (flying log, squadron yearbook) slot into S2 (log) and S9 (year
 - **S2 – Timeline and chapters: built** (v0.6.0). Home-by-month voting (±3 months, trips
   excluded) → chapters at moves; milestones (first photo, moves, biggest trip and busiest day
   per year, first photo of each named person) with keep/dismiss that survives rebuilds.
-- Next: S3 – Trip replay and "A day in…".
+- **S3 – Replay: built** (v0.7.0). One player for trips, days and months: time-ordered
+  photos with Live Photo motion, map route drawn as you go, fly-to on each stop.
+- Next: S4 – AI descriptions (opt-in, Claude vision), then S5 – stories and "Ask my life".

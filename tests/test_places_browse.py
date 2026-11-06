@@ -170,3 +170,16 @@ def test_vendor_static_files(server):
         with pytest.raises(urllib.error.HTTPError) as e:
             get(base + bad)
         assert e.value.code in (403, 404)
+
+
+def test_replay_is_in_time_order_with_live_clips(library):
+    conn, _, _ = library
+    trip_id = browse.trips(conn)[1]["id"]            # Jordan
+    items = browse.replay(conn, {"trip": trip_id})
+    assert len(items) == 13
+    times = [i["taken_at"] for i in items]
+    assert times == sorted(times) and times[0].startswith("2019-03-10")
+    assert any(i["kind"] == "video" for i in items)
+    day = browse.replay(conn, {"day": "2019-03-10"})
+    assert len(day) == 2 and all(i["taken_at"].startswith("2019-03-10") for i in day)
+    assert browse.replay(conn, {"country": "XX"}) == []

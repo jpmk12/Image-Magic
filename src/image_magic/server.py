@@ -188,7 +188,7 @@ def make_handler(app: App):
                 if path == "/api/log":
                     since = int(self._query().get("since") or 0)
                     return self._json(200, app.jobs.log_since(since))
-                if path.startswith(("/api/photos", "/api/photo/", "/api/facets", "/api/trips",
+                if path.startswith(("/api/photos", "/api/photo/", "/api/facets", "/api/trips", "/api/replay",
                                     "/api/map", "/api/people", "/api/timeline", "/media/")):
                     return self._browse(path, self._query())
             except Exception as e:
@@ -220,6 +220,8 @@ def make_handler(app: App):
                         return self._json(200, self._search(conn, settings, q))
                     return self._json(200, browse.photos(
                         conn, q, int(q.get("offset") or 0), min(int(q.get("limit") or 200), 500)))
+                if path == "/api/replay":
+                    return self._json(200, browse.replay(conn, q))
                 if path == "/api/facets":
                     return self._json(200, browse.facets(conn))
                 if path == "/api/trips":
