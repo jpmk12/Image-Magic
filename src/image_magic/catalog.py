@@ -95,29 +95,35 @@ def connect(db_file: Path) -> sqlite3.Connection:
     except sqlite3.OperationalError:
         pass
     run_script(conn, SCHEMA)
-    # Two connections can open a fresh library at the same moment (the page's status
-    # poll and a job); take the write lock for the migrations and tolerate a column
-    # the other connection added first.
-    conn.execute("BEGIN IMMEDIATE")
-    _add_columns(conn, "assets", MIGRATIONS)
-    _add_columns(conn, "trips", TRIP_MIGRATIONS)
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_assets_country ON assets(country_code)")
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_assets_trip ON assets(trip_id)")
     # Every feature's tables exist from the start, so request handlers never run DDL.
-    from . import ask, chapters, describe, faces, kids, review, search
+    from . import ask, chapters, describe, faces, review, search
     for mod in (faces, describe, search, chapters, ask):
         run_script(conn, mod.SCHEMA if mod is not describe else describe.DB_SCHEMA)
     run_script(conn, review.SCHEMA)
-    _add_columns(conn, "persons", {"birthday": "TEXT"})
+    conn.commit()
+    # Two connections can open a fresh library at the same moment (the page's status
+    # poll and a job); take the write lock for the migrations and tolerate a column
+    # the other connection added first. An up-to-date library skips this entirely.
+    wanted = {"assets": MIGRATIONS, "trips": TRIP_MIGRATIONS, "persons": {"birthday": "TEXT"}}
+    if any(_missing(conn, t, cols) for t, cols in wanted.items()):
+        conn.execute("BEGIN IMMEDIATE")
+        for t, cols in wanted.items():
+            _add_columns(conn, t, cols)
+        conn.commit()
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_assets_country ON assets(country_code)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_assets_trip ON assets(trip_id)")
     conn.commit()
     return conn
 
 
-def _add_columns(conn: sqlite3.Connection, table: str, columns: dict[str, str]) -> None:
+def _missing(conn: sqlite3.Connection, table: str, columns: dict[str, str]) -> list[str]:
     have = {row["name"] for row in conn.execute(f"PRAGMA table_info({table})")}
-    for col, typ in columns.items():
-        if col in have:
-            continue
+    return [c for c in columns if c not in have]
+
+
+def _add_columns(conn: sqlite3.Connection, table: str, columns: dict[str, str]) -> None:
+    for col in _missing(conn, table, columns):
+        typ = columns[col]
         try:
             conn.execute(f"ALTER TABLE {table} ADD COLUMN {col} {typ}")
         except sqlite3.OperationalError as e:
