@@ -243,7 +243,7 @@ def make_handler(app: App):
                     return self._json(200, app.jobs.log_since(since))
                 if path.startswith(("/api/photos", "/api/photo/", "/api/facets", "/api/trips", "/api/replay",
                                     "/api/map", "/api/people", "/api/timeline", "/api/story", "/api/memories",
-                                    "/api/shuffle", "/api/similar/", "/api/review", "/api/context/", "/api/curate/", "/api/events", "/api/home", "/api/voice/", "/media/")):
+                                    "/api/shuffle", "/api/similar/", "/api/review", "/api/context/", "/api/curate/", "/api/events", "/api/home", "/api/voice/", "/api/compare/", "/media/")):
                     return self._browse(path, self._query())
             except Exception as e:
                 return self._json(500, {"error": str(e)})
@@ -331,6 +331,16 @@ def make_handler(app: App):
                     return self._json(200, {"file": f.name})
                 if path == "/api/map":
                     return self._json(200, browse.map_points(conn, q))
+                if path == "/api/map/this-day":
+                    from . import memories
+                    return self._json(200, memories.this_day_pins(conn))
+                if path == "/api/compare/options":
+                    from . import faces
+                    return self._json(200, {
+                        "people": [{"id": p["id"], "name": p["name"], "birthday": p.get("birthday")} for p in faces.people(conn) if p["name"]],
+                        "years": [r[0] for r in conn.execute("SELECT DISTINCT substr(taken_at, 1, 4) FROM assets WHERE missing = 0 AND taken_at IS NOT NULL ORDER BY 1 DESC")],
+                        "trips": [dict(r) for r in conn.execute("SELECT id, title, substr(start_at, 1, 4) AS year FROM trips ORDER BY start_at DESC")],
+                        "events": [dict(r) for r in conn.execute("SELECT id, title, substr(start_at, 1, 10) AS day FROM events ORDER BY start_at DESC LIMIT 300")]})
                 kind, _, ident = path.rpartition("/")
                 if kind == "/media/export":
                     conn.close()
@@ -643,6 +653,13 @@ def make_handler(app: App):
                         conn.close()
                 if path in ("/api/story/write", "/api/story/save", "/api/ask"):
                     return self._ai_action(path, data)
+                if path == "/api/compare":
+                    from . import compare
+                    settings, conn = app.db()
+                    try:
+                        return self._json(200, compare.compare(conn, dict(data.get("a") or {}), dict(data.get("b") or {})))
+                    finally:
+                        conn.close()
                 if path == "/api/private":
                     from . import describe
                     settings, conn = app.db()

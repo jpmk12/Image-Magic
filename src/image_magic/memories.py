@@ -128,3 +128,29 @@ def similar(conn: sqlite3.Connection, db_key: str, asset_id: int, n: int = SIMIL
         if r and r[0] != me:
             out.append(aid)
     return _with_description(conn, browse.by_ids(conn, out))
+
+
+def this_day_pins(conn: sqlite3.Connection, today: date | None = None, window: int = 3) -> list[dict]:
+    """One located photo per year from today's date (or the nearest day within ±window), for the map."""
+    today = today or date.today()
+    rows = conn.execute(
+        f"""SELECT id, taken_at, lat, lon, city, country FROM assets
+            WHERE {VISIBLE} AND lat IS NOT NULL AND taken_at IS NOT NULL AND kind = 'photo'
+              AND substr(taken_at, 1, 4) != ? ORDER BY taken_at""", (str(today.year),)).fetchall()
+    best: dict[str, tuple[int, sqlite3.Row]] = {}
+    for r in rows:
+        y = int(r["taken_at"][:4])
+        try:
+            d = date.fromisoformat(r["taken_at"][:10])
+            target = today.replace(year=y)
+        except ValueError:
+            continue
+        off = abs((d - target).days)
+        if off <= window and (str(y) not in best or off < best[str(y)][0]):
+            best[str(y)] = (off, r)
+    out = []
+    for y in sorted(best):
+        off, r = best[y]
+        out.append({"year": y, "id": r["id"], "taken_at": r["taken_at"], "lat": r["lat"], "lon": r["lon"],
+                    "place": ", ".join(x for x in [r["city"], r["country"]] if x), "days_off": off})
+    return out

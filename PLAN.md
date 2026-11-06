@@ -305,6 +305,9 @@ Service features (flying log, squadron yearbook) slot into S2 (log) and S9 (year
 - **Voice notes** (v0.21.0): MediaRecorder in the page, raw-body upload (25 MB cap, audio
   types only) to <library>/voice/, per photo/event/trip/chapter; replay holds a slide while its
   note plays; share export includes audio only when ticked.
+- **Compare + this-day map** (v0.22.0): compare.side/compare over a shared WHERE per side
+  (person at age from the birthday, year, month, day, trip, event) with best-of pairs; one pin
+  per year within ±3 days of today's date, drawn as a dashed path.
 
 ---
 
@@ -341,8 +344,8 @@ stories, Ask, memories, year review, books and share cover the "relive" side.
 - **Photo quality + best-of selection**: built (v0.18.0).
 - **Ask → do**: built (v0.20.0). Four more tools (replay_photos, open_photos, share_photos,
   make_book) that return actions the page performs; share only opens the dialog.
-- **Comparison stories.** "Emma at 3 vs Jack at 3", "Christmas 2017 vs 2023" side-by-side pages.
-- **Where was I on this day each year** on the map: a yearly pin for today's date.
+- **Comparison stories**: built (v0.22.0). Person-at-age, year, month, day, trip, event sides.
+- **Where was I on this day each year**: built (v0.22.0) as a map layer.
 - **Flying log.** For the C-17 photos: a dedicated view of bases, sorties and aircraft tails
   from captions, with a strict share filter.
 - **Printables.** Trip books and year books (the person book exists): one PDF per trip or year.

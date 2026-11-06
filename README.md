@@ -118,6 +118,11 @@ program only. Your photos and settings are kept.
   day** shows photos from today's date in past years. **Then & now** pairs photos taken at the
   same spot at least a year apart. In the viewer, **Similar moments** shows look-alike photos
   from other days (needs smart search).
+- **Compare:** on the Memories tab, put two moments side by side: a person at an age (*Emma at
+  3 vs Jack at 3*, needs birthdays), two years, two months, two trips or two events. Each side
+  shows its count, dates, places and people, then the best photos paired up.
+- **This day, every year:** on the Map tab, **📅 This day, every year** shows one pin per past
+  year for today's date (or the nearest day within three days), joined in order.
 - **Your year in review:** at the top of the Timeline: photos, videos, countries (and first
   visits), places, kilometres travelled, trips, most-photographed people, busiest day, and the
   best photos spread across the year. **▶ The year in 30 seconds** replays them.

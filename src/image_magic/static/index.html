@@ -496,6 +496,19 @@
       <div id="mem-otd"><p class="muted">No photos from this day in past years.</p></div>
     </div>
     <div class="panel">
+      <h2>Compare</h2>
+      <p class="muted small">Two moments side by side: <i>Emma at 3 vs Jack at 3</i>, <i>2017 vs 2023</i>, <i>Jordan vs Japan</i>.</p>
+      <div class="row" id="cmp-form">
+        <select id="cmp-a-kind"><option value="person">Person at age</option><option value="year">Year</option><option value="month">Month</option><option value="trip">Trip</option><option value="event">Event</option></select>
+        <select id="cmp-a-pick"></select><input type="text" id="cmp-a-text" placeholder="age" style="width:90px">
+        <span class="muted">vs</span>
+        <select id="cmp-b-kind"><option value="person">Person at age</option><option value="year">Year</option><option value="month">Month</option><option value="trip">Trip</option><option value="event">Event</option></select>
+        <select id="cmp-b-pick"></select><input type="text" id="cmp-b-text" placeholder="age" style="width:90px">
+        <button class="btn primary" id="cmp-go">Compare</button>
+      </div>
+      <div id="cmp-out" style="margin-top:12px"></div>
+    </div>
+    <div class="panel">
       <h2>Then &amp; now</h2>
       <p class="muted small">The same spot, photographed at least a year apart. Click a side to open it.</p>
       <div class="pairs" id="mem-pairs"></div>
@@ -532,6 +545,7 @@
 
   <!-- MAP -->
   <section id="tab-map" class="hidden">
+    <div class="row" style="margin-bottom:8px"><button class="btn" id="map-thisday" title="One pin per year: where you were on today's date">📅 This day, every year</button><span class="small muted" id="map-thisday-note"></span></div>
     <div id="map"></div>
     <p class="muted small" id="map-note">Map tiles © OpenStreetMap contributors (needs internet). Place names: GeoNames (CC BY 4.0). Map library: Leaflet.</p>
   </section>
@@ -828,7 +842,7 @@ function showTab(name) {
   if (name === "trips") { loadTrips(); loadEvents(); }
   if (name === "people") loadPeople();
   if (name === "timeline") loadTimeline();
-  if (name === "memories") loadMemories();
+  if (name === "memories") { loadMemories(); cmpOptions(); }
   if (name === "map") loadMap();
 }
 $$("nav button").forEach(b => b.onclick = () => showTab(b.dataset.tab));
@@ -1629,6 +1643,58 @@ async function loadMemories() {
 }
 $("#mem-shuffle").onclick = () => api("/api/shuffle").then(renderShuffle).catch(e => toast(e.message));
 
+// ---- compare
+const cmp = { opts: null };
+async function cmpOptions() {
+  if (!cmp.opts) cmp.opts = await api("/api/compare/options").catch(() => ({ people: [], years: [], trips: [], events: [] }));
+  for (const side of ["a", "b"]) cmpFill(side);
+}
+function cmpFill(side) {
+  const kind = $(`#cmp-${side}-kind`).value, pick = $(`#cmp-${side}-pick`), text = $(`#cmp-${side}-text`);
+  pick.replaceChildren(); text.classList.toggle("hidden", !(kind === "person" || kind === "month")); pick.classList.toggle("hidden", kind === "month");
+  text.placeholder = kind === "person" ? "age (optional)" : "YYYY-MM";
+  const o = cmp.opts || {};
+  if (kind === "person") (o.people || []).forEach(p => pick.append(new Option(p.name, p.id)));
+  if (kind === "year") (o.years || []).forEach(y => pick.append(new Option(y, y)));
+  if (kind === "trip") (o.trips || []).forEach(t => pick.append(new Option(`${t.title} (${t.year})`, t.id)));
+  if (kind === "event") (o.events || []).forEach(e => pick.append(new Option(`${e.title} · ${e.day}`, e.id)));
+  if (side === "b" && kind === "year" && pick.options.length > 1) pick.selectedIndex = 1;
+}
+$("#cmp-a-kind").onchange = () => cmpFill("a"); $("#cmp-b-kind").onchange = () => cmpFill("b");
+function cmpSpec(side) {
+  const kind = $(`#cmp-${side}-kind`).value, v = $(`#cmp-${side}-pick`).value, t = $(`#cmp-${side}-text`).value.trim();
+  if (kind === "person") return { kind, id: +v, age: t === "" ? "" : +t };
+  if (kind === "year") return { kind, year: v };
+  if (kind === "month") return { kind, month: t };
+  return { kind, id: +v };
+}
+$("#cmp-go").onclick = async () => {
+  const out = $("#cmp-out"); out.textContent = "Comparing…";
+  let r; try { r = await api("/api/compare", { a: cmpSpec("a"), b: cmpSpec("b") }); } catch (e) { out.textContent = e.message; return; }
+  out.replaceChildren();
+  const head = document.createElement("div"); head.className = "pair"; head.style.padding = "12px 14px";
+  const grid = document.createElement("div"); grid.style.display = "grid"; grid.style.gridTemplateColumns = "1fr 1fr"; grid.style.gap = "14px";
+  for (const side of ["a", "b"]) {
+    const sd = r[side], d = document.createElement("div");
+    const t = document.createElement("div"); t.className = "t"; t.style.fontWeight = "600"; t.style.fontSize = "17px"; t.textContent = sd.label;
+    const m = document.createElement("div"); m.className = "small muted";
+    m.textContent = [`${fmt(sd.count)} photos`, sd.first && sd.first !== sd.last ? `${sd.first} – ${sd.last}` : sd.first, sd.places.length ? "in " + sd.places.join(", ") : "", sd.people.length ? "with " + sd.people.join(", ") : ""].filter(Boolean).join(" · ");
+    d.append(t, m); grid.append(d);
+  }
+  head.append(grid); out.append(head);
+  if (!r.pairs.length) { const p = document.createElement("p"); p.className = "muted"; p.textContent = "One side has no photos."; out.append(p); return; }
+  const all = r.pairs.flatMap(p => [p.a, p.b]);
+  const pairs = document.createElement("div"); pairs.className = "pairs"; pairs.style.marginTop = "12px";
+  r.pairs.forEach((p, i) => {
+    const card = document.createElement("div"); card.className = "pair"; const imgs = document.createElement("div"); imgs.className = "imgs";
+    for (const [k, j] of [["a", 2 * i], ["b", 2 * i + 1]]) { const im = document.createElement("img"); im.src = media("thumb", p[k].id); im.alt = ""; im.loading = "lazy"; im.onclick = () => openLightbox(j, all); imgs.append(im); }
+    const meta = document.createElement("div"); meta.className = "meta";
+    for (const [k, right] of [["a", false], ["b", true]]) { const sp = document.createElement("span"); if (right) sp.style.textAlign = "right"; sp.textContent = (p[k].taken_at || "").slice(0, 10); meta.append(sp); }
+    card.append(imgs, meta); pairs.append(card);
+  });
+  out.append(pairs);
+};
+
 // ---- corrections (viewer)
 function showMenu(anchor, items) {
   const m = $("#menu"); m.replaceChildren();
@@ -2065,6 +2131,23 @@ async function loadMap() {
   map.addLayer(cluster);
   if (pts.length) map.fitBounds(cluster.getBounds(), { padding: [30, 30], maxZoom: 12 });
 }
+let thisDay = null;
+$("#map-thisday").onclick = async () => {
+  if (!map) return;
+  if (thisDay) { map.removeLayer(thisDay); thisDay = null; $("#map-thisday-note").textContent = ""; if (cluster) map.addLayer(cluster); return; }
+  const pins = await api("/api/map/this-day").catch(e => { toast(e.message); return []; });
+  if (!pins.length) return toast("No located photos from this date in past years.");
+  if (cluster) map.removeLayer(cluster);
+  thisDay = L.layerGroup();
+  const items = pins.map(p => ({ id: p.id, kind: "photo" }));
+  pins.forEach((p, i) => {
+    const m = L.marker([p.lat, p.lon]).bindTooltip(`${p.year}${p.days_off ? " (±" + p.days_off + " d)" : ""} · ${p.place}`, { permanent: true, direction: "top", offset: [-15, -10] });
+    m.on("click", () => openLightbox(i, items)); thisDay.addLayer(m);
+  });
+  thisDay.addLayer(L.polyline(pins.map(p => [p.lat, p.lon]), { color: "#0f766e", weight: 2, dashArray: "4 6" }));
+  map.addLayer(thisDay); map.fitBounds(L.latLngBounds(pins.map(p => [p.lat, p.lon])), { padding: [60, 60], maxZoom: 10 });
+  $("#map-thisday-note").textContent = `${pins.length} year${pins.length > 1 ? "s" : ""} on ${new Date().toLocaleDateString(undefined, { month: "long", day: "numeric" })}. Click again for all photos.`;
+};
 
 refresh(); pollLog();
 setInterval(refresh, 1500); setInterval(pollLog, 2000);
