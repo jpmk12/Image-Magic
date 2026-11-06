@@ -56,7 +56,9 @@ MIGRATIONS = {
     "place_km": "REAL",      # distance to the matched place; NULL = not looked up yet
     "trip_id": "INTEGER",
     "private": "INTEGER NOT NULL DEFAULT 0",   # never sent to AI, never shared
+    "trip_manual": "INTEGER NOT NULL DEFAULT 0",   # 1 = you chose this photo's trip
 }
+TRIP_MIGRATIONS = {"manual": "INTEGER NOT NULL DEFAULT 0", "title_locked": "INTEGER NOT NULL DEFAULT 0"}
 
 LIVE_SUFFIXES = ("_HEVC",)  # icloudpd's default live-photo video suffix
 
@@ -74,6 +76,10 @@ def connect(db_file: Path) -> sqlite3.Connection:
     for col, typ in MIGRATIONS.items():
         if col not in have:
             conn.execute(f"ALTER TABLE assets ADD COLUMN {col} {typ}")
+    have_t = {row["name"] for row in conn.execute("PRAGMA table_info(trips)")}
+    for col, typ in TRIP_MIGRATIONS.items():
+        if col not in have_t:
+            conn.execute(f"ALTER TABLE trips ADD COLUMN {col} {typ}")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_assets_country ON assets(country_code)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_assets_trip ON assets(trip_id)")
     conn.commit()

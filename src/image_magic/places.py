@@ -172,36 +172,67 @@ def rebuild_trips(conn: sqlite3.Connection) -> int:
             groups.append(current)
     groups = [g for g in groups if len(g) >= MIN_TRIP_PHOTOS]
 
-    conn.execute("UPDATE assets SET trip_id = NULL")
-    conn.execute("DELETE FROM trips")
+    # Keep what you decided: manual assignments, trips you created, titles you set.
+    existing = {r["id"]: dict(r) for r in conn.execute("SELECT * FROM trips")}
+    keep_ids = {t["id"] for t in existing.values() if t["manual"]}
+    keep_ids |= {r[0] for r in conn.execute("SELECT DISTINCT trip_id FROM assets WHERE trip_manual = 1 AND trip_id IS NOT NULL")}
+    conn.execute("UPDATE assets SET trip_id = NULL WHERE trip_manual = 0")
+    matched: set[int] = set()
     for g in groups:
+        g = [p for p in g if not conn.execute("SELECT trip_manual FROM assets WHERE id = ?", (p["id"],)).fetchone()[0]]
+        if len(g) < MIN_TRIP_PHOTOS:
+            continue
         country_counts = Counter(p["country"] for p in g if p["country"])
         names = [c for c, _ in country_counts.most_common(3)]
         title = " & ".join(names[:2]) + (" +" if len(names) > 2 else "") if names else "Trip"
         cities = [c for c, _ in Counter(p["city"] for p in g if p["city"]).most_common(3)]
         start, end = g[0]["t"], g[-1]["t"]
         cover = g[len(g) // 2]
-        cur = conn.execute(
-            """INSERT INTO trips (title, subtitle, start_at, end_at, photo_count, cover_id, lat, lon)
-               VALUES (?, ?, ?, ?, 0, ?, ?, ?)""",
-            (title, ", ".join(cities), start.isoformat(), end.isoformat(),
-             cover["id"], sum(p["lat"] for p in g) / len(g), sum(p["lon"] for p in g) / len(g)),
-        )
-        trip_id = cur.lastrowid
+        lat, lon = sum(p["lat"] for p in g) / len(g), sum(p["lon"] for p in g) / len(g)
+        # Reuse an existing automatic trip whose dates overlap, so ids (and stories) stay stable.
+        trip_id = None
+        for t in existing.values():
+            if t["id"] in matched or t["manual"]:
+                continue
+            if t["start_at"][:10] <= end.isoformat()[:10] and t["end_at"][:10] >= start.isoformat()[:10]:
+                trip_id = t["id"]
+                break
+        if trip_id is None:
+            cur = conn.execute(
+                """INSERT INTO trips (title, subtitle, start_at, end_at, photo_count, cover_id, lat, lon)
+                   VALUES (?, ?, ?, ?, 0, ?, ?, ?)""",
+                (title, ", ".join(cities), start.isoformat(), end.isoformat(), cover["id"], lat, lon))
+            trip_id = cur.lastrowid
+        else:
+            t = existing[trip_id]
+            conn.execute("UPDATE trips SET title = ?, subtitle = ?, start_at = ?, end_at = ?, cover_id = ?, lat = ?, lon = ? WHERE id = ?",
+                         (t["title"] if t["title_locked"] else title, ", ".join(cities), start.isoformat(), end.isoformat(),
+                          t["cover_id"] or cover["id"], lat, lon, trip_id))
+        matched.add(trip_id)
         # Every photo/video in the trip's time window joins the trip, including
         # ones without GPS (videos, photos from apps that strip location).
+        id_list = [p["id"] for p in g]
+        for i in range(0, len(id_list), 500):
+            chunk = id_list[i:i + 500]
+            conn.execute(
+                f"""UPDATE assets SET trip_id = ? WHERE trip_manual = 0 AND id IN ({','.join('?' * len(chunk))})""",
+                [trip_id, *chunk])
         conn.execute(
-            """UPDATE assets SET trip_id = ?
-               WHERE missing = 0 AND kind != 'live_video' AND taken_at IS NOT NULL
-                 AND taken_at >= ? AND taken_at <= ?
-                 AND (lat IS NULL OR id IN (%s))""" % ",".join(str(p["id"]) for p in g),
-            (trip_id, start.isoformat(), (end + timedelta(seconds=1)).isoformat()),
-        )
-        n = conn.execute("SELECT COUNT(*) FROM assets WHERE trip_id = ? AND duplicate_of IS NULL",
-                         (trip_id,)).fetchone()[0]
-        conn.execute("UPDATE trips SET photo_count = ? WHERE id = ?", (n, trip_id))
+            """UPDATE assets SET trip_id = ? WHERE trip_manual = 0 AND missing = 0 AND kind != 'live_video'
+               AND taken_at IS NOT NULL AND lat IS NULL AND taken_at >= ? AND taken_at <= ?""",
+            (trip_id, start.isoformat(), (end + timedelta(seconds=1)).isoformat()))
+    for tid in list(existing):
+        if tid not in matched and tid not in keep_ids:
+            conn.execute("DELETE FROM trips WHERE id = ?", (tid,))
+    for tid in matched | keep_ids:
+        r = conn.execute("SELECT COUNT(*) AS n, MIN(taken_at) AS s, MAX(taken_at) AS e FROM assets "
+                         "WHERE trip_id = ? AND duplicate_of IS NULL AND missing = 0", (tid,)).fetchone()
+        if r["n"]:
+            conn.execute("UPDATE trips SET photo_count = ?, start_at = ?, end_at = ? WHERE id = ?", (r["n"], r["s"], r["e"], tid))
+        elif tid not in keep_ids:
+            conn.execute("DELETE FROM trips WHERE id = ?", (tid,))
     conn.commit()
-    return len(groups)
+    return conn.execute("SELECT COUNT(*) FROM trips").fetchone()[0]
 
 
 def refresh(conn: sqlite3.Connection) -> tuple[int, int]:

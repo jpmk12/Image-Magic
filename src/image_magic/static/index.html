@@ -219,6 +219,21 @@
   .grow .strip img { width: 56px; height: 56px; border-radius: 8px; object-fit: cover; cursor: pointer; opacity: .55; flex: none; transition: opacity .15s; }
   .grow .strip img.on { opacity: 1; outline: 2px solid var(--accent); }
 
+  /* ---- corrections */
+  .menu { position: fixed; z-index: 2600; background: var(--panel); color: var(--text); border: 1px solid var(--line);
+          border-radius: 12px; box-shadow: 0 20px 50px -20px rgba(0,0,0,.6); padding: 6px; min-width: 220px; }
+  .menu button { display: block; width: 100%; text-align: left; background: none; border: 0; font: inherit; color: var(--text);
+                 padding: 8px 12px; border-radius: 8px; cursor: pointer; }
+  .menu button:hover { background: var(--soft); }
+  .menu .sep { height: 1px; background: var(--line); margin: 4px 6px; }
+  .menu .hd { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .06em; padding: 6px 12px 2px; }
+  .sugg { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; margin-top: 12px; }
+  .sugg label { display: block; cursor: pointer; border-radius: 10px; overflow: hidden; border: 2px solid transparent; background: var(--panel-2); }
+  .sugg label:has(input:checked) { border-color: var(--accent); }
+  .sugg img { width: 100%; aspect-ratio: 1; object-fit: cover; display: block; }
+  .sugg .why { font-size: 11.5px; color: var(--muted); padding: 6px 8px; line-height: 1.35; }
+  .sugg input { position: absolute; opacity: 0; }
+  .lb aside a.edit { color: #98a2b3; font-size: 12px; margin-left: 6px; }
   /* ---- memories */
   .mem-row { display: flex; gap: 6px; flex-wrap: wrap; }
   .mem-row .tile { width: 120px; flex: none; }
@@ -640,6 +655,17 @@
     <canvas id="film-canvas" width="1280" height="720" style="width:100%;margin-top:12px;border-radius:8px;background:#000"></canvas>
   </div>
 </div>
+
+<div class="story share hidden" id="sugg">
+  <div class="card">
+    <div class="row" style="justify-content:space-between"><h2 id="sugg-title" style="margin:0">More photos from this trip?</h2><button class="btn" id="sugg-close">✕</button></div>
+    <p class="small muted" id="sugg-intro">These photos look like they belong to the trip, based on when they were taken, how they look, and their captions. Tick the ones that do.</p>
+    <div class="row"><button class="btn" id="sugg-all">Select all</button><button class="btn" id="sugg-none">Select none</button><span class="small muted" id="sugg-count"></span></div>
+    <div class="sugg" id="sugg-grid"></div>
+    <div class="row" style="margin-top:14px"><button class="btn primary" id="sugg-add">Add selected to trip</button><span class="small muted" id="sugg-note"></span></div>
+  </div>
+</div>
+<div class="menu hidden" id="menu"></div>
 
 <div class="grow hidden" id="grow">
   <div class="card">
@@ -1150,22 +1176,38 @@ async function openLightbox(i, items) {
       if (onclick) v.onclick = onclick;
       div.append(v); info.append(div);
     };
-    if (d.description && d.description.status === "ok") {
-      add("About", d.description.caption);
-      add("Keywords", d.description.keywords.join(", "));
-      if (d.description.text) add("Text in photo", d.description.text);
+    {
+      const desc = d.description && d.description.status === "ok" ? d.description : null;
+      const div = document.createElement("div"), b = document.createElement("b"); b.textContent = "About"; div.append(b);
+      const v = document.createElement("span"); v.textContent = desc ? desc.caption : "No description yet";
+      const e = document.createElement("a"); e.className = "edit"; e.textContent = "✎ edit";
+      e.onclick = async () => {
+        const cap = prompt("Describe this photo:", desc ? desc.caption : ""); if (cap === null) return;
+        const kw = prompt("Keywords (comma separated):", desc ? desc.keywords.join(", ") : ""); if (kw === null) return;
+        await api("/api/curate/caption", { id: d.id, caption: cap, keywords: kw.split(",").map(s => s.trim()).filter(Boolean) }).catch(err => toast(err.message));
+        openLightbox(lbIndex, lbItems === grid.items ? undefined : lbItems);
+      };
+      div.append(v, e); info.append(div);
+      if (desc && desc.keywords.length) add("Keywords", desc.keywords.join(", "));
+      if (desc && desc.text) add("Text in photo", desc.text);
     }
     add("Taken", d.taken_at ? new Date(d.taken_at).toLocaleString() : "");
     add("Place", [d.city, d.region, d.country].filter(Boolean).join(", "));
-    add("Trip", d.trip_title, () => { closeLightbox(); showTab("photos"); setFilters({ trip: d.trip_id, tripTitle: d.trip_title }); });
+    {
+      const div = document.createElement("div"), b = document.createElement("b"); b.textContent = "Trip"; div.append(b);
+      const v = document.createElement("a"); v.textContent = d.trip_title || "Not part of a trip";
+      v.onclick = () => { if (d.trip_id) { closeLightbox(); showTab("photos"); setFilters({ trip: d.trip_id, tripTitle: d.trip_title }); } else tripMenu(v, d); };
+      const e = document.createElement("a"); e.className = "edit"; e.textContent = "✎ change"; e.onclick = ev => { ev.stopPropagation(); tripMenu(e, d); };
+      div.append(v, e); info.append(div);
+    }
     if (d.taken_at) add("Replay", "▶ This day", () => { closeLightbox(); openReplay({ day: d.taken_at.slice(0, 10) }, fmtDate(d.taken_at)); });
     const known = (d.faces || []).filter(f => f.person_id && !f.hidden);
     if (known.length) {
       const div = document.createElement("div"), b = document.createElement("b"); b.textContent = "People"; div.append(b);
       for (const f of known) {
         const t = document.createElement("span"); t.className = "tag" + (f.name ? "" : " unnamed");
-        t.textContent = f.name || "Unnamed"; t.title = "Show this person's photos";
-        t.onclick = () => { closeLightbox(); showTab("photos"); setFilters({ person: f.person_id, personName: f.name || "Unnamed person" }); };
+        t.textContent = f.name || "Unnamed"; t.title = "Click for options";
+        t.onclick = ev => { ev.stopPropagation(); personMenu(t, f, d); };
         div.append(t);
       }
       info.append(div);
@@ -1455,6 +1497,74 @@ async function loadMemories() {
 }
 $("#mem-shuffle").onclick = () => api("/api/shuffle").then(renderShuffle).catch(e => toast(e.message));
 
+// ---- corrections (viewer)
+function showMenu(anchor, items) {
+  const m = $("#menu"); m.replaceChildren();
+  for (const it of items) {
+    if (it === "-") { const s = document.createElement("div"); s.className = "sep"; m.append(s); continue; }
+    if (it.head) { const h = document.createElement("div"); h.className = "hd"; h.textContent = it.head; m.append(h); continue; }
+    const b = document.createElement("button"); b.textContent = it.label; b.onclick = () => { hideMenu(); it.run(); }; m.append(b);
+  }
+  const r = anchor.getBoundingClientRect();
+  m.style.left = Math.min(r.left, innerWidth - 260) + "px"; m.style.top = Math.min(r.bottom + 4, innerHeight - 320) + "px";
+  m.classList.remove("hidden");
+  setTimeout(() => document.addEventListener("click", hideMenu, { once: true }), 0);
+}
+function hideMenu() { $("#menu").classList.add("hidden"); }
+let tripsCache = [];
+async function tripMenu(anchor, d) {
+  tripsCache = await api("/api/trips").catch(() => []);
+  const refreshView = () => openLightbox(lbIndex, lbItems === grid.items ? undefined : lbItems);
+  const setTrip = async trip => { await api("/api/curate/trip", { ids: [d.id], trip }).catch(e => toast(e.message)); toast("Updated"); refreshView(); };
+  const items = [{ head: "This photo is from…" }];
+  for (const t of tripsCache.slice(0, 12)) if (t.id !== d.trip_id)
+    items.push({ label: `${t.title} · ${new Date(t.start_at).toLocaleDateString(undefined, { month: "short", year: "numeric" })}`, run: () => setTrip(t.id) });
+  items.push({ label: "A new trip…", run: async () => { const name = prompt("Name the trip (e.g. Jordan 2019):"); if (name && name.trim()) setTrip({ new: name.trim() }); } });
+  if (d.trip_id) {
+    items.push("-", { label: "Not part of a trip", run: () => setTrip("none") });
+    items.push({ label: "Rename this trip…", run: async () => { const name = prompt("Trip title:", d.trip_title); if (name && name.trim()) { await api("/api/curate/trip-rename", { id: d.trip_id, title: name }).catch(e => toast(e.message)); refreshView(); } } });
+    items.push("-", { label: "🔍 Find more photos from this trip", run: () => openSuggestions(d.trip_id, d.trip_title, d.id) });
+  }
+  showMenu(anchor, items);
+}
+async function personMenu(anchor, f, d) {
+  const refreshView = () => openLightbox(lbIndex, lbItems === grid.items ? undefined : lbItems);
+  const items = [{ head: f.name || "Unnamed person" },
+    { label: "Show their photos", run: () => { closeLightbox(); goPhotos({ person: f.person_id, personName: f.name || "Unnamed person" }); } },
+    "-",
+    { label: "Not this person", run: async () => { await api("/api/people/move-face", { face: f.id, person: null }).catch(e => toast(e.message)); refreshView(); } },
+    { label: "This is someone else…", run: async () => { const name = prompt("Who is this?"); if (name && name.trim()) { await api("/api/people/move-face", { face: f.id, name: name.trim() }).catch(e => toast(e.message)); refreshView(); } } }];
+  if (!f.name) items.push({ label: "Name this person…", run: async () => { const name = prompt("Name:"); if (name && name.trim()) { await api("/api/people/rename", { id: f.person_id, name }).catch(e => toast(e.message)); refreshView(); } } });
+  showMenu(anchor, items);
+}
+let sugg = { trip: 0 };
+async function openSuggestions(tripId, title, seed) {
+  sugg.trip = tripId;
+  $("#sugg-title").textContent = `More photos from ${title}?`; $("#sugg-note").textContent = ""; $("#sugg-grid").replaceChildren();
+  $("#sugg").classList.remove("hidden"); $("#sugg-count").textContent = "Looking…";
+  try {
+    const r = await api(`/api/curate/suggest?trip=${tripId}${seed ? "&seed=" + seed : ""}`);
+    $("#sugg-count").textContent = r.items.length ? `${r.items.length} candidates` : "Nothing else looks like this trip.";
+    $("#sugg-grid").replaceChildren(...r.items.map(it => {
+      const l = document.createElement("label"); l.style.position = "relative";
+      const cb = document.createElement("input"); cb.type = "checkbox"; cb.value = it.id; cb.checked = it.strong;
+      const im = document.createElement("img"); im.src = media("thumb", it.id); im.alt = ""; im.loading = "lazy";
+      const why = document.createElement("div"); why.className = "why";
+      why.textContent = `${new Date(it.taken_at).toLocaleDateString()} · ${it.reasons.join("; ")}`;
+      l.append(cb, im, why); return l;
+    }));
+  } catch (e) { $("#sugg-count").textContent = e.message; }
+}
+$("#sugg-close").onclick = () => $("#sugg").classList.add("hidden");
+$("#sugg-all").onclick = () => $$("#sugg-grid input").forEach(i => i.checked = true);
+$("#sugg-none").onclick = () => $$("#sugg-grid input").forEach(i => i.checked = false);
+$("#sugg-add").onclick = async () => {
+  const ids = $$("#sugg-grid input:checked").map(i => +i.value);
+  if (!ids.length) return toast("Nothing selected.");
+  try { await api("/api/curate/trip", { ids, trip: sugg.trip }); $("#sugg-note").textContent = `Added ${ids.length} photo${ids.length > 1 ? "s" : ""}.`; $$("#sugg-grid input:checked").forEach(i => i.closest("label").remove()); loadTrips(); }
+  catch (e) { $("#sugg-note").textContent = e.message; }
+};
+
 // ---- growing up
 const grow = { frames: [], i: 0, timer: null, pid: 0, playing: false };
 async function openGrowing(p) {
@@ -1664,9 +1774,12 @@ async function loadTrips() {
     b.onclick = () => { showTab("photos"); setFilters({ trip: t.id, tripTitle: `${t.title}, ${start.toLocaleDateString(undefined, { month: "short", year: "numeric" })}` }); };
     const play = document.createElement("button"); play.className = "btn primary"; play.textContent = "▶ Replay";
     play.style.margin = "0 14px 12px"; play.onclick = ev => { ev.stopPropagation(); openReplay({ trip: t.id }, t.title); };
+    const more = document.createElement("button"); more.className = "btn"; more.textContent = "🔍 Find more"; more.title = "Find photos that belong to this trip";
+    more.style.margin = "0 14px 12px"; more.onclick = ev => { ev.stopPropagation(); openSuggestions(t.id, t.title); };
+    title.title = "Click to rename"; title.onclick = async ev => { ev.stopPropagation(); const name = prompt("Trip title:", t.title); if (name && name.trim()) { await api("/api/curate/trip-rename", { id: t.id, title: name }).catch(e => toast(e.message)); loadTrips(); } };
     const st = document.createElement("button"); st.className = "btn"; st.textContent = "✍ Story";
     st.style.margin = "0 14px 12px"; st.onclick = ev => { ev.stopPropagation(); openStory("trip", t.id, t.title); };
-    const rowb = document.createElement("div"); rowb.className = "row"; rowb.append(play, st);
+    const rowb = document.createElement("div"); rowb.className = "row"; rowb.append(play, st, more);
     b.append(rowb);
     return b;
   }));

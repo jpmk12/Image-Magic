@@ -277,5 +277,9 @@ Service features (flying log, squadron yearbook) slot into S2 (log) and S9 (year
   hosting and are left for a later, server-based version.
 - **Restyle** (v0.14.0): sidebar navigation with icons, page title bar, cool-neutral palette
   with a teal accent, consistent panels/controls/focus states, polished dark mode, phone layout.
+- **Corrections** (v0.15.0): persistent trips with stable ids; manual trip assignment, new
+  trips and renames survive rebuilds; "find more photos from this trip" (time window from the
+  trip's core, visual similarity to the trip and the picked photo, caption keywords, distance
+  penalty); face "not this person" / "this is…"; caption editing.
 - Phase 4 complete. Next: real-library feedback, then tuning (trip and chapter heuristics,
   face thresholds on children), and a signed installer.

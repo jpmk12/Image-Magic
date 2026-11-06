@@ -99,6 +99,13 @@ program only. Your photos and settings are kept.
 - **Film:** in any replay, click **🎬 Film** to render a video in your browser (slow zooms,
   captions, optional music from a file on your computer). Saved as a `.webm` in Downloads.
 - **Read aloud:** a story can be read out by your browser's voice (🔊 in the story window).
+- **Fixing mistakes:** everything the app works out can be corrected, and your corrections
+  stick through rebuilds. In the viewer: **Trip ✎ change** moves a photo to another trip, a
+  new trip, or no trip, and **Find more photos from this trip** suggests other photos that
+  belong with it (by date, by how they look, and by their captions) for you to tick and add.
+  Click a person's name tag for **Not this person** or **This is someone else**. **About ✎ edit**
+  rewrites a caption and keywords. Chapters can be renamed on the Timeline, milestones
+  dismissed, trips renamed on their cards.
 - **People:** turn it on once from the Home tab (about 290 MB of face models, verified by
   fingerprint). The app finds every face and groups them by person. On the **People** tab,
   click **"Who is this?"** to name a group, click the face to see all of that person's photos,

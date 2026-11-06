@@ -231,7 +231,7 @@ def make_handler(app: App):
                     return self._json(200, app.jobs.log_since(since))
                 if path.startswith(("/api/photos", "/api/photo/", "/api/facets", "/api/trips", "/api/replay",
                                     "/api/map", "/api/people", "/api/timeline", "/api/story", "/api/memories",
-                                    "/api/shuffle", "/api/similar/", "/api/review", "/api/context/", "/media/")):
+                                    "/api/shuffle", "/api/similar/", "/api/review", "/api/context/", "/api/curate/", "/media/")):
                     return self._browse(path, self._query())
             except Exception as e:
                 return self._json(500, {"error": str(e)})
@@ -271,6 +271,10 @@ def make_handler(app: App):
                     return self._json(200, browse.facets(conn))
                 if path == "/api/trips":
                     return self._json(200, browse.trips(conn))
+                if path == "/api/curate/suggest":
+                    from . import curate
+                    return self._json(200, curate.suggest_for_trip(conn, str(settings.db), int(q.get("trip") or 0),
+                                                                   int(q["seed"]) if q.get("seed") else None))
                 if path == "/api/story":
                     from . import ask
                     key = f"{q.get('kind')}:{int(q.get('id') or 0)}"
@@ -408,13 +412,22 @@ def make_handler(app: App):
                     faces.merge_people(conn, int(data["from"]), int(data["into"]))
                 elif action == "move-face":
                     pid = data.get("person")
+                    name = str(data.get("name") or "").strip()
+                    if name and not pid:
+                        match = next((p for p in faces.people(conn, include_hidden=True)
+                                      if (p["name"] or "").lower() == name.lower()), None)
+                        if match:
+                            pid = match["id"]
+                        else:
+                            cur = conn.execute("INSERT INTO persons (name, created) VALUES (?, datetime('now'))", (name[:80],))
+                            pid = cur.lastrowid
                     faces.move_face(conn, int(data["face"]), int(pid) if pid else None)
                 elif action == "birthday":
                     from . import kids
                     kids.set_birthday(conn, int(data["id"]), str(data.get("birthday") or "") or None)
                 elif action == "regroup":
                     faces.group_faces(conn)
-                if action in ("rename", "merge", "regroup", "birthday"):
+                if action in ("rename", "merge", "regroup", "birthday", "move-face"):
                     from . import chapters
                     chapters.rebuild_milestones(conn)
                 else:
@@ -508,6 +521,30 @@ def make_handler(app: App):
                     return self._people_action(path, data)
                 if path.startswith("/api/timeline/"):
                     return self._timeline_action(path, data)
+                if path.startswith("/api/curate/"):
+                    from . import curate
+                    settings, conn = app.db()
+                    try:
+                        action = path.rsplit("/", 1)[1]
+                        if action == "trip":
+                            ids = [int(i) for i in data.get("ids") or []]
+                            t = data.get("trip")
+                            if isinstance(t, dict) and t.get("new"):
+                                tid = curate.set_trip(conn, ids, None, new_title=str(t["new"]))
+                            else:
+                                tid = curate.set_trip(conn, ids, int(t) if t not in (None, "", "none") else None)
+                            from . import chapters
+                            chapters.rebuild_milestones(conn)
+                            return self._json(200, {"trip": tid})
+                        if action == "trip-rename":
+                            curate.rename_trip(conn, int(data["id"]), str(data.get("title", "")))
+                            return self._json(200, {"ok": True})
+                        if action == "caption":
+                            return self._json(200, curate.set_caption(conn, int(data["id"]), str(data.get("caption", "")),
+                                                                      [str(k) for k in data.get("keywords") or []]))
+                        return self._json(404, {"error": "not found"})
+                    finally:
+                        conn.close()
                 if path in ("/api/share/check", "/api/share/export"):
                     from . import share
                     settings, conn = app.db()
