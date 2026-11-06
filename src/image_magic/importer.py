@@ -132,7 +132,7 @@ def check_folder(conn: sqlite3.Connection, folder: Path, library: Path, original
         except OSError:
             plan.errors += 1
             continue
-        rel = str(f.relative_to(folder))
+        rel = f.relative_to(folder).as_posix()   # same spelling on Windows and elsewhere
         if sha in known_sha:
             if sha not in sha_to_id:
                 sha_to_id[sha] = conn.execute("SELECT id FROM assets WHERE sha256 = ? LIMIT 1", (sha,)).fetchone()[0]
@@ -188,7 +188,7 @@ def run_import(conn: sqlite3.Connection, plan: Plan, library: Path, originals: P
     for i, item in enumerate(todo, 1):
         if cancelled():
             break
-        src = folder / item["path"]
+        src = folder.joinpath(*item["path"].split("/"))
         try:
             dest = _dest_for(originals, src)
             shutil.copy2(src, dest)          # keeps the file's dates

@@ -72,7 +72,7 @@ def test_check_classifies_new_exact_and_near(tmp_path):
     s = plan.summary()
     assert s["new"] == 1 and s["exact"] == 2 and s["near"] == 1 and s["skipped"] == 1
     assert plan.near[0]["path"] == "resized.jpg" and plan.near[0]["bits"] <= importer.NEAR_BITS
-    assert [e["path"] for e in plan.exact] == ["copy.JPG", "sub/new-again.JPG"] or set(e["path"] for e in plan.exact) == {"copy.JPG", "sub/new-again.JPG"}
+    assert {e["path"] for e in plan.exact} == {"copy.JPG", "sub/new-again.JPG"}
 
     r = importer.run_import(conn, plan, lib, orig, include_near=False)
     assert r["copied"] == 1 and r["catalogued_new"] == 1
