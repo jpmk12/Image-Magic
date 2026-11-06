@@ -529,6 +529,15 @@ def make_handler(app: App):
                     return self._people_action(path, data)
                 if path.startswith("/api/timeline/"):
                     return self._timeline_action(path, data)
+                if path == "/api/import/check":
+                    folder = str(data.get("folder", "")).strip()
+                    if not folder:
+                        raise ValueError("Enter the folder to import from.")
+                    app.jobs.start("import_check", payload={"folder": folder})
+                    return self._json(200, app.jobs.snapshot())
+                if path == "/api/import/run":
+                    app.jobs.start("import", payload={"include_near": bool(data.get("include_near"))})
+                    return self._json(200, app.jobs.snapshot())
                 if path.startswith("/api/curate/"):
                     from . import curate
                     settings, conn = app.db()

@@ -289,3 +289,56 @@ Service features (flying log, squadron yearbook) slot into S2 (log) and S9 (year
   unreadable files recorded, batched queries, status cache, grid cap.
 - Phase 4 complete. Next: real-library feedback, then tuning (trip and chapter heuristics,
   face thresholds on children), and a signed installer.
+
+---
+
+## Phase 5: ideas for richer storytelling
+
+A review of the app as built (v0.16), and what would make the stories better. Ordered by
+how much they add for the effort.
+
+### What's strong today
+Backup and catalog are solid and verifiable. Places, trips, chapters, people, search and
+captions give the app the four coordinates of a memory (when, where, who, what). Replay,
+stories, Ask, memories, year review, books and share cover the "relive" side.
+
+### What's thin, and the fixes
+1. **Quality.** The app doesn't yet know which photos are *good*. Captions give a 1–5 quality
+   score only when AI descriptions are on. Add a local, free quality signal: sharpness
+   (Laplacian variance), exposure, face size/eyes open, and "near-duplicate burst" grouping so
+   replay, books and year review pick the best frame of each moment. Needs no network.
+2. **Events, not just days.** Life happens in events (a birthday party, a hike, a sortie):
+   clusters of photos within a few hours and a few hundred metres. Trips are the big version;
+   events are the small one. Events become the unit for stories, replay and sharing.
+3. **The home story.** Trips get all the attention; most of life is at home. "A year at home"
+   views: seasons, the backyard through the years, the kitchen table, first days of school.
+4. **Narration and voice.** Stories are read aloud by the browser voice today. A recorded
+   voice note per photo or event ("their voices" from the plan) is the most personal layer
+   possible and needs only the microphone in the browser.
+5. **Music for films.** The film maker takes a file; a small bundled set of royalty-free
+   tracks (or a folder of the user's own) would make films one click.
+
+### New features, by value
+- **Import from folders**: built (v0.17.0). SHA-256 exact duplicates, dHash look-alikes
+  (≤ 6 bits, flat images excluded), copies into originals/imported/<year>/<month>/.
+- **Events** (above) with automatic titles ("Saturday at the beach, July 2019") and an
+  event replay.
+- **Photo quality + best-of selection** (above).
+- **Ask → do.** Let Ask act: "make a book of Emma's first year", "replay our Jordan trip",
+  "share the best 20 from Christmas with Mom". The tools exist; wire them to the Ask loop.
+- **Comparison stories.** "Emma at 3 vs Jack at 3", "Christmas 2017 vs 2023" side-by-side pages.
+- **Where was I on this day each year** on the map: a yearly pin for today's date.
+- **Flying log.** For the C-17 photos: a dedicated view of bases, sorties and aircraft tails
+  from captions, with a strict share filter.
+- **Printables.** Trip books and year books (the person book exists): one PDF per trip or year.
+- **Second backup.** A one-click copy of the library to an external drive or S3/B2, with
+  verification. The backup half of the plan is still single-copy.
+- **Phone access.** The app on the laptop, viewed from the phone on the same Wi-Fi (needs
+  TLS + a pairing code; today it is loopback-only on purpose).
+- **Family edition.** A shared library with contributions from several people needs hosting;
+  a later, server-based version.
+
+### Accuracy and trust
+- Confidence shown for automatic things (trip membership, chapter boundaries, face groups) with
+  one-click confirm/dismiss, so the story is reviewed, not assumed.
+- A "review queue": the ten least-certain decisions each week, in one screen.

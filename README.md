@@ -7,6 +7,35 @@ every photo. Search by person, place and subject comes next. See [PLAN.md](PLAN.
 The iCloud download tool it uses has options that delete photos, and Image Magic blocks
 all of them in code. Automated tests check this.
 
+## Quick start
+
+**Before you start (2 minutes)**
+1. Free space: 16,000 photos need roughly 50–100 GB.
+2. Note whether **Advanced Data Protection** is on (iPhone: Settings → your name → iCloud → Advanced Data Protection).
+3. Keep your iPhone next to you for the sign-in code.
+
+**Install (1 minute)**
+1. Download `ImageMagic-Setup.exe` from the [Releases page](../../releases/latest) and double-click it.
+   If Windows shows "Windows protected your PC", click **More info → Run anyway**.
+2. Keep **"Block network access to the iCloud sign-in helper"** ticked and approve the one administrator prompt.
+3. The app opens in your browser. Later, open it from the desktop icon.
+
+**First run (15 minutes)**
+1. **Settings:** enter your Apple ID; tick the ADP box if it's on. Click **Save**.
+2. **Home → Test with 20 photos.** Enter your Apple ID password, then the 6-digit code from your iPhone.
+   If Windows Firewall asks about `icloudpd`, click **Cancel**.
+   If the sync fails with "setup is not complete", sign in once at https://www.icloud.com in a browser, then try again.
+3. Check the **Photos** tab shows your 20 most recent photos.
+4. **Home → Download everything.** Leave the laptop plugged in and awake; a few hours. It resumes if interrupted.
+
+**Once the download finishes**
+1. **Home → Check backup** confirms nothing is missing or damaged.
+2. **Trips, Timeline, Map** fill in automatically. Rename any chapter or trip by clicking its title.
+3. **Home → Turn on People** (290 MB, then about an hour on a GPU). Name your family on the **People** tab and set birthdays.
+4. **Home → Turn on smart search** (600 MB, a few minutes). Try "C-17" in the Photos search box.
+5. Optional, about $3–4: add an Anthropic API key in Settings, **Try on 25 photos**, then **Describe all new photos**.
+   This unlocks word search, stories and the Ask tab.
+
 ## Install (Windows)
 
 1. Go to the **[Releases page](../../releases/latest)** and download **`ImageMagic-Setup.exe`**.
@@ -100,6 +129,11 @@ program only. Your photos and settings are kept.
 - **Film:** in any replay, click **🎬 Film** to render a video in your browser (slow zooms,
   captions, optional music from a file on your computer). Saved as a `.webm` in Downloads.
 - **Read aloud:** a story can be read out by your browser's voice (🔊 in the story window).
+- **Import from a folder:** on the Home tab, enter a folder (your desktop, an old phone's
+  export, a camera card) and click **Check folder**. Each file is compared with the library:
+  exact copies are skipped, look-alikes (the same picture resized or re-saved) are listed with
+  the library photo they match, and the rest are new. Click **Import** to copy the new ones into
+  `originals/imported/<year>/<month>/`. Your files are copied, never moved.
 - **Fixing mistakes:** everything the app works out can be corrected, and your corrections
   stick through rebuilds. In the viewer: **Trip ✎ change** moves a photo to another trip, a
   new trip, or no trip, and **Find more photos from this trip** suggests other photos that

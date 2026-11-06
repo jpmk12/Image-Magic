@@ -396,6 +396,18 @@
       </div>
     </div>
 
+    <div class="panel" id="importpanel">
+      <h2>Import from a folder</h2>
+      <p class="small">Add photos you have elsewhere (your desktop, an old phone, a camera card). The app checks each
+        file against the library first: exact copies are skipped, and look-alikes (the same picture resized or re-saved)
+        are listed for you to decide. Originals are copied, never moved.</p>
+      <div class="row">
+        <input type="text" id="import-folder" placeholder="C:\Users\you\Desktop\Photos" style="max-width:420px">
+        <button class="btn primary" id="import-check">Check folder</button>
+      </div>
+      <div id="import-result" class="small" style="margin-top:10px"></div>
+    </div>
+
     <div class="panel">
       <h2>Your library</h2>
       <div class="stats" id="stats"><p class="muted">Nothing downloaded yet.</p></div>
@@ -810,7 +822,7 @@ function renderJob(j) {
   $$("[data-run]").forEach(b => b.disabled = busy);
   $("#job-msg").textContent = j.message || "Working...";
   const bar = $("#job-bar");
-  if (j.total && ["sync", "index", "faces", "describe"].includes(j.kind)) {
+  if (j.total && ["sync", "index", "faces", "describe", "import_check", "import"].includes(j.kind)) {
     bar.classList.remove("indeterminate");
     bar.firstElementChild.style.width = Math.min(100, 100 * j.downloaded / j.total) + "%";
   } else {
@@ -851,6 +863,7 @@ async function refresh() {
     renderSmart(st);
     renderPeoplePanel(st);
     renderAiPanel(st);
+    renderImport(st.job);
   } catch (e) { /* app may be quitting */ }
 }
 
@@ -970,6 +983,40 @@ $("#ai-all").onclick = async () => {
   if (!confirm(`Describe all new photos with Claude? Estimated cost about $${est}. You can stop at any time.`)) return;
   api("/api/run", { kind: "describe", mode: "full" }).then(renderJob).catch(e => toast(e.message));
 };
+
+let importShownFor = 0;
+function renderImport(j) {
+  const box = $("#import-result");
+  $("#import-check").disabled = ["running", "needs_password", "needs_code"].includes(j.state);
+  if (j.kind === "import_check" && j.state === "done" && j.result && j.finished !== importShownFor) {
+    importShownFor = j.finished;
+    const r = j.result; box.replaceChildren();
+    const p = document.createElement("p");
+    p.textContent = `${fmt(r.new)} new (${bytes(r.new_bytes)}), ${fmt(r.exact)} already in your library, ${fmt(r.near)} look-alikes` +
+      (r.skipped ? `, ${fmt(r.skipped)} other files ignored` : "") + ".";
+    box.append(p);
+    if (r.near_examples.length) {
+      const d = document.createElement("details"); const s = document.createElement("summary"); s.textContent = "Look-alikes (first " + r.near_examples.length + ")"; d.append(s);
+      const row = document.createElement("div"); row.className = "mem-row"; row.style.marginTop = "6px";
+      for (const n of r.near_examples) {
+        const card = document.createElement("div"); card.style.width = "120px"; card.className = "small muted";
+        const im = document.createElement("img"); im.src = media("thumb", n.match_id); im.style.cssText = "width:120px;height:120px;object-fit:cover;border-radius:8px;display:block";
+        const t = document.createElement("div"); t.textContent = n.path.split(/[\\/]/).pop() + ` (${n.bits} bits off)`; t.style.overflowWrap = "anywhere";
+        card.append(im, t); row.append(card);
+      }
+      d.append(row); box.append(d);
+    }
+    if (r.new || r.near) {
+      const acts = document.createElement("div"); acts.className = "row"; acts.style.marginTop = "10px";
+      const b = document.createElement("button"); b.className = "btn primary"; b.textContent = `Import ${fmt(r.new)} new`;
+      const lab = document.createElement("label"); lab.className = "small"; lab.style.display = r.near ? "" : "none";
+      const cb = document.createElement("input"); cb.type = "checkbox"; lab.append(cb, document.createTextNode(` also import the ${fmt(r.near)} look-alikes`));
+      b.onclick = () => api("/api/import/run", { include_near: cb.checked }).then(j2 => { renderJob(j2); box.replaceChildren(); }).catch(e => toast(e.message));
+      acts.append(b, lab); box.append(acts);
+    }
+  }
+}
+$("#import-check").onclick = () => api("/api/import/check", { folder: $("#import-folder").value }).then(renderJob).catch(e => toast(e.message));
 
 // ---- actions
 $$("[data-run]").forEach(b => b.onclick = async () => {

@@ -10,6 +10,7 @@ import time
 import urllib.parse
 import urllib.request
 from collections import deque
+from pathlib import Path
 from dataclasses import dataclass, field
 
 from . import catalog, sync
@@ -113,15 +114,17 @@ class JobRunner:
     def log_since(self, seq: int) -> list[dict]:
         return [{"seq": n, "line": line} for n, line in list(self.log) if n > seq]
 
-    def start(self, kind: str, mode: str = "full") -> None:
+    def start(self, kind: str, mode: str = "full", payload: dict | None = None) -> None:
         with self._lock:
             if self.busy:
                 raise RuntimeError("Another task is already running")
             self._cancel.clear()
             self.state = JobState(kind=kind, state="running", started=time.time())
+            self.payload = payload or {}
             target = {"sync": self._run_sync, "scan": self._run_scan, "verify": self._run_verify,
                       "index": self._run_index, "faces": self._run_faces,
-                      "describe": self._run_describe}[kind]
+                      "describe": self._run_describe, "import_check": self._run_import_check,
+                      "import": self._run_import}[kind]
             threading.Thread(target=target, args=(mode,), daemon=True).start()
 
     def cancel(self) -> None:
@@ -320,6 +323,50 @@ class JobRunner:
             self._finish(state, f"AI descriptions: {r['described']:,} photos described"
                          f"{' (stopped early)' if state == 'cancelled' else ''}. About ${c['spent_usd']:.2f} spent in total.", r)
         return r
+
+    def _run_import_check(self, _mode: str) -> None:
+        from . import importer
+        try:
+            settings = self._settings_provider()
+            conn = catalog.connect(settings.db)
+            try:
+                self.state.message = "Preparing look-alike detection for your library..."
+                importer.fill_hashes(conn, settings.library, settings.originals,
+                                     progress=self._progress("Prepared"), cancelled=self._cancel.is_set)
+                self.state.message = "Checking the folder..."
+                plan = importer.check_folder(conn, Path(self.payload.get("folder", "")), settings.library, settings.originals,
+                                             progress=self._progress("Checked"), cancelled=self._cancel.is_set)
+            finally:
+                conn.close()
+            self.import_plan = plan
+            s = plan.summary()
+            self._finish("cancelled" if self._cancel.is_set() else "done",
+                         f"Checked {s['new'] + s['exact'] + s['near']:,} photos and videos: {s['new']:,} new, "
+                         f"{s['exact']:,} already in the library, {s['near']:,} look-alikes.", s)
+        except Exception as e:
+            self._finish("failed", f"Could not check that folder: {e}")
+
+    def _run_import(self, _mode: str) -> None:
+        from . import importer
+        plan = getattr(self, "import_plan", None)
+        if plan is None:
+            self._finish("failed", "Check a folder first.")
+            return
+        try:
+            settings = self._settings_provider()
+            conn = catalog.connect(settings.db)
+            try:
+                self.state.message = "Copying files into the library..."
+                r = importer.run_import(conn, plan, settings.library, settings.originals,
+                                        include_near=bool(self.payload.get("include_near")),
+                                        progress=self._progress("Copied"), cancelled=self._cancel.is_set)
+            finally:
+                conn.close()
+            self.import_plan = None
+            self._finish("cancelled" if self._cancel.is_set() else "done",
+                         f"Imported {r['copied']:,} files ({r['failed']} failed). Your library now has {r['total']:,} items.", r)
+        except Exception as e:
+            self._finish("failed", f"Import failed: {e}")
 
     def _run_verify(self, _mode: str) -> None:
         try:

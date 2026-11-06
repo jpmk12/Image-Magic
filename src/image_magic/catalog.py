@@ -57,6 +57,7 @@ MIGRATIONS = {
     "trip_id": "INTEGER",
     "private": "INTEGER NOT NULL DEFAULT 0",   # never sent to AI, never shared
     "trip_manual": "INTEGER NOT NULL DEFAULT 0",   # 1 = you chose this photo's trip
+    "phash": "INTEGER",                            # perceptual hash for look-alike detection
 }
 TRIP_MIGRATIONS = {"manual": "INTEGER NOT NULL DEFAULT 0", "title_locked": "INTEGER NOT NULL DEFAULT 0"}
 
