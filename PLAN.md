@@ -275,5 +275,7 @@ Service features (flying log, squadron yearbook) slot into S2 (log) and S9 (year
   share export as a self-contained folder with metadata-stripped copies after an OPSEC check
   on captions/keywords/places. Family contributions (others adding to shared chapters) need
   hosting and are left for a later, server-based version.
+- **Restyle** (v0.14.0): sidebar navigation with icons, page title bar, cool-neutral palette
+  with a teal accent, consistent panels/controls/focus states, polished dark mode, phone layout.
 - Phase 4 complete. Next: real-library feedback, then tuning (trip and chapter heuristics,
   face thresholds on children), and a signed installer.
