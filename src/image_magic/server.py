@@ -508,6 +508,25 @@ def make_handler(app: App):
                     return self._people_action(path, data)
                 if path.startswith("/api/timeline/"):
                     return self._timeline_action(path, data)
+                if path in ("/api/share/check", "/api/share/export"):
+                    from . import share
+                    settings, conn = app.db()
+                    try:
+                        filters = {k: v for k, v in dict(data.get("filters") or {}).items() if k in
+                                   ("trip", "chapter", "person", "year", "month", "day", "country", "city", "q")}
+                        if path.endswith("check"):
+                            return self._json(200, share.check(conn, filters))
+                        folder = share.export(conn, settings.originals, settings.library, filters,
+                                              str(data.get("title") or "My photos")[:80],
+                                              exclude=[int(i) for i in data.get("exclude") or []],
+                                              story_key=data.get("story_key"))
+                        try:
+                            _open_folder(folder)
+                        except Exception:
+                            pass   # opening the folder is a convenience; the export succeeded
+                        return self._json(200, {"folder": str(folder)})
+                    finally:
+                        conn.close()
                 if path in ("/api/story/write", "/api/story/save", "/api/ask"):
                     return self._ai_action(path, data)
                 if path == "/api/private":

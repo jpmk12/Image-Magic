@@ -270,4 +270,10 @@ Service features (flying log, squadron yearbook) slot into S2 (log) and S9 (year
 - **S8 – Year in review and context: built** (v0.12.0). Per-year stats, best-of-year
   selection by slot, 30-second replay; local sunrise/sunset (NOAA approximation); optional
   Open-Meteo weather, cached, off by default.
-- Next: S9 – Films and sharing.
+- **S9 – Films and sharing: built** (v0.13.0). In-browser film rendering (canvas +
+  MediaRecorder, optional music via Web Audio, WebM); story read-aloud via speech synthesis;
+  share export as a self-contained folder with metadata-stripped copies after an OPSEC check
+  on captions/keywords/places. Family contributions (others adding to shared chapters) need
+  hosting and are left for a later, server-based version.
+- Phase 4 complete. Next: real-library feedback, then tuning (trip and chapter heuristics,
+  face thresholds on children), and a signed installer.

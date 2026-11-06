@@ -91,6 +91,14 @@ program only. Your photos and settings are kept.
 - **That day:** the viewer shows sunrise and sunset for a photo's place and date (computed on
   your laptop). Turn on **Show the weather** in Settings → Privacy to add that day's weather
   from Open-Meteo (sends the date and a location rounded to about 1 km).
+- **Share:** with a trip, person, chapter, day or month selected in Photos, click **↗ Share**.
+  The app first lists photos that look sensitive (aircraft, bases, uniforms, documents, and
+  similar, from the AI captions) so you can leave them out, then exports a folder with a web
+  page and 1600 px copies of the photos with **all metadata removed**. Zip it to send, or
+  copy it to any web host. Private photos are never included.
+- **Film:** in any replay, click **🎬 Film** to render a video in your browser (slow zooms,
+  captions, optional music from a file on your computer). Saved as a `.webm` in Downloads.
+- **Read aloud:** a story can be read out by your browser's voice (🔊 in the story window).
 - **People:** turn it on once from the Home tab (about 290 MB of face models, verified by
   fingerprint). The app finds every face and groups them by person. On the **People** tab,
   click **"Who is this?"** to name a group, click the face to see all of that person's photos,

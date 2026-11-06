@@ -138,6 +138,12 @@
   .yr .stat .n { font-size: 26px; }
   .yr-best { display: flex; gap: 6px; overflow-x: auto; padding: 4px 0; }
   .yr-best .tile { width: 110px; flex: none; }
+  .share, .film { z-index: 2200; }   /* above the replay player */
+  .share .card { background: var(--panel); color: var(--text); border-radius: 14px; width: min(760px, 100%); max-height: 90vh; overflow: auto; padding: 22px 24px; }
+  .flag { display: flex; gap: 10px; align-items: center; padding: 6px 0; border-top: 1px solid var(--line); }
+  .flag img { width: 64px; height: 64px; object-fit: cover; border-radius: 6px; }
+  .flag .r { color: var(--warn); font-size: 12px; }
+  .film .card { background: var(--panel); color: var(--text); border-radius: 14px; width: min(560px, 100%); padding: 22px 24px; }
   .mem-row { display: flex; gap: 6px; flex-wrap: wrap; }
   .mem-row .tile { width: 120px; flex: none; }
   .shuffle { display: grid; grid-template-columns: 1fr 300px; gap: 18px; align-items: start; }
@@ -311,6 +317,7 @@
       <select id="f-kind"><option value="">Photos &amp; videos</option><option value="photo">Photos only</option><option value="video">Videos only</option></select>
       <span id="f-trip" class="chip hidden"></span>
       <button class="btn hidden" id="f-replay" title="Watch these photos in order, on the map">▶ Replay</button>
+      <button class="btn hidden" id="f-share" title="Export a page with these photos, metadata removed">↗ Share</button>
       <span class="muted small" id="f-count"></span>
     </div>
     <div class="grid" id="grid"></div>
@@ -522,7 +529,31 @@
     <div class="prog" id="rp-prog"><div></div></div>
     <span class="count" id="rp-count"></span>
     <select id="rp-speed" title="Seconds per photo"><option value="5">Slow</option><option value="3" selected>Normal</option><option value="1.5">Fast</option></select>
+    <button id="rp-film" title="Render this replay as a video file">🎬 Film</button>
     <button id="rp-close" title="Close (Esc)">✕ Close</button>
+  </div>
+</div>
+
+<div class="story share hidden" id="share">
+  <div class="card">
+    <div class="row" style="justify-content:space-between"><h2 style="margin:0">Share</h2><button class="btn" id="share-close">✕</button></div>
+    <p class="small muted">Makes a folder with a web page and copies of the photos at 1600 px with <b>all metadata removed</b> (no location, no camera, no dates inside the files). Private photos are never included. Zip the folder to send it, or copy it to any web host.</p>
+    <label class="field"><span>Title</span><input type="text" id="share-title"></label>
+    <div id="share-check" class="small"></div>
+    <div id="share-flags"></div>
+    <div class="row" style="margin-top:14px"><button class="btn primary" id="share-go">Export</button><span class="small muted" id="share-note"></span></div>
+  </div>
+</div>
+
+<div class="story film hidden" id="film">
+  <div class="card">
+    <div class="row" style="justify-content:space-between"><h2 style="margin:0">Make a film</h2><button class="btn" id="film-close">✕</button></div>
+    <p class="small muted">Renders a video in your browser from the photos in this replay: slow zooms, captions, optional music. Nothing is uploaded. The file is saved as .webm (plays in Chrome, Edge, VLC and most phones).</p>
+    <label class="field"><span>Seconds per photo</span><input type="number" id="film-secs" value="3" min="1" max="10" style="max-width:100px"></label>
+    <label class="check"><input type="checkbox" id="film-captions" checked><span>Show date and place on each photo</span></label>
+    <label class="field"><span>Music (optional)</span><input type="file" id="film-music" accept="audio/*"><small>An MP3 or M4A from your computer. It fades out at the end.</small></label>
+    <div class="row" style="margin-top:10px"><button class="btn primary" id="film-go">🎬 Render</button><span class="small" id="film-note"></span></div>
+    <canvas id="film-canvas" width="1280" height="720" style="width:100%;margin-top:12px;border-radius:8px;background:#000"></canvas>
   </div>
 </div>
 
@@ -554,6 +585,7 @@
     <div class="row" style="margin-top:14px">
       <button class="btn primary" id="story-write">✍ Write with AI</button>
       <button class="btn" id="story-editbtn">Edit</button>
+      <button class="btn" id="story-speak" title="Read the story aloud">🔊 Read aloud</button>
       <button class="btn hidden" id="story-save">Save</button>
       <span class="small muted" id="story-note"></span>
     </div>
@@ -934,6 +966,7 @@ function setFilters(f) {
     : f.chapter ? "Chapter: " + (f.chapterTitle || "") : (f.month || f.day) ? (f.monthTitle || f.month || f.day) : "";
   chip.classList.toggle("hidden", !label);
   $("#f-replay").classList.toggle("hidden", !(f.trip || f.day || f.month));
+  $("#f-share").classList.toggle("hidden", !(f.trip || f.day || f.month || f.person || f.chapter || f.year));
   $("#f-replay").textContent = f.trip ? "▶ Replay trip" : f.day ? "▶ Replay this day" : "▶ Replay this month";
   if (label) {
     chip.replaceChildren(document.createTextNode(label));
@@ -1397,6 +1430,110 @@ $("#story-save").onclick = async () => {
   try { renderStory(await api("/api/story/save", { kind: story.kind, id: story.id, text: $("#story-edit").value })); }
   catch (e) { return toast(e.message); }
   $("#story-edit").classList.add("hidden"); $("#story-text").classList.remove("hidden"); $("#story-save").classList.add("hidden");
+};
+
+$("#story-speak").onclick = () => {
+  if (!("speechSynthesis" in window)) return toast("Your browser can't read aloud.");
+  if (speechSynthesis.speaking) { speechSynthesis.cancel(); $("#story-speak").textContent = "🔊 Read aloud"; return; }
+  const text = $("#story-edit").value || $("#story-text").textContent; if (!text) return;
+  const u = new SpeechSynthesisUtterance(text); u.rate = 0.95;
+  u.onend = () => $("#story-speak").textContent = "🔊 Read aloud";
+  $("#story-speak").textContent = "⏹ Stop"; speechSynthesis.speak(u);
+};
+
+// ---- share
+const shareState = { filters: {}, flagged: [] };
+async function openShare(filters, title) {
+  shareState.filters = filters; $("#share-title").value = title || "My photos";
+  $("#share").classList.remove("hidden"); $("#share-note").textContent = ""; $("#share-flags").replaceChildren();
+  $("#share-check").textContent = "Checking…";
+  try {
+    const r = await api("/api/share/check", { filters });
+    shareState.flagged = r.flagged;
+    $("#share-check").textContent = `${fmt(r.total)} photos will be shared.` + (r.no_descriptions ? " Turn on AI descriptions to get a sensitivity check of what's in the photos." : "");
+    if (r.flagged.length) {
+      const h = document.createElement("p"); h.innerHTML = `<b>${r.flagged.length} photo(s) look sensitive.</b> Untick any you want to leave out:`;
+      $("#share-flags").append(h);
+      for (const f of r.flagged) {
+        const row = document.createElement("label"); row.className = "flag";
+        row.innerHTML = `<input type="checkbox" data-id="${f.id}"><img alt=""><span><span class="cap"></span><br><span class="r"></span></span>`;
+        row.querySelector("img").src = media("thumb", f.id);
+        row.querySelector(".cap").textContent = f.caption || fmtDate(f.taken_at);
+        row.querySelector(".r").textContent = "Flagged for: " + f.reasons.join(", ");
+        $("#share-flags").append(row);
+      }
+    }
+  } catch (e) { $("#share-check").textContent = e.message; }
+}
+$("#f-share").onclick = () => openShare(grid.filters, $("#f-trip").textContent.replace("✕", "").replace(/^(Trip|Person|Chapter): /, ""));
+$("#share-close").onclick = () => $("#share").classList.add("hidden");
+$("#share-go").onclick = async () => {
+  const exclude = [...$$("#share-flags input:not(:checked)")].map(i => +i.dataset.id);
+  const f = shareState.filters;
+  const story_key = f.trip ? "trip:" + f.trip : f.chapter ? "chapter:" + f.chapter : null;
+  $("#share-note").textContent = "Exporting…"; $("#share-go").disabled = true;
+  try { const r = await api("/api/share/export", { filters: f, title: $("#share-title").value, exclude, story_key }); $("#share-note").textContent = "Done: " + r.folder; }
+  catch (e) { $("#share-note").textContent = e.message; }
+  $("#share-go").disabled = false;
+};
+
+// ---- film (rendered in the browser)
+$("#rp-film").onclick = () => { pauseReplay(); $("#film").classList.remove("hidden"); $("#film-note").textContent = `${rp.items.length} photos`; };
+$("#film-close").onclick = () => $("#film").classList.add("hidden");
+$("#film-go").onclick = async () => {
+  const items = rp.items.filter(it => it.kind !== "video");
+  if (!items.length) return toast("No photos to film.");
+  const secs = Math.max(1, Math.min(10, +$("#film-secs").value || 3)), fps = 30, W = 1280, H = 720;
+  const canvas = $("#film-canvas"), ctx = canvas.getContext("2d");
+  const stream = canvas.captureStream(fps);
+  let audioCtx = null, music = null;
+  const file = $("#film-music").files[0];
+  if (file) {
+    audioCtx = new AudioContext(); const dest = audioCtx.createMediaStreamDestination();
+    const buf = await audioCtx.decodeAudioData(await file.arrayBuffer());
+    music = audioCtx.createBufferSource(); music.buffer = buf; music.loop = true;
+    const gain = audioCtx.createGain(); music.connect(gain); gain.connect(dest);
+    const total = items.length * secs; gain.gain.setValueAtTime(1, audioCtx.currentTime); gain.gain.setValueAtTime(1, audioCtx.currentTime + Math.max(0, total - 3)); gain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + total);
+    dest.stream.getAudioTracks().forEach(t => stream.addTrack(t));
+  }
+  const mime = ["video/webm;codecs=vp9,opus", "video/webm;codecs=vp8,opus", "video/webm"].find(m => MediaRecorder.isTypeSupported(m)) || "";
+  const rec = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 8_000_000 });
+  const chunks = []; rec.ondataavailable = e => e.data.size && chunks.push(e.data);
+  const done = new Promise(res => rec.onstop = res);
+  const load = src => new Promise((res, rej) => { const im = new Image(); im.onload = () => res(im); im.onerror = rej; im.src = src; });
+  $("#film-go").disabled = true;
+  rec.start(500); if (music) music.start();
+  const t0 = performance.now(); let next = null;
+  for (let i = 0; i < items.length; i++) {
+    const it = items[i];
+    const img = next || await load(media("view", it.id)).catch(() => null);
+    next = i + 1 < items.length ? load(media("view", items[i + 1].id)).catch(() => null) : null;
+    if (next) next = await next;
+    const start = performance.now();
+    const zoomIn = i % 2 === 0;
+    while (performance.now() - start < secs * 1000) {
+      const t = (performance.now() - start) / (secs * 1000);
+      const z = zoomIn ? 1 + 0.08 * t : 1.08 - 0.08 * t;
+      ctx.fillStyle = "#000"; ctx.fillRect(0, 0, W, H);
+      if (img) {
+        const s = Math.min(W / img.width, H / img.height) * z, dw = img.width * s, dh = img.height * s;
+        ctx.drawImage(img, (W - dw) / 2 + (zoomIn ? -20 : 20) * t, (H - dh) / 2, dw, dh);
+      }
+      if (t < 0.25) { ctx.fillStyle = `rgba(0,0,0,${1 - t * 4})`; ctx.fillRect(0, 0, W, H); }
+      if ($("#film-captions").checked) {
+        const d = new Date(it.taken_at), cap = [d.toLocaleDateString(undefined, { month: "long", day: "numeric", year: "numeric" }), [it.city, it.country].filter(Boolean).join(", ")].filter(Boolean).join(" · ");
+        ctx.font = "600 26px system-ui, sans-serif"; ctx.fillStyle = "rgba(0,0,0,.55)"; const tw = ctx.measureText(cap).width;
+        ctx.fillRect(30, H - 80, tw + 30, 50); ctx.fillStyle = "#fff"; ctx.fillText(cap, 45, H - 45);
+      }
+      $("#film-note").textContent = `Rendering ${i + 1} / ${items.length}…`;
+      await new Promise(r => requestAnimationFrame(r));
+    }
+  }
+  rec.stop(); await done; if (music) { music.stop(); audioCtx.close(); }
+  const blob = new Blob(chunks, { type: mime || "video/webm" });
+  const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = (rp.title || "film").replace(/[^\w.-]+/g, "-") + ".webm"; a.click();
+  $("#film-note").textContent = `Done in ${Math.round((performance.now() - t0) / 1000)} s. Saved to your Downloads folder.`;
+  $("#film-go").disabled = false;
 };
 
 // ---- ask my life
