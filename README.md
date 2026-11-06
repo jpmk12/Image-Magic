@@ -144,7 +144,10 @@ program only. Your photos and settings are kept.
   page and 1600 px copies of the photos with **all metadata removed**. Zip it to send, or
   copy it to any web host. Private photos are never included.
 - **Film:** in any replay, click **🎬 Film** to render a video in your browser (slow zooms,
-  captions, optional music from a file on your computer). Saved as a `.webm` in Downloads.
+  captions). Pick one of three **built-in music** tracks (generated on your computer, nothing
+  to download or license) or a file of your own; music fades out at the end. Your **voice
+  notes** are mixed in: the music ducks under them and each photo stays up until the note
+  ends. Saved as a `.webm` in Downloads.
 - **Read aloud:** a story can be read out by your browser's voice (🔊 in the story window).
 - **Import from a folder:** on the Home tab, enter a folder (your desktop, an old phone's
   export, a camera card) and click **Check folder**. Each file is compared with the library:

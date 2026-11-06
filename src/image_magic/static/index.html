@@ -732,7 +732,10 @@
     <p class="small muted">Renders a video in your browser from the photos in this replay: slow zooms, captions, optional music. Nothing is uploaded. The file is saved as .webm (plays in Chrome, Edge, VLC and most phones).</p>
     <label class="field"><span>Seconds per photo</span><input type="number" id="film-secs" value="3" min="1" max="10" style="max-width:100px"></label>
     <label class="check"><input type="checkbox" id="film-captions" checked><span>Show date and place on each photo</span></label>
-    <label class="field"><span>Music (optional)</span><input type="file" id="film-music" accept="audio/*"><small>An MP3 or M4A from your computer. It fades out at the end.</small></label>
+    <label class="field"><span>Music</span>
+      <select id="film-track"><option value="">No music</option><option value="calm" selected>Calm (built in)</option><option value="warm">Warm strings (built in)</option><option value="bright">Bright (built in)</option><option value="file">A file from my computer…</option></select>
+      <input type="file" id="film-music" accept="audio/*" class="hidden"><small>Built-in tracks are generated on your computer (no download, nothing to license). Music fades out at the end.</small></label>
+    <label class="check"><input type="checkbox" id="film-voice" checked><span>Include my voice notes (music ducks under them; the photo stays until you finish)</span></label>
     <div class="row" style="margin-top:10px"><button class="btn primary" id="film-go">🎬 Render</button><span class="small" id="film-note"></span></div>
     <canvas id="film-canvas" width="1280" height="720" style="width:100%;margin-top:12px;border-radius:8px;background:#000"></canvas>
   </div>
@@ -2027,15 +2030,41 @@ $("#film-go").onclick = async () => {
   const secs = Math.max(1, Math.min(10, +$("#film-secs").value || 3)), fps = 30, W = 1280, H = 720;
   const canvas = $("#film-canvas"), ctx = canvas.getContext("2d");
   const stream = canvas.captureStream(fps);
-  let audioCtx = null, music = null;
-  const file = $("#film-music").files[0];
-  if (file) {
-    audioCtx = new AudioContext(); const dest = audioCtx.createMediaStreamDestination();
-    const buf = await audioCtx.decodeAudioData(await file.arrayBuffer());
-    music = audioCtx.createBufferSource(); music.buffer = buf; music.loop = true;
-    const gain = audioCtx.createGain(); music.connect(gain); gain.connect(dest);
-    const total = items.length * secs; gain.gain.setValueAtTime(1, audioCtx.currentTime); gain.gain.setValueAtTime(1, audioCtx.currentTime + Math.max(0, total - 3)); gain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + total);
-    dest.stream.getAudioTracks().forEach(t => stream.addTrack(t));
+  const track = $("#film-track").value, file = track === "file" ? $("#film-music").files[0] : null;
+  $("#film-note").textContent = "Preparing…"; $("#film-go").disabled = true;
+  // Voice notes: fetch and decode first, so each photo can stay up for its note.
+  const wantVoice = $("#film-voice").checked && items.some(it => it.voice_id);
+  let audioCtx = (track && track !== "file") || file || wantVoice ? new AudioContext() : null;
+  const voices = new Map();
+  if (wantVoice) for (const it of items) if (it.voice_id) {
+    try { const r = await fetch(media("voice", it.voice_id)); voices.set(it.id, await audioCtx.decodeAudioData(await r.arrayBuffer())); } catch (e) { /* skip this note */ }
+  }
+  const durs = items.map(it => Math.max(secs, voices.has(it.id) ? voices.get(it.id).duration + 0.8 : 0));
+  const total = durs.reduce((a, b) => a + b, 0);
+  let music = null, musicGain = null;
+  if (audioCtx) {
+    const dest = audioCtx.createMediaStreamDestination();
+    musicGain = audioCtx.createGain(); musicGain.connect(dest);
+    const now = audioCtx.currentTime + 0.1;
+    if (file) {
+      try { const buf = await audioCtx.decodeAudioData(await file.arrayBuffer()); music = audioCtx.createBufferSource(); music.buffer = buf; music.loop = true; music.connect(musicGain); }
+      catch (e) { toast("Couldn't read that music file; rendering without it."); }
+    } else if (track) {
+      music = builtinMusic(audioCtx, musicGain, now, total, track);
+    }
+    // Fade at the end, and duck the music under each voice note.
+    musicGain.gain.setValueAtTime(1, now);
+    let t = now;
+    items.forEach((it, i) => {
+      const v = voices.get(it.id);
+      if (v) {
+        const src = audioCtx.createBufferSource(); src.buffer = v; src.connect(dest); src.start(t + 0.4);
+        musicGain.gain.setTargetAtTime(0.18, t + 0.1, 0.3); musicGain.gain.setTargetAtTime(1, t + 0.4 + v.duration, 0.5);
+      }
+      t += durs[i];
+    });
+    musicGain.gain.setValueAtTime(musicGain.gain.value, now + Math.max(0, total - 3)); musicGain.gain.linearRampToValueAtTime(0, now + total);
+    dest.stream.getAudioTracks().forEach(tr => stream.addTrack(tr));
   }
   const mime = ["video/webm;codecs=vp9,opus", "video/webm;codecs=vp8,opus", "video/webm"].find(m => MediaRecorder.isTypeSupported(m)) || "";
   const rec = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 8_000_000 });
@@ -2043,17 +2072,17 @@ $("#film-go").onclick = async () => {
   const done = new Promise(res => rec.onstop = res);
   const load = src => new Promise((res, rej) => { const im = new Image(); im.onload = () => res(im); im.onerror = rej; im.src = src; });
   $("#film-go").disabled = true;
-  rec.start(500); if (music) music.start();
+  rec.start(500); if (music && music.start) music.start(audioCtx.currentTime + 0.1);
   const t0 = performance.now(); let next = null;
   for (let i = 0; i < items.length; i++) {
     const it = items[i];
     const img = next || await load(media("view", it.id)).catch(() => null);
     next = i + 1 < items.length ? load(media("view", items[i + 1].id)).catch(() => null) : null;
     if (next) next = await next;
-    const start = performance.now();
+    const start = performance.now(), slot = durs[i];
     const zoomIn = i % 2 === 0;
-    while (performance.now() - start < secs * 1000) {
-      const t = (performance.now() - start) / (secs * 1000);
+    while (performance.now() - start < slot * 1000) {
+      const t = (performance.now() - start) / (slot * 1000);
       const z = zoomIn ? 1 + 0.08 * t : 1.08 - 0.08 * t;
       ctx.fillStyle = "#000"; ctx.fillRect(0, 0, W, H);
       if (img) {
@@ -2070,12 +2099,43 @@ $("#film-go").onclick = async () => {
       await new Promise(r => requestAnimationFrame(r));
     }
   }
-  rec.stop(); await done; if (music) { music.stop(); audioCtx.close(); }
+  rec.stop(); await done; if (music && music.stop) try { music.stop(); } catch (e) {} if (audioCtx) audioCtx.close();
   const blob = new Blob(chunks, { type: mime || "video/webm" });
   const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = (rp.title || "film").replace(/[^\w.-]+/g, "-") + ".webm"; a.click();
   $("#film-note").textContent = `Done in ${Math.round((performance.now() - t0) / 1000)} s. Saved to your Downloads folder.`;
   $("#film-go").disabled = false;
 };
+
+$("#film-track").onchange = e => { $("#film-music").classList.toggle("hidden", e.target.value !== "file"); if (e.target.value === "file") $("#film-music").click(); };
+// Built-in music: a slow chord progression played by soft detuned oscillators, generated on the
+// spot. Nothing is downloaded and there is nothing to license.
+function builtinMusic(actx, out, t0, total, style) {
+  const styles = {
+    calm:   { bpm: 56, wave: "sine",     chords: [[0, 4, 7, 11], [5, 9, 12, 16], [9, 12, 16, 19], [7, 11, 14, 17]], base: 48, pulse: false, level: 0.16 },
+    warm:   { bpm: 50, wave: "triangle", chords: [[0, 7, 12, 16], [9, 12, 16, 19], [5, 9, 12, 16], [7, 11, 14, 19]], base: 43, pulse: false, level: 0.14 },
+    bright: { bpm: 84, wave: "triangle", chords: [[0, 4, 7], [7, 11, 14], [9, 12, 16], [5, 9, 12]], base: 55, pulse: true, level: 0.13 },
+  };
+  const st = styles[style] || styles.calm, beat = 60 / st.bpm, bar = beat * 4;
+  const master = actx.createGain(); master.gain.value = st.level; master.connect(out);
+  const lp = actx.createBiquadFilter(); lp.type = "lowpass"; lp.frequency.value = 1800; lp.connect(master);
+  const nodes = [];
+  const hz = m => 440 * Math.pow(2, (m - 69) / 12);
+  for (let t = 0, k = 0; t < total; t += bar, k++) {
+    const chord = st.chords[k % st.chords.length], end = Math.min(t + bar, total);
+    for (const semi of chord) for (const det of [-4, 4]) {
+      const o = actx.createOscillator(); o.type = st.wave; o.frequency.value = hz(st.base + semi); o.detune.value = det;
+      const g = actx.createGain(); g.gain.setValueAtTime(0, t0 + t); g.gain.linearRampToValueAtTime(1, t0 + t + 1.2);
+      g.gain.setValueAtTime(1, t0 + end - 0.6); g.gain.linearRampToValueAtTime(0, t0 + end);
+      o.connect(g); g.connect(lp); o.start(t0 + t); o.stop(t0 + end + 0.05); nodes.push(o);
+    }
+    if (st.pulse) for (let b = t; b < end; b += beat) {
+      const o = actx.createOscillator(); o.type = "sine"; o.frequency.value = hz(st.base + chord[0] - 12);
+      const g = actx.createGain(); g.gain.setValueAtTime(0, t0 + b); g.gain.linearRampToValueAtTime(0.9, t0 + b + 0.02); g.gain.exponentialRampToValueAtTime(0.001, t0 + b + beat * 0.9);
+      o.connect(g); g.connect(master); o.start(t0 + b); o.stop(t0 + b + beat); nodes.push(o);
+    }
+  }
+  return { stop: () => nodes.forEach(n => { try { n.stop(); } catch (e) {} }) };
+}
 
 // ---- ask my life
 function addMsg(cls, text, items) {

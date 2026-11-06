@@ -321,6 +321,9 @@ Service features (flying log, squadron yearbook) slot into S2 (log) and S9 (year
   similarity to cached person centres, chapter confidence from the home share of the first
   four months; reviews table; confirm locks (trip_manual / faces.locked / chapters.auto=0 /
   milestone kept), dismiss undoes; shown in the viewer.
+- **Film music** (v0.27.0): Web Audio chord progressions (calm/warm/bright) scheduled over the
+  film length, low-passed, faded; voice notes decoded up front, slots stretched to fit them,
+  music ducked to 18% under speech.
 
 ---
 
@@ -347,7 +350,7 @@ stories, Ask, memories, year review, books and share cover the "relive" side.
 4. **Narration and voice** (built, v0.21.0). Stories are read aloud by the browser voice today. A recorded
    voice note per photo or event ("their voices" from the plan) is the most personal layer
    possible and needs only the microphone in the browser.
-5. **Music for films.** The film maker takes a file; a small bundled set of royalty-free
+5. **Music for films** (built, v0.27.0: three generated tracks + own file + voice notes). The film maker takes a file; a small bundled set of royalty-free
    tracks (or a folder of the user's own) would make films one click.
 
 ### New features, by value
