@@ -1886,10 +1886,17 @@ $("#ask-form").onsubmit = async ev => {
   const q = $("#ask-q").value.trim(); if (!q) return;
   $("#ask-q").value = ""; addMsg("q", q);
   const thinking = addMsg("a", "Looking through your library…"); $("#ask-send").disabled = true;
-  try { const r = await api("/api/ask", { question: q }); thinking.remove(); addMsg("a", r.answer || "I couldn't find an answer in your library.", r.items); }
+  try { const r = await api("/api/ask", { question: q }); thinking.remove(); addMsg("a", r.answer || "I couldn't find an answer in your library.", r.items); for (const a of r.actions || []) doAction(a); }
   catch (e) { thinking.textContent = e.message; }
   $("#ask-send").disabled = false; $("#ask-q").focus();
 };
+function doAction(a) {
+  const f = a.filters || {};
+  if (a.type === "replay") openReplay(f, a.title);
+  else if (a.type === "open") goPhotos(f);
+  else if (a.type === "share") openShare(f, a.title);
+  else if (a.type === "book") openGrowing({ id: a.person_id, name: a.title }).then(() => exportPerson("book"));
+}
 $("#ask-reset").onclick = async () => { $("#ask-log").replaceChildren(); await api("/api/ask", { question: "(new conversation)", reset: true }).catch(() => {}); };
 
 // ---- trips

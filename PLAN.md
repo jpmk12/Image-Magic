@@ -300,6 +300,8 @@ Service features (flying log, squadron yearbook) slot into S2 (log) and S9 (year
 - **Home story** (v0.19.0): per chapter, photos within ~5 km of home and off trips; seasons
   per year (December rolls into the next winter) with best-of per season; same-spot series
   (55 m cells seen in ≥ 3 years); people at home; "a year at home" replay.
+- **Ask → do** (v0.20.0): action tools with the shared filter schema (incl. events and
+  "best"); actions returned to the page (replay, photos, share dialog, person book).
 
 ---
 
@@ -334,8 +336,8 @@ stories, Ask, memories, year review, books and share cover the "relive" side.
   (≤ 6 bits, flat images excluded), copies into originals/imported/<year>/<month>/.
 - **Events**: built (v0.18.0). Automatic titles, event filter, replay and share, renames kept.
 - **Photo quality + best-of selection**: built (v0.18.0).
-- **Ask → do.** Let Ask act: "make a book of Emma's first year", "replay our Jordan trip",
-  "share the best 20 from Christmas with Mom". The tools exist; wire them to the Ask loop.
+- **Ask → do**: built (v0.20.0). Four more tools (replay_photos, open_photos, share_photos,
+  make_book) that return actions the page performs; share only opens the dialog.
 - **Comparison stories.** "Emma at 3 vs Jack at 3", "Christmas 2017 vs 2023" side-by-side pages.
 - **Where was I on this day each year** on the map: a yearly pin for today's date.
 - **Flying log.** For the C-17 photos: a dedicated view of bases, sorties and aircraft tails

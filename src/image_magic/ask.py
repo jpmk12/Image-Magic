@@ -95,6 +95,7 @@ def library_summary(conn: sqlite3.Connection) -> dict:
         "people": [{"id": p["id"], "name": p["name"], "photos": p["photo_count"]}
                    for p in faces.people(conn) if p["name"]],
         "milestones": q("SELECT date, title FROM milestones WHERE state != 'dismissed' ORDER BY date"),
+        "recent_events": q("SELECT id, title, substr(start_at, 1, 10) AS day, photo_count FROM events ORDER BY start_at DESC LIMIT 60"),
         "described_photos": conn.execute("SELECT COUNT(*) FROM descriptions WHERE status = 'ok'").fetchone()[0],
     }
 
@@ -186,7 +187,24 @@ the big picture (years, countries, trips, people), and search_photos to find spe
 Dates and places come from the photos' metadata; captions and people names are from the
 library. When you find relevant photos, call show_photos with up to 12 of their ids so they
 appear next to your answer. Answer in a few friendly sentences, in second person, with real
-dates and places. If the library has no answer, say so plainly."""
+dates and places. If the library has no answer, say so plainly.
+
+You can also DO things when asked: start a replay (slideshow on the map) of a trip, event,
+day, month, year or person with replay_photos; open the share dialog for a set of photos
+with share_photos (the person still reviews and clicks Export); make a person's printable
+book with make_book; or open the Photos tab filtered with open_photos. Use the same filters
+as search_photos; set best=true for "the best of". Do only what was asked, then confirm in
+one sentence what you started."""
+
+FILTER_PROPS = {
+    "query": {"type": "string"}, "year": {"type": "string", "description": "YYYY or empty"},
+    "month": {"type": "string", "description": "YYYY-MM or empty"}, "day": {"type": "string", "description": "YYYY-MM-DD or empty"},
+    "country": {"type": "string", "description": "two-letter code like JO, or empty"},
+    "city": {"type": "string"}, "person": {"type": "string", "description": "a named person, or empty"},
+    "trip_id": {"type": "integer"}, "chapter_id": {"type": "integer"}, "event_id": {"type": "integer"},
+    "best": {"type": "boolean", "description": "only the best photos (sharp, well exposed, one per burst)"},
+}
+FILTER_KEYS = list(FILTER_PROPS)
 
 TOOLS = [
     {"name": "library_summary", "description": "Overview of the whole library: photos per year, countries, "
@@ -195,15 +213,22 @@ TOOLS = [
     {"name": "search_photos", "description": "Find photos. Any filter may be empty. 'query' matches words in AI "
      "captions and does a visual search; use plain nouns ('beach', 'birthday cake', 'C-17').",
      "strict": True,
-     "input_schema": {"type": "object", "properties": {
-         "query": {"type": "string"}, "year": {"type": "string", "description": "YYYY or empty"},
-         "month": {"type": "string", "description": "YYYY-MM or empty"}, "day": {"type": "string", "description": "YYYY-MM-DD or empty"},
-         "country": {"type": "string", "description": "two-letter code like JO, or empty"},
-         "city": {"type": "string"}, "person": {"type": "string", "description": "a named person, or empty"},
-         "trip_id": {"type": "integer"}, "chapter_id": {"type": "integer"},
-         "limit": {"type": "integer", "description": "1-40"}},
-         "required": ["query", "year", "month", "day", "country", "city", "person", "trip_id", "chapter_id", "limit"],
-         "additionalProperties": False}},
+     "input_schema": {"type": "object", "properties": {**FILTER_PROPS, "limit": {"type": "integer", "description": "1-40"}},
+         "required": [*FILTER_KEYS, "limit"], "additionalProperties": False}},
+    {"name": "replay_photos", "description": "Start a replay (slideshow with the map) of the photos matching the filters. "
+     "Give it a short title.", "strict": True,
+     "input_schema": {"type": "object", "properties": {**FILTER_PROPS, "title": {"type": "string"}},
+         "required": [*FILTER_KEYS, "title"], "additionalProperties": False}},
+    {"name": "open_photos", "description": "Open the Photos tab filtered to these photos.", "strict": True,
+     "input_schema": {"type": "object", "properties": {**FILTER_PROPS, "title": {"type": "string"}},
+         "required": [*FILTER_KEYS, "title"], "additionalProperties": False}},
+    {"name": "share_photos", "description": "Open the share dialog for these photos (the person reviews the sensitivity "
+     "check and clicks Export; nothing leaves the computer by itself).", "strict": True,
+     "input_schema": {"type": "object", "properties": {**FILTER_PROPS, "title": {"type": "string"}},
+         "required": [*FILTER_KEYS, "title"], "additionalProperties": False}},
+    {"name": "make_book", "description": "Build the printable PDF book of a named person (cover, growing up, best photos per year).",
+     "strict": True, "input_schema": {"type": "object", "properties": {"person": {"type": "string"}},
+                                      "required": ["person"], "additionalProperties": False}},
     {"name": "show_photos", "description": "Pick the photos to show next to your answer.", "strict": True,
      "input_schema": {"type": "object", "properties": {"ids": {"type": "array", "items": {"type": "integer"}}},
                       "required": ["ids"], "additionalProperties": False}},
@@ -216,6 +241,32 @@ class Asker:
         ensure_schema(conn)
         self.conn, self.settings, self.search_fn = conn, settings, search_fn
         self.shown: list[int] = []
+        self.actions: list[dict] = []
+
+    def _person_id(self, name: str) -> int:
+        p = next((p for p in faces.people(self.conn) if (p["name"] or "").lower() == name.lower()), None)
+        if not p:
+            raise ValueError(f"No person named {name}. Known people: "
+                             + ", ".join(x["name"] for x in faces.people(self.conn) if x["name"]))
+        return p["id"]
+
+    def _filters(self, args: dict) -> dict:
+        """Tool arguments -> the page's filter names (person resolved to an id)."""
+        params: dict = {}
+        for k in ("year", "month", "day", "country", "city"):
+            if args.get(k):
+                params[k] = str(args[k])
+        for k, dest in (("trip_id", "trip"), ("chapter_id", "chapter"), ("event_id", "event")):
+            if args.get(k):
+                params[dest] = int(args[k])
+        if args.get("person"):
+            params["person"] = self._person_id(args["person"])
+            params["personName"] = args["person"]
+        if args.get("best"):
+            params["best"] = "1"
+        if args.get("query"):
+            params["q"] = str(args["query"])[:200]
+        return params
 
     def run_tool(self, name: str, args: dict) -> str:
         conn = self.conn
@@ -225,21 +276,32 @@ class Asker:
             ids = [int(i) for i in args.get("ids", [])][:12]
             self.shown = [i for i in ids if conn.execute("SELECT 1 FROM assets WHERE id = ? AND private = 0", (i,)).fetchone()]
             return json.dumps({"shown": self.shown})
+        if name in ("replay_photos", "open_photos", "share_photos"):
+            try:
+                params = self._filters(args)
+            except ValueError as e:
+                return json.dumps({"error": str(e)})
+            if not params:
+                return json.dumps({"error": "Give at least one filter (a trip, event, person, day, month or year)."})
+            kind = name.split("_")[0]
+            if kind == "replay" and "q" in params:
+                return json.dumps({"error": "A replay needs a trip, event, person, day, month or year, not a text query."})
+            n = len(browse.ids(conn, {k: v for k, v in params.items() if k != "q"}))
+            self.actions.append({"type": kind, "filters": params, "title": str(args.get("title") or "")[:80]})
+            return json.dumps({"started": kind, "photos": n})
+        if name == "make_book":
+            try:
+                pid = self._person_id(str(args.get("person") or ""))
+            except ValueError as e:
+                return json.dumps({"error": str(e)})
+            self.actions.append({"type": "book", "person_id": pid, "title": str(args.get("person"))})
+            return json.dumps({"started": "book", "person_id": pid})
         if name == "search_photos":
-            params: dict = {}
-            for k in ("year", "month", "day", "country", "city"):
-                if args.get(k):
-                    params[k] = args[k]
-            if args.get("trip_id"):
-                params["trip"] = int(args["trip_id"])
-            if args.get("chapter_id"):
-                params["chapter"] = int(args["chapter_id"])
-            if args.get("person"):
-                p = next((p for p in faces.people(conn) if (p["name"] or "").lower() == args["person"].lower()), None)
-                if not p:
-                    return json.dumps({"error": f"No person named {args['person']}. Known people: "
-                                       + ", ".join(x["name"] for x in faces.people(conn) if x["name"])})
-                params["person"] = p["id"]
+            try:
+                params = self._filters({**args, "query": ""})
+            except ValueError as e:
+                return json.dumps({"error": str(e)})
+            params.pop("personName", None)
             limit = max(1, min(int(args.get("limit") or 20), 40))
             if args.get("query"):
                 hits = self.search_fn(conn, self.settings, {**params, "q": args["query"]})
@@ -253,7 +315,7 @@ class Asker:
 
     def ask(self, client, question: str, history: list | None = None, model: str = ASK_MODEL) -> dict:
         messages = list(history or []) + [{"role": "user", "content": question}]
-        self.shown = []
+        self.shown, self.actions = [], []
         answer = ""
         for _ in range(MAX_TOOL_ROUNDS):
             resp = client.beta.messages.create(
@@ -279,4 +341,4 @@ class Asker:
             messages.append({"role": "user", "content": results})
         # Keep the history compact: drop tool traffic, keep question/answer text.
         compact = list(history or []) + [{"role": "user", "content": question}, {"role": "assistant", "content": answer or "…"}]
-        return {"answer": answer, "photos": self.shown, "history": compact[-12:]}
+        return {"answer": answer, "photos": self.shown, "actions": self.actions[:3], "history": compact[-12:]}

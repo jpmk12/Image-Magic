@@ -125,3 +125,37 @@ def test_ask_api_requires_key(library):
         assert got["edited"] == 1
     finally:
         srv.shutdown()
+
+
+class DoClient:
+    """Scripted Claude: asked to replay, it calls replay_photos then answers."""
+    def __init__(self, tool, args):
+        self.beta = SimpleNamespace(messages=SimpleNamespace(create=self.create)); self.n = 0; self.tool, self.args = tool, args; self.results = []
+    def create(self, **kw):
+        self.n += 1
+        last = kw["messages"][-1]
+        if isinstance(last["content"], list):
+            self.results.append(json.loads(last["content"][0]["content"]))
+        if self.n == 1:
+            return SimpleNamespace(stop_reason="tool_use", content=[SimpleNamespace(type="tool_use", id="t1", name=self.tool, input=self.args)])
+        return SimpleNamespace(stop_reason="end_turn", content=[SimpleNamespace(type="text", text="Starting the replay of your Jordan trip.")])
+
+
+def test_ask_can_act(library):
+    conn, lib = library
+    from image_magic.server import find_photos
+    settings = Settings(apple_id="x", library_path=str(lib))
+    trip = conn.execute("SELECT id FROM trips").fetchone()[0]
+    empty = {k: "" for k in ("query", "year", "month", "day", "country", "city", "person")} | {"trip_id": 0, "chapter_id": 0, "event_id": 0, "best": False}
+    c = DoClient("replay_photos", {**empty, "trip_id": trip, "best": True, "title": "Jordan"})
+    r = ask.Asker(conn, settings, find_photos).ask(c, "Replay the best of my Jordan trip")
+    assert r["actions"] == [{"type": "replay", "filters": {"trip": trip, "best": "1"}, "title": "Jordan"}]
+    assert c.results[0]["started"] == "replay" and c.results[0]["photos"] == 12
+    # a share opens the dialog only; a book needs a known person; no filters is refused
+    asker = ask.Asker(conn, settings, find_photos)
+    assert json.loads(asker.run_tool("share_photos", {**empty, "year": "2019", "title": "2019"}))["started"] == "share"
+    assert asker.actions[0]["filters"] == {"year": "2019"}
+    assert "No person named" in asker.run_tool("make_book", {"person": "Nobody"})
+    assert "at least one filter" in asker.run_tool("open_photos", {**empty, "title": ""})
+    assert "not a text query" in asker.run_tool("replay_photos", {**empty, "query": "beach", "title": ""})
+    assert "recent_events" in ask.library_summary(conn)

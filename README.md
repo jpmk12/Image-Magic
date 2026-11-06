@@ -105,6 +105,9 @@ program only. Your photos and settings are kept.
   beach?", "How many countries have the kids been to?") and shows the photos it found. Claude
   reads the catalog through a few tools (dates, places, trip and chapter names, people's names,
   captions, and any notes you wrote on a chapter); it never sees the photos. Needs your API key.
+  Ask can also **do** things: *"replay the best of our Jordan trip"*, *"show me Emma's photos
+  from 2021"*, *"share the best 20 from Christmas"* (opens the share dialog; you still review
+  and click Export), *"make Emma's book"*. Nothing is sent or deleted by itself.
 - **Growing up, birthdays and the book:** on a person's card, **Set birthday** adds ages
   everywhere and "Emma turns 3" milestones to the Timeline. **Growing up** plays their face
   through the years; **Save as GIF** exports it, and **Make the book** builds a printable PDF
