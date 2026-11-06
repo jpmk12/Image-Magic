@@ -127,6 +127,87 @@ Ideas, roughly in order of effort:
 
 ---
 
+## Phase 4: The story of my life
+
+The goal: the app uses the photos to tell the story of a life, so you can explore it and
+relive what you've seen and done. Everything builds on the data the earlier phases produce:
+**when** (dates), **where** (places and trips), **who** (faces) and **what** (smart search,
+AI descriptions).
+
+### Features, grouped by the experience they give
+
+**Your life as a story**
+- **Life chapters.** Found automatically from home moves (each new home location), new faces
+  appearing (a child is born), and trip clusters (a deployment). Each becomes a chapter such
+  as "The Dover years, 2016–2019". You rename, merge and split them.
+- **Life timeline.** One scrollable line from the first photo to today, with lanes for
+  chapters, trips, people and milestones. Zoom from decades to a single afternoon.
+- **AI-written stories.** Opt-in: Claude drafts a short narrative for a chapter or trip from
+  the dates, places, people and photo descriptions. You edit it into your own words. Cheap,
+  because it sends text, not photos.
+- **Milestones found for you.** A child's first photos, birthdays, graduations, a new house,
+  a first flight in a new aircraft. Spotted from faces, places and search, confirmed by you.
+
+**Reliving moments**
+- **Trip replay.** An animated map flies along the route; photos appear where and when they
+  were taken, Live Photos move, music plays.
+- **A day in...** replays one day hour by hour.
+- **Then and now.** Photos taken at the same spot years apart, side by side or with a slider.
+- **The rabbit hole.** From any photo, jump to similar moments from other years (smart search
+  on the photo itself).
+- **Shuffle a memory.** One button: a random good moment, with its story and people.
+
+**Your kids' stories**
+- **Growing-up time-lapse** of each child's face from baby to now.
+- **Birthday reel** every year, made automatically.
+- **A book for each child** as a printable PDF photo book.
+- **Their voices.** Record what they remember about a photo; the voice note stays attached.
+
+**Your service**
+- **Flying and deployment log.** C-17 photos on a map of bases and places, with dates. Private
+  by default; every photo gets an OPSEC check before sharing.
+- **Squadron yearbook.** A curated book of the people and moments from one assignment.
+
+**Ask my life**
+- Plain-language questions: "When did we last go to the beach?", "Show me Emma's first bike
+  ride", "How many countries have the kids been to?" Claude answers from the catalog and
+  shows the photos.
+
+**Your year, reviewed**
+- **Year in review**: countries, kilometres travelled, most-photographed person, longest trip,
+  best sunset, the year in 30 seconds.
+- **Context for each memory**: weather that day, sunrise time, the number-one song.
+
+**Sharing the story**
+- **Short films**: slow zooms across photos, music, optional narration of the chapter text.
+- **Private story links** for family, with locations removed and an OPSEC check first.
+- **Family contributions**: others add their own stories and photos to shared chapters.
+
+### Build order
+Each step is usable on its own and feeds the next.
+
+| Step | What | Depends on |
+|---|---|---|
+| **S1 – People** | Face detection and grouping (local, on the GPU). Name a group once; filter photos by person. The foundation for every "kids" feature. | Nothing new |
+| **S2 – Life timeline and chapters** | Automatic chapters from home moves, new people and trips; the zoomable timeline; milestones list. | S1 for people-based chapters |
+| **S3 – Trip replay and "day in"** | Animated map route with photos appearing in order; Live Photo motion; a day-by-hour player. | Nothing new |
+| **S4 – AI descriptions** | One opt-in pass over the library (about $2–5) adding a caption and keywords per photo. Makes search richer and enables narratives and questions. | Nothing new |
+| **S5 – Stories and "Ask my life"** | AI-written chapter and trip stories you edit; plain-language questions answered from the catalog. | S2, S4 |
+| **S6 – Kids' stories** | Growing-up time-lapse, birthday reels, per-child PDF book. | S1 |
+| **S7 – Then and now, rabbit hole, shuffle** | Same-spot pairs across years; similar-moment browsing; random memory. | S4 helps |
+| **S8 – Year in review and context** | Yearly stats and highlight reel; weather, sunrise and song for a memory. | S1, S4 |
+| **S9 – Films and sharing** | Video export with music and narration; private links with GPS removed and an OPSEC check; family contributions. | S5 |
+
+Service features (flying log, squadron yearbook) slot into S2 (log) and S9 (yearbook).
+
+### Principles
+- Everything runs on the laptop unless you opt in to a paid AI step, and even then only
+  text (or downscaled, location-stripped copies) leaves the machine.
+- The app proposes, you decide: chapters, milestones and stories are drafts you can edit.
+- Nothing is shared without an OPSEC check and location removal.
+
+---
+
 ## Proposed tech stack
 | Layer | Choice | Why |
 |---|---|---|
@@ -164,5 +245,5 @@ Ideas, roughly in order of effort:
 - **M3 – Smart search: built** (v0.4.0). CLIP ViT-B/16 (ONNX) runs locally on the GPU through
   DirectML, or on the CPU. One-time model download of about 600 MB, verified by SHA-256.
   Search combines with the year, place and trip filters.
-- Next: test with the real library. Then M4 – People (face grouping and labelling), M5 –
-  custom tags (e.g. a trained "my C-17" tag), then Phase 3 – memories and sharing.
+- Phase 3 is folded into Phase 4 (above), which is the roadmap from here.
+- Next: Phase 4, S1 – People.
