@@ -13,7 +13,9 @@ voice notes, but cannot change settings, start syncs, export or quit.
 from __future__ import annotations
 
 import datetime as dt
+import hashlib
 import ipaddress
+import json
 import secrets
 import socket
 import threading
@@ -89,15 +91,44 @@ def ensure_certificate(ips: list[str]) -> tuple[Path, Path]:
     return cert, key
 
 
-class Pairing:
-    """The rotating pairing code and the tokens of paired phones."""
+def _phones_file() -> Path:
+    return settings_dir() / "phones.json"
 
-    def __init__(self) -> None:
+
+def _hash(token: str) -> str:
+    return hashlib.sha256(token.encode()).hexdigest()
+
+
+class Pairing:
+    """The rotating pairing code and the tokens of paired phones.
+
+    Tokens are kept hashed in phones.json (settings folder) so a family member's
+    phone stays paired after the app restarts; the phone keeps the token itself.
+    """
+
+    def __init__(self, persist: bool = True) -> None:
         self._lock = threading.Lock()
-        self.tokens: dict[str, dict] = {}          # token -> {"paired": iso, "name": str}
+        self.tokens: dict[str, dict] = {}          # sha256(token) -> {"paired": iso, "name": str}
         self._code = ""
         self._expires = 0.0
         self._tries = 0
+        self._persist = persist
+        if persist:
+            try:
+                self.tokens = {k: v for k, v in json.loads(_phones_file().read_text(encoding="utf-8")).items() if isinstance(v, dict)}
+            except (OSError, ValueError):
+                self.tokens = {}
+
+    def _save(self) -> None:
+        if not self._persist:
+            return
+        f = _phones_file()
+        try:
+            f.parent.mkdir(parents=True, exist_ok=True)
+            f.write_text(json.dumps(self.tokens, indent=1), encoding="utf-8")
+            f.chmod(0o600)
+        except OSError:
+            pass
 
     def code(self) -> tuple[str, int]:
         with self._lock:
@@ -117,16 +148,24 @@ class Pairing:
                 return None
             self._code = ""                        # one phone per code
             token = secrets.token_urlsafe(24)
-            self.tokens[token] = {"paired": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"), "name": name[:40]}
+            self.tokens[_hash(token)] = {"paired": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"), "name": name.strip()[:40]}
+            self._save()
             return token
 
     def valid(self, token: str) -> bool:
-        return any(secrets.compare_digest(token, t) for t in list(self.tokens))
+        return _hash(token) in self.tokens
+
+    def name_of(self, token: str) -> str:
+        return (self.tokens.get(_hash(token)) or {}).get("name", "")
+
+    def phones(self) -> list[dict]:
+        return [{"name": v.get("name", ""), "paired": v.get("paired", "")} for v in self.tokens.values()]
 
     def reset(self) -> None:
         with self._lock:
             self.tokens.clear()
             self._code = ""
+            self._save()
 
 
 def laptop_only(path: str) -> bool:
@@ -140,6 +179,7 @@ form{background:#182024;padding:28px;border-radius:16px;width:min(360px,90vw)} h
 input{font-size:28px;letter-spacing:6px;text-align:center;width:100%;padding:10px;border-radius:10px;border:1px solid #2a3a40;background:#0f1416;color:#fff;margin:14px 0}
 button{width:100%;padding:12px;border:0;border-radius:10px;background:#14b8a6;color:#04201c;font-weight:700;font-size:16px}
 p{color:#9fb0b7;font-size:14px;margin:6px 0} .err{color:#f87171}</style></head><body>
-<form method="post" action="/pair"><h1>Pair this phone</h1><p>Type the 6-digit code shown in Image Magic → Settings → Phone access on your laptop.</p>
-<input name="code" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="one-time-code" autofocus required>
+<form method="post" action="/pair"><h1>Pair this phone</h1><p>Type the 6-digit code shown in Image Magic → Settings → Phone access on the laptop, and your name (photos you add are marked with it).</p>
+<input name="name" placeholder="Your name" maxlength="40" style="font-size:18px;letter-spacing:0" required>
+<input name="code" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="one-time-code" required>
 <button type="submit">Connect</button>%ERR%</form></body></html>"""

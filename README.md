@@ -163,6 +163,11 @@ program only. Your photos and settings are kept.
 - **On your phone:** turn on **Phone access** in Settings, open the address it shows on your
   phone (same Wi-Fi), accept the certificate warning once, type the pairing code, and the app
   opens on the phone for browsing, replays, Ask and voice notes.
+- **Family:** anyone who pairs a phone gives their name, and from the phone's Home tab **📷 Add
+  photos** sends their own pictures into your library. Each is checked first (exact copies and
+  look-alikes are refused), stored under `originals/contributed/<name>/`, marked **Added by**
+  that person in the viewer, and shows up in search, replays and books. The Home tab's Family
+  panel lists who added what. Pairings survive restarts; **Disconnect all phones** ends them.
 - **Second copy:** set a backup folder on another drive in Settings, then **Back up now** on
   the Home tab. Every file under `originals` and `voice` is copied (only new or changed files
   on later runs), read back and checked against its SHA-256 in the catalog, and a consistent
@@ -252,7 +257,9 @@ Place names are looked up **on your computer** from a bundled list of about 145,
   revokes them, and turning the setting off closes the listener. From a phone you can browse,
   replay, ask and record voice notes, but not change settings, sync, import, export or quit.
   Windows Firewall will ask about Image Magic the first time; allow it on **private** networks
-  only, never public ones.
+  only, never public ones. Paired phones are remembered in `%APPDATA%\ImageMagic\phones.json`
+  as hashes (the phone keeps its own code); photos they add are checked against the library
+  and stored with the sender's name. Nothing a phone sends can delete or overwrite anything.
 
 **What was reviewed**
 - The code had an independent security and privacy review and a bugs-and-performance review

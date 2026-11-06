@@ -154,7 +154,7 @@ class App:
     def phone_status(self) -> dict:
         s = self.settings_provider()
         out = {"on": s.phone_access, "running": self.phone_server is not None, "paired": len(self.pairing.tokens),
-               "error": getattr(self, "phone_error", "")}
+               "phones": self.pairing.phones(), "error": getattr(self, "phone_error", "")}
         if self.phone_server is not None:
             code, left = self.pairing.code()
             port = self.phone_server.server_address[1]
@@ -297,7 +297,7 @@ def make_handler(app: App):
                     return self._json(200, app.jobs.log_since(since))
                 if path.startswith(("/api/photos", "/api/photo/", "/api/facets", "/api/trips", "/api/replay",
                                     "/api/map", "/api/people", "/api/timeline", "/api/story", "/api/memories",
-                                    "/api/shuffle", "/api/similar/", "/api/review", "/api/context/", "/api/curate/", "/api/events", "/api/home", "/api/voice/", "/api/compare/", "/api/flying", "/api/book", "/api/review-queue", "/media/")):
+                                    "/api/shuffle", "/api/similar/", "/api/review", "/api/context/", "/api/curate/", "/api/events", "/api/home", "/api/voice/", "/api/compare/", "/api/flying", "/api/book", "/api/review-queue", "/api/family", "/media/")):
                     return self._browse(path, self._query())
             except Exception as e:
                 return self._json(500, {"error": str(e)})
@@ -392,6 +392,9 @@ def make_handler(app: App):
                     from . import books
                     f = books.make(conn, settings.originals, settings.library, str(q.get("kind")), str(q.get("id") or ""))
                     return self._json(200, {"file": f.name})
+                if path == "/api/family":
+                    from . import family
+                    return self._json(200, {"contributors": family.contributors(conn), "phones": app.pairing.phones()})
                 if path == "/api/flying":
                     from . import flying
                     return self._json(200, flying.log(conn))
@@ -481,6 +484,22 @@ def make_handler(app: App):
             finally:
                 conn.close()
             return self._json(200, note)
+
+        def _contribute(self, q: dict):
+            """POST /api/contribute?name=<file name> with the photo as the raw body (phones, or the laptop)."""
+            from . import family
+            n = int(self.headers.get("Content-Length") or 0)
+            if n <= 0 or n > family.MAX_BYTES:
+                raise ValueError("The file is empty or too large")
+            data = self.rfile.read(n)
+            who = app.pairing.name_of(self.headers.get("X-Token") or "") if self.from_phone else "me"
+            settings, conn = app.db()
+            try:
+                r = family.contribute(conn, settings.library, settings.originals, data, self.headers.get("Content-Type", ""),
+                                      who or "Family", str(q.get("name") or "")[:80])
+            finally:
+                conn.close()
+            return self._json(200, r)
 
         def _ai_action(self, path: str, data: dict):
             from . import ask
@@ -627,7 +646,8 @@ def make_handler(app: App):
                 raise ValueError("request too large")
             form = parse_qs(self.rfile.read(n).decode("utf-8", "replace"))
             code = (form.get("code") or [""])[0]
-            token = app.pairing.try_code(code, self.headers.get("User-Agent", "")[:40])
+            name = (form.get("name") or [""])[0].strip() or "Family"
+            token = app.pairing.try_code(code, name)
             if not token:
                 body = phone.PAIR_PAGE.replace("%ERR%", '<p class="err">That code did not work. Check it on the laptop and try again.</p>')
                 return self._send(403, body.encode(), "text/html; charset=utf-8")
@@ -650,6 +670,8 @@ def make_handler(app: App):
             try:
                 if path == "/api/voice":
                     return self._voice_upload(self._query())
+                if path == "/api/contribute":
+                    return self._contribute(self._query())
                 data = self._body()
                 if path == "/api/voice/delete":
                     from . import notes

@@ -62,6 +62,7 @@ MIGRATIONS = {
     "burst_id": "INTEGER",                         # first photo of a burst of look-alikes
     "burst_best": "INTEGER NOT NULL DEFAULT 1",    # the keeper of its burst
     "event_id": "INTEGER",                         # small cluster of photos: a party, a hike (events.py)
+    "contributor": "TEXT",                         # family member who added it from their phone (family.py)
 }
 TRIP_MIGRATIONS = {"manual": "INTEGER NOT NULL DEFAULT 0", "title_locked": "INTEGER NOT NULL DEFAULT 0"}
 
@@ -271,6 +272,23 @@ def scan(conn: sqlite3.Connection, originals: Path, progress=None, cancelled=lam
     set_meta(conn, "last_scan", now_iso())
     conn.commit()
     return result
+
+
+def add_file(conn: sqlite3.Connection, originals: Path, path: Path, contributor: str | None = None) -> int:
+    """Catalog one new file right away (a family contribution); the next scan fills in trips and events."""
+    rel = _rel(path, originals)
+    kind = media_kind(path) or "photo"
+    st = path.stat()
+    meta = read_photo_meta(path) if kind == "photo" else None
+    taken_at = (meta.taken_at if meta else None) or datetime.fromtimestamp(st.st_mtime).isoformat(timespec="seconds")
+    cur = conn.execute(
+        """INSERT INTO assets (path, kind, size, mtime, sha256, taken_at, lat, lon, camera_make, camera_model, width, height,
+                               first_seen, contributor) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        (rel, kind, st.st_size, st.st_mtime, sha256_file(path), taken_at, meta.lat if meta else None, meta.lon if meta else None,
+         meta.camera_make if meta else None, meta.camera_model if meta else None, meta.width if meta else None,
+         meta.height if meta else None, now_iso(), contributor))
+    conn.commit()
+    return cur.lastrowid
 
 
 def _link_live_photos(conn: sqlite3.Connection) -> None:

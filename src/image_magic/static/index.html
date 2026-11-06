@@ -396,6 +396,17 @@
       </div>
     </div>
 
+    <div class="panel" id="familypanel">
+      <div class="row" style="justify-content:space-between">
+        <h2 style="margin:0">Family</h2>
+        <div class="row"><input type="file" id="contrib-files" accept="image/*,video/*" multiple class="hidden"><button class="btn primary" id="contrib-add">📷 Add photos</button></div>
+      </div>
+      <p class="small">Everyone who pairs a phone (Settings → Phone access) can add their own photos to this library from
+        the phone. Copies already in the library are refused, and each photo is marked with who added it.</p>
+      <div id="family-list" class="small"></div>
+      <div id="contrib-note" class="small muted"></div>
+    </div>
+
     <div class="panel" id="reviewpanel">
       <div class="row" style="justify-content:space-between">
         <h2 style="margin:0">Review queue</h2>
@@ -973,7 +984,7 @@ async function refresh() {
     renderAiPanel(st);
     renderQualityPanel(st);
     renderBackupPanel(st);
-    if (!refresh.queued || Date.now() - refresh.queued > 60000) { refresh.queued = Date.now(); loadReviewQueue(); }
+    if (!refresh.queued || Date.now() - refresh.queued > 60000) { refresh.queued = Date.now(); loadReviewQueue(); loadFamily(); }
     renderImport(st.job);
   } catch (e) { /* app may be quitting */ }
 }
@@ -1003,6 +1014,31 @@ $("#smart-on").onclick = async () => {
 };
 $("#smart-update").onclick = () => api("/api/run", { kind: "index" }).then(renderJob).catch(e => toast(e.message));
 
+async function loadFamily() {
+  const f = await api("/api/family").catch(() => null); if (!f) return;
+  const box = $("#family-list"); box.replaceChildren();
+  const el = (t, c, txt) => { const d = document.createElement(t); if (c) d.className = c; if (txt) d.textContent = txt; return d; };
+  if (f.phones.length) box.append(el("div", "", "Paired: " + f.phones.map(p => p.name || "unnamed phone").join(", ")));
+  if (f.contributors.length) { const row = el("div", "row");
+    for (const c of f.contributors) { const b = el("button", "btn", `${c.name}: ${fmt(c.photos)} photos`); b.onclick = () => goPhotos({ contributor: c.name, eventTitle: "Added by " + c.name }); row.append(b); }
+    box.append(row); }
+  if (!f.phones.length && !f.contributors.length) box.append(el("div", "muted", "No family photos yet."));
+}
+$("#contrib-add").onclick = () => $("#contrib-files").click();
+$("#contrib-files").onchange = async ev => {
+  const files = [...ev.target.files]; if (!files.length) return;
+  let added = 0, dup = 0, failed = 0;
+  for (const [i, f] of files.entries()) {
+    $("#contrib-note").textContent = `Adding ${i + 1} of ${files.length}…`;
+    try {
+      const res = await fetch("/api/contribute?name=" + encodeURIComponent(f.name), { method: "POST", headers: { "X-Token": TOKEN, "Content-Type": f.type || "image/jpeg" }, body: f });
+      const r = await res.json().catch(() => ({})); if (!res.ok) throw new Error(r.error || res.statusText);
+      if (r.status === "added") added++; else dup++;
+    } catch (e) { failed++; }
+  }
+  $("#contrib-note").textContent = `${added} added, ${dup} already in the library, ${failed} failed. Trips and events pick them up at the next catalog update.`;
+  ev.target.value = ""; loadFamily(); refresh();
+};
 async function loadReviewQueue() {
   const q = await api("/api/review-queue").catch(() => null);
   const box = $("#review-list"); if (!q) return;
@@ -1212,13 +1248,13 @@ async function loadPhoneStatus() {
   if (!p.running) { box.append(el("div", "", "Not running" + (p.error ? ": " + p.error : " (save settings to start it)."))); return; }
   box.append(el("div", "", "On the phone, open: " + (p.urls || []).join("  or  ")));
   const code = el("div", "", "Pairing code: "); const b = el("b", "", p.code); b.style.fontSize = "22px"; b.style.letterSpacing = "4px"; code.append(b, el("span", "muted", `  (changes in ${Math.ceil(p.expires_in / 60)} min)`)); box.append(code);
-  const row = el("div", "row"); row.append(el("span", "muted", `${p.paired} phone${p.paired === 1 ? "" : "s"} paired.`));
+  const row = el("div", "row"); row.append(el("span", "muted", `${p.paired} phone${p.paired === 1 ? "" : "s"} paired` + (p.phones && p.phones.length ? ": " + p.phones.map(x => x.name || "unnamed").join(", ") : "") + "."));
   const btn = el("button", "btn", "Disconnect all phones"); btn.type = "button"; btn.onclick = async () => { await api("/api/phone/reset", {}).catch(e => toast(e.message)); loadPhoneStatus(); };
   row.append(btn); box.append(row);
   clearTimeout(loadPhoneStatus.t); loadPhoneStatus.t = setTimeout(() => { if (!$("#tab-settings").classList.contains("hidden")) loadPhoneStatus(); }, 30000);
 }
 if (location.protocol === "https:") document.addEventListener("DOMContentLoaded", () => {
-  const n = document.createElement("p"); n.className = "note"; n.textContent = "📱 Viewing from a phone: browsing, replays, Ask and voice notes work here; syncing, settings, imports and exports are done on the laptop.";
+  const n = document.createElement("p"); n.className = "note"; n.textContent = "📱 Viewing from a phone: browsing, replays, Ask, voice notes and Add photos work here; syncing, settings, imports and exports are done on the laptop.";
   $("#tab-home").prepend(n);
 });
 $("#settings-form").onsubmit = async ev => {
@@ -1288,7 +1324,7 @@ function setFilters(f) {
   fillCities();
   const chip = $("#f-trip");
   const label = f.trip ? "Trip: " + (f.tripTitle || "") : f.person ? "Person: " + (f.personName || "")
-    : f.chapter ? "Chapter: " + (f.chapterTitle || "") : f.event ? "Event: " + (f.eventTitle || "") : f.burst ? (f.burstTitle || "Burst") : f.flying ? (f.eventTitle || f.monthTitle || "Aircraft")
+    : f.chapter ? "Chapter: " + (f.chapterTitle || "") : f.event ? "Event: " + (f.eventTitle || "") : f.burst ? (f.burstTitle || "Burst") : f.flying ? (f.eventTitle || f.monthTitle || "Aircraft") : f.contributor ? (f.eventTitle || "Added by " + f.contributor)
     : (f.month || f.day) ? (f.monthTitle || f.month || f.day) : "";
   chip.classList.toggle("hidden", !label);
   $("#f-replay").classList.toggle("hidden", !(f.trip || f.day || f.month || f.event || f.flying));
@@ -1297,7 +1333,7 @@ function setFilters(f) {
   if (label) {
     chip.replaceChildren(document.createTextNode(label));
     const x = document.createElement("button"); x.textContent = "✕"; x.title = "Show all photos";
-    x.onclick = () => setFilters({ ...f, trip: "", person: "", chapter: "", month: "", day: "", event: "", burst: "", flying: "" }); chip.append(x);
+    x.onclick = () => setFilters({ ...f, trip: "", person: "", chapter: "", month: "", day: "", event: "", burst: "", flying: "", contributor: "" }); chip.append(x);
   }
   loadMorePhotos();
 }
@@ -1323,7 +1359,7 @@ async function loadMorePhotos() {
   grid.loading = true;
   const mine = grid;
   const q = new URLSearchParams({ offset: grid.offset, limit: PAGE });
-  for (const k of ["q", "year", "country", "city", "trip", "kind", "person", "month", "day", "chapter", "event", "best", "burst", "flying"]) if (grid.filters[k]) q.set(k, grid.filters[k]);
+  for (const k of ["q", "year", "country", "city", "trip", "kind", "person", "month", "day", "chapter", "event", "best", "burst", "flying", "contributor"]) if (grid.filters[k]) q.set(k, grid.filters[k]);
   try {
     const res = await api("/api/photos?" + q);
     if (mine !== grid) return;  // filters changed meanwhile
@@ -1446,6 +1482,7 @@ async function openLightbox(i, items) {
         (q.burst_size > 1 ? ` · ${q.burst_best ? "best of" : "one of"} a burst of ${q.burst_size}` : ""),
         q.burst_size > 1 ? () => { closeLightbox(); showTab("photos"); setFilters({ burst: q.burst_id, burstTitle: `Burst of ${q.burst_size}` }); } : null);
     }
+    if (d.contributor) add("Added by", d.contributor, () => { closeLightbox(); goPhotos({ contributor: d.contributor, eventTitle: "Added by " + d.contributor }); });
     add("Camera", [d.camera_make, d.camera_model].filter(Boolean).join(" "));
     add("Size", d.width ? `${d.width} × ${d.height} · ${bytes(d.size)}` : bytes(d.size));
     add("File", d.path);

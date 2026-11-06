@@ -328,7 +328,43 @@ Service features (flying log, squadron yearbook) slot into S2 (log) and S9 (year
   list, pairing page); make_phone_server wraps the same handler in TLS 1.2+; GET/POST /pair
   without a token; the laptop token is not accepted on the Wi-Fi side and phone tokens are
   not accepted for laptop-only paths.
-- Phase 5 complete except the family edition (see above).
+- **Family edition** (v0.29.0): family.contribute (sha256 exact + dHash near refusal, store
+  under contributed/<name>/<Y>/<Y-M>/, catalog.add_file, place lookup); contributor column
+  and filter; Pairing persisted (hashed tokens + names); /api/contribute allowed for phones.
+- Phase 5 complete.
+
+---
+
+## Phase 6: ideas for the next level (proposed, not yet built)
+
+Ordered by how much they add for the effort. Each one is local and private unless marked.
+
+1. **The life book.** One printable (and one on-screen) book of everything: chapters as
+   parts, trips and events as sections, your stories and voice-note transcripts as text, the
+   best photos per section. The trip/year/person books become its pages.
+2. **Albums and saved searches.** Hand-picked albums ("Emma's best", "The C-17 years") and
+   saved filters that update themselves. Any album can be replayed, filmed, booked, shared.
+3. **Favourites from iCloud.** icloudpd already saves favourites, titles and keywords as
+   .xmp sidecars; read them into the catalog so a heart in Photos counts in the ranking and
+   "Favourites" is a filter.
+4. **Place stories.** A page per country and per city: every visit, years, best photos, the
+   map of where you went there, and a "world" summary (countries by year, farthest from home,
+   most-returned-to place).
+5. **People over time.** Who was in your life when: a strip per named person across the
+   years, who appears together, and "first photo together" milestones.
+6. **Clutter and duplicates.** Screenshots, receipts and documents (from captions) and
+   near-duplicate sets grouped into a "clutter" view that hides them from stories without
+   deleting anything. Also a "one of each burst" tidy-up for the Photos grid.
+7. **Plain-English dates in search.** "last summer", "Christmas 2019", "Emma's 3rd birthday",
+   "the week we moved" parsed on the laptop, no AI needed; plus person AND person filters.
+8. **Memory of the day.** A Windows notification each morning the app is open ("8 years ago
+   today: Petra"), and a weekly digest page.
+9. **TV mode.** A full-screen ambient slideshow of best memories, openable from a TV or
+   tablet browser through phone access, with the family's voice notes.
+10. **Archive export.** The whole story as a self-contained static site (chapters, trips,
+    events, stories, metadata-stripped copies) for a USB stick or a family archive.
+11. **Scale and speed for 16k+.** Pre-render thumbnails in a background job, virtualise the
+    grid, and cache the year/timeline queries.
 
 ---
 
@@ -376,11 +412,10 @@ stories, Ask, memories, year review, books and share cover the "relive" side.
 - **Phone access**: built (v0.28.0). Opt-in HTTPS listener on the LAN address with a locally
   made certificate (cryptography), rotating 6-digit pairing code, per-phone tokens, Host
   allowlist of the LAN addresses, laptop-only paths refused for phones.
-- **Family edition.** Not built, on purpose. A shared library that several people add to
-  needs a host that is always on, accounts, and a way to merge catalogs; that is a
-  server-based product, not a change to this local app. The nearest thing today: family
-  members pair their phones over the home Wi-Fi (above) to view, replay and add voice notes,
-  and the **Import** feature brings their photos into the library from a folder they share.
+- **Family edition**: built local-first (v0.29.0). Paired phones carry a name and add their
+  own photos over the home Wi-Fi (deduplicated, catalogued at once, attributed, filterable);
+  pairings persist as hashes. A hosted, always-on family library with accounts stays out of
+  scope: this app is the laptop's, and the laptop is the host while it is on.
 
 ### Accuracy and trust
 - Confidence shown for automatic things (trip membership, chapter boundaries, face groups) with
