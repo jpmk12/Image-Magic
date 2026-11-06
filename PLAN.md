@@ -265,4 +265,6 @@ Service features (flying log, squadron yearbook) slot into S2 (log) and S9 (year
 - **S6 – Kids' stories: built** (v0.10.0). Birthday per person with age labels; growing-up
   time-lapse (best face per period, in-app player and GIF export); birthday milestones; per-person
   PDF book with reportlab.
-- Next: S7 – Memories: on this day, then & now, similar moments, shuffle.
+- **S7 – Memories: built** (v0.11.0). On this day, shuffle (quality → people → trips), then &
+  now by ~55 m GPS cell and ≥ 1 year, similar moments via CLIP image-image similarity.
+- Next: S8 – Year in review and context (sunrise, weather).

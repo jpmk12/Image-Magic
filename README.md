@@ -80,6 +80,11 @@ program only. Your photos and settings are kept.
   through the years; **Save as GIF** exports it, and **Make the book** builds a printable PDF
   (cover, growing-up page, then the best photos of each year with captions). Exports land in
   the `exports` folder inside your library.
+- **Memories tab:** **Shuffle a memory** picks a random good moment (best-rated photos first,
+  then photos of named people, then trips) with its date, place, trip and chapter. **On this
+  day** shows photos from today's date in past years. **Then & now** pairs photos taken at the
+  same spot at least a year apart. In the viewer, **Similar moments** shows look-alike photos
+  from other days (needs smart search).
 - **People:** turn it on once from the Home tab (about 290 MB of face models, verified by
   fingerprint). The app finds every face and groups them by person. On the **People** tab,
   click **"Who is this?"** to name a group, click the face to see all of that person's photos,

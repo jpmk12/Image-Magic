@@ -230,7 +230,8 @@ def make_handler(app: App):
                     since = int(self._query().get("since") or 0)
                     return self._json(200, app.jobs.log_since(since))
                 if path.startswith(("/api/photos", "/api/photo/", "/api/facets", "/api/trips", "/api/replay",
-                                    "/api/map", "/api/people", "/api/timeline", "/api/story", "/media/")):
+                                    "/api/map", "/api/people", "/api/timeline", "/api/story", "/api/memories",
+                                    "/api/shuffle", "/api/similar/", "/media/")):
                     return self._browse(path, self._query())
             except Exception as e:
                 return self._json(500, {"error": str(e)})
@@ -271,6 +272,14 @@ def make_handler(app: App):
                     from . import ask
                     key = f"{q.get('kind')}:{int(q.get('id') or 0)}"
                     return self._json(200, ask.get_story(conn, key) or {"key": key, "text": ""})
+                if path == "/api/memories":
+                    from . import memories
+                    return self._json(200, {"on_this_day": memories.on_this_day(conn),
+                                            "then_now": memories.then_and_now(conn),
+                                            "shuffle": memories.shuffle(conn)})
+                if path == "/api/shuffle":
+                    from . import memories
+                    return self._json(200, memories.shuffle(conn))
                 if path == "/api/timeline":
                     from . import chapters
                     return self._json(200, chapters.timeline(conn))
@@ -296,6 +305,9 @@ def make_handler(app: App):
                     ctype = "application/pdf" if f.suffix == ".pdf" else "image/gif" if f.suffix == ".gif" else "application/octet-stream"
                     return self._file(f, ctype)
                 asset_id = int(ident)
+                if kind == "/api/similar":
+                    from . import memories
+                    return self._json(200, memories.similar(conn, str(settings.db), asset_id))
                 if kind == "/api/photo":
                     d = browse.photo_detail(conn, asset_id)
                     if d:

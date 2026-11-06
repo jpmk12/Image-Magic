@@ -134,6 +134,18 @@
   .grow .strip img { width: 56px; height: 56px; border-radius: 6px; object-fit: cover; cursor: pointer; opacity: .6; flex: none; }
   .grow .strip img.on { opacity: 1; outline: 2px solid var(--accent); }
   .person .acts { flex-wrap: wrap; }
+  .mem-row { display: flex; gap: 6px; flex-wrap: wrap; }
+  .mem-row .tile { width: 120px; flex: none; }
+  .shuffle { display: grid; grid-template-columns: 1fr 300px; gap: 18px; align-items: start; }
+  .shuffle img { width: 100%; max-height: 420px; object-fit: contain; background: #000; border-radius: 10px; cursor: pointer; }
+  .shuffle .cap { font-size: 17px; line-height: 1.5; }
+  .pairs { display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 14px; }
+  .pair { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+  .pair .imgs { display: grid; grid-template-columns: 1fr 1fr; gap: 2px; }
+  .pair img { width: 100%; aspect-ratio: 4/3; object-fit: cover; display: block; cursor: pointer; background: var(--line); }
+  .pair .meta { display: flex; justify-content: space-between; padding: 8px 12px; font-size: 13px; }
+  .pair .meta b { display: block; }
+  @media (max-width: 760px) { .shuffle { grid-template-columns: 1fr; } }
   .people { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 14px; }
   .person { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 12px;
             text-align: center; font: inherit; color: inherit; }
@@ -177,6 +189,7 @@
     <button data-tab="home" class="active">Home</button>
     <button data-tab="photos">Photos</button>
     <button data-tab="timeline">Timeline</button>
+    <button data-tab="memories">Memories</button>
     <button data-tab="people">People</button>
     <button data-tab="trips">Trips</button>
     <button data-tab="map">Map</button>
@@ -321,6 +334,27 @@
       <button class="btn primary" type="submit" id="ask-send">Ask</button>
       <button class="btn" type="button" id="ask-reset" title="Start a new conversation">New</button>
     </form>
+  </section>
+
+  <!-- MEMORIES -->
+  <section id="tab-memories" class="hidden">
+    <div class="panel">
+      <div class="row" style="justify-content:space-between">
+        <h2 style="margin:0">Shuffle a memory</h2>
+        <button class="btn primary" id="mem-shuffle">🎲 Another one</button>
+      </div>
+      <div class="shuffle" id="mem-shuffle-box" style="margin-top:12px"><p class="muted">Nothing yet.</p></div>
+    </div>
+    <div class="panel">
+      <h2>On this day</h2>
+      <div id="mem-otd"><p class="muted">No photos from this day in past years.</p></div>
+    </div>
+    <div class="panel">
+      <h2>Then &amp; now</h2>
+      <p class="muted small">The same spot, photographed at least a year apart. Click a side to open it.</p>
+      <div class="pairs" id="mem-pairs"></div>
+      <p class="muted" id="mem-pairs-empty" style="display:none">No pairs yet. These appear once you have photos from the same place in different years.</p>
+    </div>
   </section>
 
   <!-- PEOPLE -->
@@ -574,6 +608,7 @@ function showTab(name) {
   if (name === "trips") loadTrips();
   if (name === "people") loadPeople();
   if (name === "timeline") loadTimeline();
+  if (name === "memories") loadMemories();
   if (name === "map") loadMap();
 }
 $$("nav button").forEach(b => b.onclick = () => showTab(b.dataset.tab));
@@ -1005,6 +1040,13 @@ async function openLightbox(i, items) {
     add("File", d.path);
     add("Privacy", d.private ? "🔒 Private — never sent to AI or shared. Click to make normal." : "Normal — click to mark Private (never sent to AI or shared)",
         async () => { await api("/api/private", { id: d.id, private: !d.private }).catch(e => toast(e.message)); openLightbox(lbIndex, lbItems === grid.items ? undefined : lbItems); });
+    api("/api/similar/" + it.id).then(sim => {
+      if (lbIndex !== i || !sim.length) return;
+      const div = document.createElement("div"), b = document.createElement("b"); b.textContent = "Similar moments"; div.append(b);
+      const row = document.createElement("div"); row.className = "mem-row"; row.style.marginTop = "6px";
+      sim.forEach((s, k) => { const t = tileFor(s, sim, k); t.style.width = "72px"; row.append(t); });
+      div.append(row); info.append(div);
+    }).catch(() => {});
     if (d.live_video_id) add("Live Photo", "Play motion", () => {
       stage.querySelectorAll("img,video").forEach(n => n.remove());
       const v = document.createElement("video"); v.src = media("view", d.live_video_id);
@@ -1191,6 +1233,62 @@ document.addEventListener("keydown", e => {
   if (e.key === "ArrowLeft") $("#rp-prev").click();
   if (e.key === "ArrowRight") $("#rp-next").click();
 });
+
+// ---- memories
+function tileFor(it, list, i) {
+  const b = document.createElement("button"); b.className = "tile"; b.title = it.caption || placeLabel(it);
+  if (it.kind === "video") { b.classList.add("video"); b.textContent = "▶"; }
+  else { const img = document.createElement("img"); img.loading = "lazy"; img.src = media("thumb", it.id); img.alt = ""; b.append(img); }
+  b.onclick = () => openLightbox(i, list);
+  return b;
+}
+function renderShuffle(d) {
+  const box = $("#mem-shuffle-box");
+  if (!d) { box.innerHTML = '<p class="muted">Nothing yet. Download some photos first.</p>'; return; }
+  box.replaceChildren();
+  const img = document.createElement("img"); img.src = media("view", d.id); img.alt = ""; img.onclick = () => openLightbox(0, [d]);
+  const side = document.createElement("div");
+  const cap = document.createElement("div"); cap.className = "cap"; cap.textContent = d.caption || "";
+  const when = new Date(d.taken_at);
+  const meta = document.createElement("p"); meta.className = "muted";
+  meta.textContent = [when.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric", year: "numeric" }),
+    [d.city, d.country].filter(Boolean).join(", "), d.trip_title ? "Trip: " + d.trip_title : "", d.chapter ? "Chapter: " + d.chapter.title : ""].filter(Boolean).join(" · ");
+  const acts = document.createElement("div"); acts.className = "row";
+  const rp = document.createElement("button"); rp.className = "btn"; rp.textContent = "▶ Replay this day";
+  rp.onclick = () => openReplay({ day: d.taken_at.slice(0, 10) }, fmtDate(d.taken_at));
+  acts.append(rp);
+  if (d.trip_id) { const t = document.createElement("button"); t.className = "btn"; t.textContent = "See the trip"; t.onclick = () => goPhotos({ trip: d.trip_id, tripTitle: d.trip_title }); acts.append(t); }
+  side.append(cap, meta, acts); box.append(img, side);
+}
+async function loadMemories() {
+  const m = await api("/api/memories").catch(e => { toast(e.message); return null; });
+  if (!m) return;
+  renderShuffle(m.shuffle);
+  const otd = $("#mem-otd");
+  if (m.on_this_day.length) {
+    otd.replaceChildren(...m.on_this_day.map(y => {
+      const sec = document.createElement("div");
+      const h = document.createElement("div"); h.className = "month"; h.textContent = `${y.year} · ${y.years_ago} year${y.years_ago > 1 ? "s" : ""} ago`;
+      const row = document.createElement("div"); row.className = "mem-row";
+      y.items.forEach((it, i) => row.append(tileFor(it, y.items, i)));
+      sec.append(h, row); return sec;
+    }));
+  }
+  $("#mem-pairs-empty").style.display = m.then_now.length ? "none" : "";
+  $("#mem-pairs").replaceChildren(...m.then_now.map(p => {
+    const card = document.createElement("div"); card.className = "pair";
+    const imgs = document.createElement("div"); imgs.className = "imgs";
+    for (const side of ["then", "now"]) {
+      const im = document.createElement("img"); im.src = media("thumb", p[side].id); im.alt = ""; im.loading = "lazy";
+      im.onclick = () => openLightbox(side === "then" ? 0 : 1, [p.then, p.now]); imgs.append(im);
+    }
+    const meta = document.createElement("div"); meta.className = "meta";
+    const l = document.createElement("span"); l.innerHTML = `<b>${p.then.taken_at.slice(0, 4)}</b>${p.place}`;
+    const r = document.createElement("span"); r.style.textAlign = "right"; r.innerHTML = `<b>${p.now.taken_at.slice(0, 4)}</b>${Math.round(p.days / 365)} years apart`;
+    meta.append(l, r); card.append(imgs, meta); return card;
+  }));
+}
+$("#mem-shuffle").onclick = () => api("/api/shuffle").then(renderShuffle).catch(e => toast(e.message));
 
 // ---- growing up
 const grow = { frames: [], i: 0, timer: null, pid: 0, playing: false };
