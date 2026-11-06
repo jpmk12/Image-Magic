@@ -168,6 +168,7 @@ def main(argv: list[str] | None = None) -> int:
     server = make_server(app, args.port)
     threading.Thread(target=server.serve_forever, daemon=True).start()
     _write_session(args.port, app.token)
+    app.apply_phone_setting(port=args.port + 1)
     print(f"Image Magic is running at http://127.0.0.1:{args.port}/  (close it from the app's Quit button)")
     if not args.no_browser:
         webbrowser.open(app_url(args.port, app.token))

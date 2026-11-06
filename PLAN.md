@@ -324,6 +324,11 @@ Service features (flying log, squadron yearbook) slot into S2 (log) and S9 (year
 - **Film music** (v0.27.0): Web Audio chord progressions (calm/warm/bright) scheduled over the
   film length, low-passed, faded; voice notes decoded up front, slots stretched to fit them,
   music ducked to 18% under speech.
+- **Phone access** (v0.28.0): phone.py (lan_ips, ensure_certificate, Pairing, laptop-only
+  list, pairing page); make_phone_server wraps the same handler in TLS 1.2+; GET/POST /pair
+  without a token; the laptop token is not accepted on the Wi-Fi side and phone tokens are
+  not accepted for laptop-only paths.
+- Phase 5 complete except the family edition (see above).
 
 ---
 
@@ -368,10 +373,14 @@ stories, Ask, memories, year review, books and share cover the "relive" side.
 - **Second backup**: built (v0.25.0) to a folder on another drive, verified by checksum. Cloud
   targets (S3/B2) would need credentials and a client; a synced folder (OneDrive, Dropbox,
   Backblaze's folder backup) as the destination covers most of that today.
-- **Phone access.** The app on the laptop, viewed from the phone on the same Wi-Fi (needs
-  TLS + a pairing code; today it is loopback-only on purpose).
-- **Family edition.** A shared library with contributions from several people needs hosting;
-  a later, server-based version.
+- **Phone access**: built (v0.28.0). Opt-in HTTPS listener on the LAN address with a locally
+  made certificate (cryptography), rotating 6-digit pairing code, per-phone tokens, Host
+  allowlist of the LAN addresses, laptop-only paths refused for phones.
+- **Family edition.** Not built, on purpose. A shared library that several people add to
+  needs a host that is always on, accounts, and a way to merge catalogs; that is a
+  server-based product, not a change to this local app. The nearest thing today: family
+  members pair their phones over the home Wi-Fi (above) to view, replay and add voice notes,
+  and the **Import** feature brings their photos into the library from a folder they share.
 
 ### Accuracy and trust
 - Confidence shown for automatic things (trip membership, chapter boundaries, face groups) with

@@ -22,7 +22,7 @@ from importlib import resources
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
 
-from . import __version__, browse, catalog, media
+from . import __version__, browse, catalog, media, phone
 from .jobs import JobRunner
 from .settings import Settings
 
@@ -39,6 +39,9 @@ class App:
         self.on_quit = on_quit
         self._last_auto = time.time()
         self.ask_history: list = []
+        self.pairing = phone.Pairing()
+        self.phone_server: ThreadingHTTPServer | None = None
+        self.phone_port: int | None = None
 
     # ---- API handlers (return JSON-able dicts) -------------------------
     _stats_cache: tuple[float, str, dict] = (0.0, "", {})
@@ -129,7 +132,34 @@ class App:
             raise ValueError("Wait for the current task to finish before changing settings.")
         s = Settings.from_dict(data)
         s.save()
+        self.apply_phone_setting(s)
         return s.to_dict()
+
+    def apply_phone_setting(self, s: Settings | None = None, port: int | None = None) -> None:
+        """Start or stop the Wi-Fi (HTTPS) listener to match the setting."""
+        s = s or self.settings_provider()
+        if port is not None:
+            self.phone_port = port
+        if s.phone_access and self.phone_server is None and self.phone_port is not None:
+            try:
+                self.phone_server = make_phone_server(self, self.phone_port)
+                threading.Thread(target=self.phone_server.serve_forever, daemon=True).start()
+            except Exception as e:
+                self.phone_error = str(e)
+        elif not s.phone_access and self.phone_server is not None:
+            srv, self.phone_server = self.phone_server, None
+            threading.Thread(target=srv.shutdown, daemon=True).start()
+            self.pairing.reset()
+
+    def phone_status(self) -> dict:
+        s = self.settings_provider()
+        out = {"on": s.phone_access, "running": self.phone_server is not None, "paired": len(self.pairing.tokens),
+               "error": getattr(self, "phone_error", "")}
+        if self.phone_server is not None:
+            code, left = self.pairing.code()
+            port = self.phone_server.server_address[1]
+            out.update({"code": code, "expires_in": left, "urls": [f"https://{ip}:{port}/pair" for ip in phone.lan_ips()]})
+        return out
 
     def auto_sync_tick(self) -> None:
         s = self.settings_provider()
@@ -184,7 +214,13 @@ def make_handler(app: App):
 
         def _host_ok(self) -> bool:
             host = (self.headers.get("Host") or "").rsplit(":", 1)[0].strip("[]")
+            if getattr(self.server, "phone", False):
+                return host in getattr(self.server, "hosts", set())
             return host in ALLOWED_HOSTS
+
+        @property
+        def from_phone(self) -> bool:
+            return bool(getattr(self.server, "phone", False))
 
         def _send(self, code: int, body: bytes, ctype: str) -> None:
             self.send_response(code)
@@ -212,6 +248,14 @@ def make_handler(app: App):
             token = self.headers.get("X-Token") or ""
             if not token and self.command == "GET" and self.path.startswith("/media/"):
                 token = self._query().get("t", "")
+            if self.from_phone:
+                if not app.pairing.valid(token):
+                    self._json(HTTPStatus.FORBIDDEN, {"error": "This phone is not paired. Open /pair on the phone."})
+                    return False
+                if phone.laptop_only(self.path.split("?", 1)[0]):
+                    self._json(HTTPStatus.FORBIDDEN, {"error": "That can only be done on the laptop."})
+                    return False
+                return True
             if not secrets.compare_digest(token, app.token):
                 self._json(HTTPStatus.FORBIDDEN, {"error": "bad token"})
                 return False
@@ -229,6 +273,8 @@ def make_handler(app: App):
 
         def do_GET(self):
             path = self.path.split("?", 1)[0]
+            if path == "/pair" and self.from_phone and self._host_ok():
+                return self._send(200, phone.PAIR_PAGE.replace("%ERR%", "").encode(), "text/html; charset=utf-8")
             if path in ("/", "/index.html"):
                 if not self._host_ok():
                     return self._json(HTTPStatus.FORBIDDEN, {"error": "bad host"})
@@ -244,6 +290,8 @@ def make_handler(app: App):
                     from . import describe
                     return self._json(200, {**app.get_settings(), "api_key_hint": describe.key_hint(),
                                             "ai_models": {k: v[0] for k, v in describe.MODELS.items()}})
+                if path == "/api/phone":
+                    return self._json(200, app.phone_status())
                 if path == "/api/log":
                     since = int(self._query().get("since") or 0)
                     return self._json(200, app.jobs.log_since(since))
@@ -572,10 +620,33 @@ def make_handler(app: App):
                         return
                     left -= len(chunk)
 
+        def _pair(self) -> None:
+            """POST /pair from a phone: check the code, hand out that phone's token in the URL fragment."""
+            n = int(self.headers.get("Content-Length") or 0)
+            if n > 4096:
+                raise ValueError("request too large")
+            form = parse_qs(self.rfile.read(n).decode("utf-8", "replace"))
+            code = (form.get("code") or [""])[0]
+            token = app.pairing.try_code(code, self.headers.get("User-Agent", "")[:40])
+            if not token:
+                body = phone.PAIR_PAGE.replace("%ERR%", '<p class="err">That code did not work. Check it on the laptop and try again.</p>')
+                return self._send(403, body.encode(), "text/html; charset=utf-8")
+            self.send_response(303)
+            self.send_header("Location", f"/#t={token}")
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+
         def do_POST(self):
+            path = self.path.split("?", 1)[0]
+            if path == "/pair" and self.from_phone:
+                if not self._host_ok():
+                    return self._json(HTTPStatus.FORBIDDEN, {"error": "bad host"})
+                try:
+                    return self._pair()
+                except Exception as e:
+                    return self._json(400, {"error": str(e)})
             if not self._authorized():
                 return
-            path = self.path.split("?", 1)[0]
             try:
                 if path == "/api/voice":
                     return self._voice_upload(self._query())
@@ -588,6 +659,9 @@ def make_handler(app: App):
                     finally:
                         conn.close()
                     return self._json(200, {"ok": True})
+                if path == "/api/phone/reset":
+                    app.pairing.reset()
+                    return self._json(200, app.phone_status())
                 if path == "/api/settings":
                     from . import describe
                     if "anthropic_api_key" in data:
@@ -718,4 +792,20 @@ def make_handler(app: App):
 def make_server(app: App, port: int) -> ThreadingHTTPServer:
     server = ThreadingHTTPServer(("127.0.0.1", port), make_handler(app))
     server.daemon_threads = True
+    return server
+
+
+def make_phone_server(app: App, port: int, host: str = "0.0.0.0") -> ThreadingHTTPServer:
+    """The Wi-Fi listener: HTTPS with a locally made certificate; phones pair with a code."""
+    import ssl
+    ips = phone.lan_ips()
+    cert, key = phone.ensure_certificate(ips)
+    server = ThreadingHTTPServer((host, port), make_handler(app))
+    server.daemon_threads = True
+    server.phone = True                                                   # type: ignore[attr-defined]
+    server.hosts = set(ips) | {"image-magic.local", "localhost", "127.0.0.1"}   # type: ignore[attr-defined]
+    ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+    ctx.minimum_version = ssl.TLSVersion.TLSv1_2
+    ctx.load_cert_chain(str(cert), str(key))
+    server.socket = ctx.wrap_socket(server.socket, server_side=True)
     return server

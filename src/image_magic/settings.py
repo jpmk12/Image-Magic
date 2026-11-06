@@ -57,6 +57,7 @@ class Settings:
     ai_descriptions: bool = False      # describe new photos with Claude after each sync (paid)
     ai_model: str = "claude-haiku-5-5"
     backup_path: str = ""              # second copy of the library (external drive, NAS); empty = off
+    phone_access: bool = False         # also listen on the Wi-Fi address (HTTPS + pairing code)
 
     def __post_init__(self) -> None:
         if not self.library_path:

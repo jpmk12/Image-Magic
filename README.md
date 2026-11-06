@@ -160,6 +160,9 @@ program only. Your photos and settings are kept.
   **Yes** locks the decision so rebuilds keep it; **No** undoes it the way the viewer's
   corrections do. The viewer shows how sure the app is about a photo's trip, and marks
   loosely matched faces with "?".
+- **On your phone:** turn on **Phone access** in Settings, open the address it shows on your
+  phone (same Wi-Fi), accept the certificate warning once, type the pairing code, and the app
+  opens on the phone for browsing, replays, Ask and voice notes.
 - **Second copy:** set a backup folder on another drive in Settings, then **Back up now** on
   the Home tab. Every file under `originals` and `voice` is copied (only new or changed files
   on later runs), read back and checked against its SHA-256 in the catalog, and a consistent
@@ -241,6 +244,15 @@ Place names are looked up **on your computer** from a bundled list of about 145,
   must carry a random access code that's created at each launch and given only to your
   browser, so other websites and other accounts on the laptop can't use it.
 - Image Magic never deletes anything in iCloud (see the top of this page).
+- **Phone access** is off by default. When you turn it on (Settings → Phone access), a second
+  listener on your Wi-Fi address serves the app over HTTPS with a certificate made on your
+  laptop (the phone's browser warns about it once; accept it there). A phone gets in only
+  with the 6-digit pairing code shown in Settings, which changes every ten minutes and dies
+  after five wrong tries. Each phone gets its own access code; **Disconnect all phones**
+  revokes them, and turning the setting off closes the listener. From a phone you can browse,
+  replay, ask and record voice notes, but not change settings, sync, import, export or quit.
+  Windows Firewall will ask about Image Magic the first time; allow it on **private** networks
+  only, never public ones.
 
 **What was reviewed**
 - The code had an independent security and privacy review and a bugs-and-performance review
@@ -271,6 +283,7 @@ Place names are looked up **on your computer** from a bundled list of about 145,
 | Map background | Turn off to keep map views from going to OpenStreetMap |
 | Auto sync | Get new photos every hour, every 6 hours or daily while the app is open |
 | "Get new photos" stops after | How many already-downloaded photos in a row before a quick sync stops |
+| Phone access | Let phones on the same Wi-Fi open the app over HTTPS with a pairing code (off by default) |
 | Second copy (backup folder) | An empty folder on another drive; **Back up now** on the Home tab mirrors the library there with checksum verification |
 
 Settings are stored in `%APPDATA%\ImageMagic\settings.json`. Your Apple ID password is

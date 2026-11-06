@@ -676,6 +676,16 @@
       </div>
 
       <div class="panel">
+        <h2>Phone access</h2>
+        <label class="check"><input type="checkbox" name="phone_access">
+          <span>Let my phone open the app on this Wi-Fi
+          <small>Off by default: the app only answers this computer. When on, phones on the same Wi-Fi can open it over HTTPS
+            with a 6-digit pairing code. Phones can browse, replay, ask and record voice notes, not change settings, sync or export.
+            The certificate is made on this computer, so the phone's browser warns once; accept it there.</small></span></label>
+        <div id="phone-status" class="small" style="margin:8px 0 0 28px"></div>
+      </div>
+
+      <div class="panel">
         <h2>Safety</h2>
         <p class="note">🛡️ <b>Never delete from iCloud</b> is always on and can't be turned off.
           Image Magic only copies photos to this computer.</p>
@@ -1193,7 +1203,24 @@ async function loadSettings() {
     if (el.type === "checkbox") el.checked = !!v; else el.value = v;
   }
   $("#settings-msg").textContent = "";
+  loadPhoneStatus();
 }
+async function loadPhoneStatus() {
+  const box = $("#phone-status"); box.replaceChildren();
+  const p = await api("/api/phone").catch(() => null); if (!p || !p.on) return;
+  const el = (t, c, txt) => { const d = document.createElement(t); if (c) d.className = c; if (txt) d.textContent = txt; return d; };
+  if (!p.running) { box.append(el("div", "", "Not running" + (p.error ? ": " + p.error : " (save settings to start it)."))); return; }
+  box.append(el("div", "", "On the phone, open: " + (p.urls || []).join("  or  ")));
+  const code = el("div", "", "Pairing code: "); const b = el("b", "", p.code); b.style.fontSize = "22px"; b.style.letterSpacing = "4px"; code.append(b, el("span", "muted", `  (changes in ${Math.ceil(p.expires_in / 60)} min)`)); box.append(code);
+  const row = el("div", "row"); row.append(el("span", "muted", `${p.paired} phone${p.paired === 1 ? "" : "s"} paired.`));
+  const btn = el("button", "btn", "Disconnect all phones"); btn.type = "button"; btn.onclick = async () => { await api("/api/phone/reset", {}).catch(e => toast(e.message)); loadPhoneStatus(); };
+  row.append(btn); box.append(row);
+  clearTimeout(loadPhoneStatus.t); loadPhoneStatus.t = setTimeout(() => { if (!$("#tab-settings").classList.contains("hidden")) loadPhoneStatus(); }, 30000);
+}
+if (location.protocol === "https:") document.addEventListener("DOMContentLoaded", () => {
+  const n = document.createElement("p"); n.className = "note"; n.textContent = "📱 Viewing from a phone: browsing, replays, Ask and voice notes work here; syncing, settings, imports and exports are done on the laptop.";
+  $("#tab-home").prepend(n);
+});
 $("#settings-form").onsubmit = async ev => {
   ev.preventDefault();
   const f = ev.target, data = {};
