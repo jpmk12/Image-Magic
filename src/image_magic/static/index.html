@@ -495,6 +495,14 @@
       <h2>On this day</h2>
       <div id="mem-otd"><p class="muted">No photos from this day in past years.</p></div>
     </div>
+    <div class="panel" id="fly-panel">
+      <div class="row" style="justify-content:space-between">
+        <h2 style="margin:0">Flying log</h2>
+        <div class="row"><button class="btn" id="fly-photos">All aircraft photos</button><button class="btn" id="fly-share" title="Strict export: no captions, places, readable text or tail numbers">↗ Share (strict)</button></div>
+      </div>
+      <p class="muted small">Aircraft photos (from the AI captions, or a keyword like "aircraft" you add yourself) by base, by day and by tail number. Sharing from here uses the strict filter.</p>
+      <div id="fly-body"></div>
+    </div>
     <div class="panel">
       <h2>Compare</h2>
       <p class="muted small">Two moments side by side: <i>Emma at 3 vs Jack at 3</i>, <i>2017 vs 2023</i>, <i>Jordan vs Japan</i>.</p>
@@ -842,7 +850,7 @@ function showTab(name) {
   if (name === "trips") { loadTrips(); loadEvents(); }
   if (name === "people") loadPeople();
   if (name === "timeline") loadTimeline();
-  if (name === "memories") { loadMemories(); cmpOptions(); }
+  if (name === "memories") { loadMemories(); cmpOptions(); loadFlying(); }
   if (name === "map") loadMap();
 }
 $$("nav button").forEach(b => b.onclick = () => showTab(b.dataset.tab));
@@ -1193,16 +1201,16 @@ function setFilters(f) {
   fillCities();
   const chip = $("#f-trip");
   const label = f.trip ? "Trip: " + (f.tripTitle || "") : f.person ? "Person: " + (f.personName || "")
-    : f.chapter ? "Chapter: " + (f.chapterTitle || "") : f.event ? "Event: " + (f.eventTitle || "") : f.burst ? (f.burstTitle || "Burst")
+    : f.chapter ? "Chapter: " + (f.chapterTitle || "") : f.event ? "Event: " + (f.eventTitle || "") : f.burst ? (f.burstTitle || "Burst") : f.flying ? (f.eventTitle || f.monthTitle || "Aircraft")
     : (f.month || f.day) ? (f.monthTitle || f.month || f.day) : "";
   chip.classList.toggle("hidden", !label);
-  $("#f-replay").classList.toggle("hidden", !(f.trip || f.day || f.month || f.event));
-  $("#f-share").classList.toggle("hidden", !(f.trip || f.day || f.month || f.person || f.chapter || f.year || f.event));
+  $("#f-replay").classList.toggle("hidden", !(f.trip || f.day || f.month || f.event || f.flying));
+  $("#f-share").classList.toggle("hidden", !(f.trip || f.day || f.month || f.person || f.chapter || f.year || f.event || f.flying));
   $("#f-replay").textContent = f.trip ? "▶ Replay trip" : f.event ? "▶ Replay event" : f.day ? "▶ Replay this day" : "▶ Replay this month";
   if (label) {
     chip.replaceChildren(document.createTextNode(label));
     const x = document.createElement("button"); x.textContent = "✕"; x.title = "Show all photos";
-    x.onclick = () => setFilters({ ...f, trip: "", person: "", chapter: "", month: "", day: "", event: "", burst: "" }); chip.append(x);
+    x.onclick = () => setFilters({ ...f, trip: "", person: "", chapter: "", month: "", day: "", event: "", burst: "", flying: "" }); chip.append(x);
   }
   loadMorePhotos();
 }
@@ -1228,7 +1236,7 @@ async function loadMorePhotos() {
   grid.loading = true;
   const mine = grid;
   const q = new URLSearchParams({ offset: grid.offset, limit: PAGE });
-  for (const k of ["q", "year", "country", "city", "trip", "kind", "person", "month", "day", "chapter", "event", "best", "burst"]) if (grid.filters[k]) q.set(k, grid.filters[k]);
+  for (const k of ["q", "year", "country", "city", "trip", "kind", "person", "month", "day", "chapter", "event", "best", "burst", "flying"]) if (grid.filters[k]) q.set(k, grid.filters[k]);
   try {
     const res = await api("/api/photos?" + q);
     if (mine !== grid) return;  // filters changed meanwhile
@@ -1507,7 +1515,7 @@ const rp = { items: [], i: -1, timer: null, playing: false, map: null, line: nul
 $("#f-replay").onclick = () => openReplay(grid.filters, $("#f-trip").textContent.replace("✕", ""));
 async function openReplay(filters, title) {
   const q = new URLSearchParams();
-  for (const k of ["trip", "day", "month", "person", "chapter", "year", "country", "city", "best", "event", "n", "home"]) if (filters[k]) q.set(k, filters[k]);
+  for (const k of ["trip", "day", "month", "person", "chapter", "year", "country", "city", "best", "event", "n", "home", "flying"]) if (filters[k]) q.set(k, filters[k]);
   let items;
   try { items = await api("/api/replay?" + q); } catch (e) { return toast(e.message); }
   if (!items.length) return toast("Nothing to replay here.");
@@ -1642,6 +1650,38 @@ async function loadMemories() {
   }));
 }
 $("#mem-shuffle").onclick = () => api("/api/shuffle").then(renderShuffle).catch(e => toast(e.message));
+
+// ---- flying log
+async function loadFlying() {
+  const f = await api("/api/flying").catch(() => null);
+  const body = $("#fly-body"); if (!f) return;
+  const el = (t, c, txt) => { const d = document.createElement(t); if (c) d.className = c; if (txt) d.textContent = txt; return d; };
+  body.replaceChildren();
+  $("#fly-share").disabled = $("#fly-photos").disabled = !f.total;
+  if (!f.total) { body.append(el("p", "muted", f.has_descriptions ? "No aircraft photos found yet." : "Turn on AI descriptions (Home tab) to find aircraft photos, or add the keyword \"aircraft\" to a photo in the viewer.")); return; }
+  const strip = el("div", "yr-best"); f.best.forEach((it, i) => strip.append(tileFor(it, f.best, i))); body.append(strip);
+  const stats = el("div", "yr");
+  for (const [n, l] of [[fmt(f.total), "Aircraft photos"], [f.bases.length, "Bases"], [f.sorties.length, "Days"], [f.tails.length, "Tails"]]) {
+    const d = el("div", "stat"); d.append(el("div", "n", String(n)), el("div", "l", l)); stats.append(d);
+  }
+  body.append(stats);
+  if (f.bases.length) { body.append(el("h3", "", "Bases")); const row = el("div", "mem-row");
+    for (const b of f.bases) { const w = el("div"); w.style.width = "120px"; w.style.textAlign = "center"; const t = tileFor({ id: b.cover_id, kind: "photo" }, [{ id: b.cover_id, kind: "photo" }], 0);
+      t.onclick = () => goPhotos({ flying: 1, city: b.place.split(",")[0], tripTitle: "", eventTitle: b.place }); w.append(t, el("div", "small", b.place), el("div", "small muted", `${fmt(b.photos)} photos · ${b.days} days`)); row.append(w); } body.append(row); }
+  if (f.tails.length) { body.append(el("h3", "", "Tail numbers")); const row = el("div", "mem-row");
+    for (const t of f.tails) { const w = el("div"); w.style.width = "120px"; w.style.textAlign = "center"; w.append(tileFor({ id: t.cover_id, kind: "photo" }, [{ id: t.cover_id, kind: "photo" }], 0), el("div", "small", t.tail), el("div", "small muted", `${t.photos} photos · ${t.first.slice(0, 4)}–${t.last.slice(0, 4)}`)); row.append(w); } body.append(row); }
+  body.append(el("h3", "", "Flying days"));
+  const list = el("div"); list.style.maxHeight = "320px"; list.style.overflow = "auto";
+  for (const d of f.sorties) { const r = el("div", "row"); r.style.margin = "4px 0";
+    const t = tileFor({ id: d.cover_id, kind: "photo" }, [{ id: d.cover_id, kind: "photo" }], 0); t.style.width = "56px";
+    const a = el("a", "", `${fmtDate(d.day)} · ${d.place} · ${d.photos} photos${d.tails.length ? " · tails " + d.tails.join(", ") : ""}`);
+    a.onclick = () => goPhotos({ flying: 1, day: d.day, monthTitle: `Flying, ${fmtDate(d.day)}` });
+    const play = el("button", "btn", "▶"); play.onclick = () => openReplay({ flying: 1, day: d.day }, `Flying, ${fmtDate(d.day)}`);
+    r.append(t, a, play); list.append(r); }
+  body.append(list);
+}
+$("#fly-photos").onclick = () => goPhotos({ flying: 1, eventTitle: "Aircraft" });
+$("#fly-share").onclick = () => openShare({ flying: 1 }, "Flying", true);
 
 // ---- compare
 const cmp = { opts: null };
@@ -1871,14 +1911,15 @@ $("#story-speak").onclick = () => {
 
 // ---- share
 const shareState = { filters: {}, flagged: [] };
-async function openShare(filters, title) {
-  shareState.filters = filters; $("#share-title").value = title || "My photos";
+async function openShare(filters, title, strict) {
+  shareState.filters = filters; shareState.strict = !!(strict || filters.flying); $("#share-title").value = title || "My photos";
   $("#share").classList.remove("hidden"); $("#share-note").textContent = ""; $("#share-flags").replaceChildren();
   $("#share-check").textContent = "Checking…";
   try {
     const r = await api("/api/share/check", { filters });
     shareState.flagged = r.flagged;
-    $("#share-check").textContent = `${fmt(r.total)} photos will be shared.` + (r.no_descriptions ? " Turn on AI descriptions to get a sensitivity check of what's in the photos." : "");
+    $("#share-check").textContent = `${fmt(r.total)} photos will be shared.` + (r.no_descriptions ? " Turn on AI descriptions to get a sensitivity check of what's in the photos." : "")
+      + (r.strict ? ` Strict filter: ${r.removed.length} photo(s) with readable text, tail numbers, badges or documents are left out automatically, and the page carries no captions, places or names.` : "");
     if (r.flagged.length) {
       const h = document.createElement("p"); h.innerHTML = `<b>${r.flagged.length} photo(s) look sensitive.</b> Untick any you want to leave out:`;
       $("#share-flags").append(h);
@@ -1893,14 +1934,14 @@ async function openShare(filters, title) {
     }
   } catch (e) { $("#share-check").textContent = e.message; }
 }
-$("#f-share").onclick = () => openShare(grid.filters, $("#f-trip").textContent.replace("✕", "").replace(/^(Trip|Person|Chapter): /, ""));
+$("#f-share").onclick = () => openShare(grid.filters, $("#f-trip").textContent.replace("✕", "").replace(/^(Trip|Person|Chapter|Event): /, ""), !!grid.filters.flying);
 $("#share-close").onclick = () => $("#share").classList.add("hidden");
 $("#share-go").onclick = async () => {
   const exclude = [...$$("#share-flags input:not(:checked)")].map(i => +i.dataset.id);
   const f = shareState.filters;
   const story_key = f.trip ? "trip:" + f.trip : f.chapter ? "chapter:" + f.chapter : null;
   $("#share-note").textContent = "Exporting…"; $("#share-go").disabled = true;
-  try { const r = await api("/api/share/export", { filters: f, title: $("#share-title").value, exclude, story_key, voice: $("#share-voice").checked }); $("#share-note").textContent = "Done: " + r.folder; }
+  try { const r = await api("/api/share/export", { filters: f, title: $("#share-title").value, exclude, story_key, voice: $("#share-voice").checked, strict: shareState.strict }); $("#share-note").textContent = "Done: " + r.folder; }
   catch (e) { $("#share-note").textContent = e.message; }
   $("#share-go").disabled = false;
 };

@@ -30,6 +30,10 @@ SENSITIVE_TERMS = [
     "deployment", "squadron", "tarmac", "helicopter", "drone", "id card", "badge", "passport", "license plate",
     "licence plate", "document", "receipt", "screenshot", "credit card", "address",
 ]
+# With the strict filter (flying log) these are left out automatically, as is any photo with readable text.
+STRICT_TERMS = {"tail number", "id card", "badge", "passport", "document", "address", "base housing", "license plate",
+                "licence plate", "screenshot", "receipt", "credit card", "weapon", "rifle", "gun", "ammunition", "convoy",
+                "deployment", "squadron"}
 
 
 def _visible_ids(conn: sqlite3.Connection, params: dict) -> list[int]:
@@ -44,11 +48,16 @@ def _visible_ids(conn: sqlite3.Connection, params: dict) -> list[int]:
     return [i for i in ids if i not in private]
 
 
-def check(conn: sqlite3.Connection, params: dict) -> dict:
-    """What would be shared, and which photos look sensitive."""
+def check(conn: sqlite3.Connection, params: dict, strict: bool = False) -> dict:
+    """What would be shared, and which photos look sensitive. Strict: list what is removed automatically."""
     describe.ensure_schema(conn)
+    if params.get("flying"):
+        from . import flying
+        flying.refresh(conn)
+        strict = True
     ids = _visible_ids(conn, params)
     flagged = []
+    removed = []
     descs: dict[int, sqlite3.Row] = {}
     assets: dict[int, sqlite3.Row] = {}
     for i in range(0, len(ids), 500):
@@ -64,10 +73,16 @@ def check(conn: sqlite3.Connection, params: dict) -> dict:
         text = " ".join([d.get("caption") or "", " ".join(d.get("keywords") or []),
                          d.get("text") or "", a["city"] or ""]).lower()
         hits = sorted({t for t in SENSITIVE_TERMS if re.search(r"(?<![a-z0-9])" + re.escape(t) + r"(?![a-z0-9])", text)})
-        if hits:
+        # Strict looks at what is in the photo, not at the place name (places are never exported in strict mode).
+        content = text[: len(text) - len((a["city"] or "").lower()) - 1] if a["city"] else text
+        content_hits = {t for t in STRICT_TERMS if re.search(r"(?<![a-z0-9])" + re.escape(t) + r"(?![a-z0-9])", content)}
+        if strict and ((d.get("text") or "").strip() or content_hits):
+            removed.append({"id": aid, "taken_at": a["taken_at"], "reasons": sorted(content_hits) or ["readable text"],
+                            "caption": (d or {}).get("caption", "")})
+        elif hits:
             flagged.append({"id": aid, "taken_at": a["taken_at"], "reasons": hits,
                             "caption": (d or {}).get("caption", "")})
-    return {"total": len(ids), "flagged": flagged,
+    return {"total": len(ids) - len(removed), "flagged": flagged, "removed": removed, "strict": strict,
             "no_descriptions": not conn.execute("SELECT 1 FROM descriptions LIMIT 1").fetchone()}
 
 
@@ -84,9 +99,17 @@ def _slug(s: str) -> str:
 
 
 def export(conn: sqlite3.Connection, originals: Path, library: Path, params: dict, title: str,
-           exclude: list[int] | None = None, story_key: str | None = None, voice: bool = False) -> Path:
-    """Write exports/share-<slug>/ with index.html and images/. Returns the folder."""
+           exclude: list[int] | None = None, story_key: str | None = None, voice: bool = False,
+           strict: bool = False) -> Path:
+    """Write exports/share-<slug>/ with index.html and images/. Returns the folder.
+
+    Strict (always on for the flying log): photos with readable text or strict-term hits are
+    left out, and the page carries no captions, places or people, only the year.
+    """
     exclude = set(exclude or [])
+    if params.get("flying") or strict:
+        strict = True
+        exclude |= {r["id"] for r in check(conn, params, strict=True)["removed"]}
     ids = [i for i in _visible_ids(conn, params) if i not in exclude]
     if not ids:
         raise ValueError("Nothing to share after your exclusions.")
@@ -123,6 +146,9 @@ def export(conn: sqlite3.Connection, originals: Path, library: Path, params: dic
             if found:
                 audio = f"images/{n:04d}{found[0].suffix}"
                 shutil.copyfile(found[0], folder / audio)
+        if strict:
+            items.append({"src": name, "w": w, "h": h, "date": (a["taken_at"] or "")[:4], "place": "", "caption": "", "people": [], "audio": ""})
+            continue
         items.append({"src": name, "w": w, "h": h, "date": (a["taken_at"] or "")[:10],
                       "place": ", ".join(x for x in [a["city"], a["country"]] if x),
                       "caption": (d or {}).get("caption", "") if d and d.get("status") == "ok" else "",

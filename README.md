@@ -118,6 +118,11 @@ program only. Your photos and settings are kept.
   day** shows photos from today's date in past years. **Then & now** pairs photos taken at the
   same spot at least a year apart. In the viewer, **Similar moments** shows look-alike photos
   from other days (needs smart search).
+- **Flying log:** on the Memories tab, your aircraft photos (found from the AI captions, or from
+  a keyword like "aircraft" you add in the viewer) by base, by flying day and by tail number read
+  from the photo. **↗ Share (strict)** exports with the strict filter: photos with readable text,
+  tail numbers, badges or documents are left out automatically, and the page shows no captions,
+  places or names, only the year.
 - **Compare:** on the Memories tab, put two moments side by side: a person at an age (*Emma at
   3 vs Jack at 3*, needs birthdays), two years, two months, two trips or two events. Each side
   shows its count, dates, places and people, then the best photos paired up.

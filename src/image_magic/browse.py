@@ -44,6 +44,8 @@ def _filters(params: dict, alias: str = "") -> tuple[str, list]:
     if params.get("burst"):
         where.append(f"{a}burst_id = ?")
         args.append(int(params["burst"]))
+    if params.get("flying"):
+        where.append(f"{a}id IN (SELECT asset_id FROM flying_photos)")
     if params.get("best"):
         where.append(f"({a}burst_id IS NULL OR {a}burst_best = 1) AND COALESCE({a}quality_score, 60) >= 55 AND {a}kind = 'photo'")
     if params.get("kind") in ("photo", "video"):

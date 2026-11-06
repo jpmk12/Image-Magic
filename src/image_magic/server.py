@@ -243,7 +243,7 @@ def make_handler(app: App):
                     return self._json(200, app.jobs.log_since(since))
                 if path.startswith(("/api/photos", "/api/photo/", "/api/facets", "/api/trips", "/api/replay",
                                     "/api/map", "/api/people", "/api/timeline", "/api/story", "/api/memories",
-                                    "/api/shuffle", "/api/similar/", "/api/review", "/api/context/", "/api/curate/", "/api/events", "/api/home", "/api/voice/", "/api/compare/", "/media/")):
+                                    "/api/shuffle", "/api/similar/", "/api/review", "/api/context/", "/api/curate/", "/api/events", "/api/home", "/api/voice/", "/api/compare/", "/api/flying", "/media/")):
                     return self._browse(path, self._query())
             except Exception as e:
                 return self._json(500, {"error": str(e)})
@@ -331,6 +331,9 @@ def make_handler(app: App):
                     return self._json(200, {"file": f.name})
                 if path == "/api/map":
                     return self._json(200, browse.map_points(conn, q))
+                if path == "/api/flying":
+                    from . import flying
+                    return self._json(200, flying.log(conn))
                 if path == "/api/map/this-day":
                     from . import memories
                     return self._json(200, memories.this_day_pins(conn))
@@ -637,13 +640,14 @@ def make_handler(app: App):
                     settings, conn = app.db()
                     try:
                         filters = {k: v for k, v in dict(data.get("filters") or {}).items() if k in
-                                   ("trip", "chapter", "person", "year", "month", "day", "country", "city", "q", "event", "best")}
+                                   ("trip", "chapter", "person", "year", "month", "day", "country", "city", "q", "event", "best", "flying")}
                         if path.endswith("check"):
                             return self._json(200, share.check(conn, filters))
                         folder = share.export(conn, settings.originals, settings.library, filters,
                                               str(data.get("title") or "My photos")[:80],
                                               exclude=[int(i) for i in data.get("exclude") or []],
-                                              story_key=data.get("story_key"), voice=bool(data.get("voice")))
+                                              story_key=data.get("story_key"), voice=bool(data.get("voice")),
+                                              strict=bool(data.get("strict")))
                         try:
                             _open_folder(folder)
                         except Exception:

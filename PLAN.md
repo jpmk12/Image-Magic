@@ -308,6 +308,9 @@ Service features (flying log, squadron yearbook) slot into S2 (log) and S9 (year
 - **Compare + this-day map** (v0.22.0): compare.side/compare over a shared WHERE per side
   (person at age from the birthday, year, month, day, trip, event) with best-of pairs; one pin
   per year within ±3 days of today's date, drawn as a dashed path.
+- **Flying log** (v0.23.0): flying_photos table rebuilt from descriptions (aircraft term
+  list), tails via `\d{2}-\d{4}|\d{5}`; `flying` filter; strict share removes photos with
+  readable text or strict-term content (place names excluded from that test) and strips the page.
 
 ---
 
@@ -346,8 +349,8 @@ stories, Ask, memories, year review, books and share cover the "relive" side.
   make_book) that return actions the page performs; share only opens the dialog.
 - **Comparison stories**: built (v0.22.0). Person-at-age, year, month, day, trip, event sides.
 - **Where was I on this day each year**: built (v0.22.0) as a map layer.
-- **Flying log.** For the C-17 photos: a dedicated view of bases, sorties and aircraft tails
-  from captions, with a strict share filter.
+- **Flying log**: built (v0.23.0). Bases, flying days, tail numbers (regex on readable
+  text), strict share (auto-removal + no captions/places/names).
 - **Printables.** Trip books and year books (the person book exists): one PDF per trip or year.
 - **Second backup.** A one-click copy of the library to an external drive or S3/B2, with
   verification. The backup half of the plan is still single-copy.
