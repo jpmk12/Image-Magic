@@ -1232,7 +1232,7 @@ $("#settings-form").onsubmit = async ev => {
   try {
     await api("/api/settings", data);
     $("#settings-msg").textContent = "Saved ✓"; $("#settings-msg").style.color = "var(--ok)";
-    refresh();
+    refresh(); loadPhoneStatus();
   } catch (e) { $("#settings-msg").textContent = e.message; $("#settings-msg").style.color = "var(--bad)"; }
 };
 
