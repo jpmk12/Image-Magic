@@ -37,6 +37,7 @@ class App:
         self.jobs = JobRunner(settings_provider)
         self.on_quit = on_quit
         self._last_auto = time.time()
+        self.ask_history: list = []
 
     # ---- API handlers (return JSON-able dicts) -------------------------
     def status(self) -> dict:
@@ -76,6 +77,13 @@ class App:
                 conn.close()
         except ImportError:   # onnxruntime/numpy not installed
             return None
+
+    def ai_client(self):
+        from . import describe
+        key = describe.get_api_key()
+        if not key:
+            raise ValueError("Add your Anthropic API key in Settings first.")
+        return describe.make_client(key)
 
     def ai_counts(self, s):
         from . import describe
@@ -122,6 +130,24 @@ class App:
         if time.time() - self._last_auto >= s.auto_sync_hours * 3600:
             self._last_auto = time.time()
             self.jobs.start("sync", "quick")
+
+
+def find_photos(conn, settings, q: dict) -> list[tuple[int, float]]:
+    """Text query + filters -> [(asset_id, score)]: AI-description word matches first, then smart search."""
+    from . import describe, search
+    text = (q.get("q") or "").strip()[:200]
+    has_filters = any(q.get(k) for k in ("year", "country", "city", "trip", "kind", "person", "month", "day", "chapter"))
+    allowed = None
+    if has_filters:
+        allowed = {r["id"] for r in browse.photos(conn, q, 0, 10**9)["items"]}
+    hits = [(i, 1.0) for i in describe.text_search(conn, text, allowed)]
+    seen = {i for i, _ in hits}
+    if search.model_ready():
+        hits += [(i, s) for i, s in search.search(conn, str(settings.db), search.Model.get(), text, allowed)
+                 if i not in seen]
+    elif not hits and not describe.counts(conn)["described"]:
+        raise ValueError("Search isn't set up yet. Turn on smart search or AI descriptions from the Home tab.")
+    return hits
 
 
 def _open_folder(path: Path) -> None:
@@ -204,7 +230,7 @@ def make_handler(app: App):
                     since = int(self._query().get("since") or 0)
                     return self._json(200, app.jobs.log_since(since))
                 if path.startswith(("/api/photos", "/api/photo/", "/api/facets", "/api/trips", "/api/replay",
-                                    "/api/map", "/api/people", "/api/timeline", "/media/")):
+                                    "/api/map", "/api/people", "/api/timeline", "/api/story", "/media/")):
                     return self._browse(path, self._query())
             except Exception as e:
                 return self._json(500, {"error": str(e)})
@@ -241,6 +267,10 @@ def make_handler(app: App):
                     return self._json(200, browse.facets(conn))
                 if path == "/api/trips":
                     return self._json(200, browse.trips(conn))
+                if path == "/api/story":
+                    from . import ask
+                    key = f"{q.get('kind')}:{int(q.get('id') or 0)}"
+                    return self._json(200, ask.get_story(conn, key) or {"key": key, "text": ""})
                 if path == "/api/timeline":
                     from . import chapters
                     return self._json(200, chapters.timeline(conn))
@@ -280,6 +310,35 @@ def make_handler(app: App):
                 f, ctype = media.viewable(settings.library, settings.originals, row["path"], row["sha256"])
                 return self._file(f, ctype, cache=True)
             return self._json(404, {"error": "not found"})
+
+        def _ai_action(self, path: str, data: dict):
+            from . import ask
+            settings, conn = app.db()
+            try:
+                if path == "/api/story/save":
+                    key = f"{data.get('kind')}:{int(data.get('id') or 0)}"
+                    ask.save_story(conn, key, str(data.get("text", "")), "you", edited=True)
+                    return self._json(200, ask.get_story(conn, key))
+                client = app.ai_client()
+                if path == "/api/story/write":
+                    kind, ident = str(data.get("kind")), int(data.get("id") or 0)
+                    text = ask.write_story(client, ask.story_context(conn, kind, ident))
+                    if not text:
+                        raise ValueError("Claude declined to write this one.")
+                    ask.save_story(conn, f"{kind}:{ident}", text, ask.STORY_MODEL, edited=False)
+                    return self._json(200, ask.get_story(conn, f"{kind}:{ident}"))
+                question = str(data.get("question", "")).strip()[:1000]
+                if not question:
+                    raise ValueError("Ask something first.")
+                if data.get("reset"):
+                    app.ask_history = []
+                asker = ask.Asker(conn, settings, find_photos)
+                r = asker.ask(client, question, app.ask_history)
+                app.ask_history = r["history"]
+                r["items"] = browse.by_ids(conn, r["photos"])
+                return self._json(200, r)
+            finally:
+                conn.close()
 
         def _timeline_action(self, path: str, data: dict):
             from . import chapters
@@ -324,20 +383,8 @@ def make_handler(app: App):
                 conn.close()
 
         def _search(self, conn, settings, q: dict) -> dict:
-            from . import describe, search
             text = q["q"].strip()[:200]
-            has_filters = any(q.get(k) for k in ("year", "country", "city", "trip", "kind", "person", "month", "day", "chapter"))
-            allowed = None
-            if has_filters:
-                allowed = {r["id"] for r in browse.photos(conn, q, 0, 10**9)["items"]}
-            # Word matches in AI descriptions come first, then smart-search matches.
-            hits = [(i, 1.0) for i in describe.text_search(conn, text, allowed)]
-            seen = {i for i, _ in hits}
-            if search.model_ready():
-                hits += [(i, s) for i, s in search.search(conn, str(settings.db), search.Model.get(), text, allowed)
-                         if i not in seen]
-            elif not hits and not describe.counts(conn)["described"]:
-                raise ValueError("Search isn't set up yet. Turn on smart search or AI descriptions from the Home tab.")
+            hits = find_photos(conn, settings, q)
             offset, limit = int(q.get("offset") or 0), min(int(q.get("limit") or 200), 500)
             page = hits[offset:offset + limit]
             items = browse.by_ids(conn, [h[0] for h in page])
@@ -420,6 +467,8 @@ def make_handler(app: App):
                     return self._people_action(path, data)
                 if path.startswith("/api/timeline/"):
                     return self._timeline_action(path, data)
+                if path in ("/api/story/write", "/api/story/save", "/api/ask"):
+                    return self._ai_action(path, data)
                 if path == "/api/private":
                     from . import describe
                     settings, conn = app.db()

@@ -116,6 +116,16 @@
   .rp .prog > div { height: 100%; width: 0; background: var(--accent); border-radius: 99px; }
   .rp .count { font-variant-numeric: tabular-nums; color: #9aa0a9; font-size: 13px; }
   @media (max-width: 760px) { .rp .body { grid-template-columns: 1fr; grid-template-rows: 40% 1fr; } }
+  .ask-log { display: flex; flex-direction: column; gap: 14px; margin-bottom: 16px; }
+  .msg { max-width: 760px; padding: 12px 16px; border-radius: 14px; white-space: pre-wrap; }
+  .msg.q { align-self: flex-end; background: var(--accent); color: var(--accent-text); }
+  .msg.a { align-self: flex-start; background: var(--panel); border: 1px solid var(--line); }
+  .msg .strip { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
+  .msg .strip img { width: 96px; height: 96px; object-fit: cover; border-radius: 6px; cursor: pointer; background: var(--line); }
+  .story { position: fixed; inset: 0; background: rgba(0,0,0,.6); z-index: 2050; display: grid; place-items: center; padding: 20px; }
+  .story .card { background: var(--panel); color: var(--text); border-radius: 14px; width: min(760px, 100%); max-height: 90vh; overflow: auto; padding: 22px 24px; }
+  .story textarea { width: 100%; min-height: 260px; font: inherit; line-height: 1.6; padding: 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--text); resize: vertical; }
+  .story .text { white-space: pre-wrap; line-height: 1.7; font-size: 16px; }
   .people { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 14px; }
   .person { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 12px;
             text-align: center; font: inherit; color: inherit; }
@@ -162,6 +172,7 @@
     <button data-tab="people">People</button>
     <button data-tab="trips">Trips</button>
     <button data-tab="map">Map</button>
+    <button data-tab="ask">Ask</button>
     <button data-tab="settings">Settings</button>
     <button data-tab="log">Activity log</button>
   </nav>
@@ -290,6 +301,18 @@
     </div>
     <div id="timeline"></div>
     <p class="muted" id="tl-empty" style="display:none">Nothing here yet. Chapters appear once photos with dates and locations are downloaded.</p>
+  </section>
+
+  <!-- ASK -->
+  <section id="tab-ask" class="hidden">
+    <p class="muted small">Ask about your own life: <i>"When did we last go to the beach?"</i>, <i>"How many countries have I been to?"</i>,
+      <i>"Show me the first photos from Germany"</i>. Claude reads your catalog (dates, places, people's names, captions), never the photos themselves.</p>
+    <div class="ask-log" id="ask-log"></div>
+    <form class="row" id="ask-form">
+      <input type="text" id="ask-q" placeholder="Ask about your photos…" style="max-width:640px;flex:1" autocomplete="off">
+      <button class="btn primary" type="submit" id="ask-send">Ask</button>
+      <button class="btn" type="button" id="ask-reset" title="Start a new conversation">New</button>
+    </form>
   </section>
 
   <!-- PEOPLE -->
@@ -442,6 +465,24 @@
     <span class="count" id="rp-count"></span>
     <select id="rp-speed" title="Seconds per photo"><option value="5">Slow</option><option value="3" selected>Normal</option><option value="1.5">Fast</option></select>
     <button id="rp-close" title="Close (Esc)">✕ Close</button>
+  </div>
+</div>
+
+<div class="story hidden" id="story">
+  <div class="card">
+    <div class="row" style="justify-content:space-between">
+      <h2 id="story-title" style="margin:0"></h2>
+      <button class="btn" id="story-close">✕</button>
+    </div>
+    <p class="muted small" id="story-meta"></p>
+    <div class="text" id="story-text"></div>
+    <textarea id="story-edit" class="hidden"></textarea>
+    <div class="row" style="margin-top:14px">
+      <button class="btn primary" id="story-write">✍ Write with AI</button>
+      <button class="btn" id="story-editbtn">Edit</button>
+      <button class="btn hidden" id="story-save">Save</button>
+      <span class="small muted" id="story-note"></span>
+    </div>
   </div>
 </div>
 
@@ -982,7 +1023,9 @@ async function loadTimeline() {
     };
     const sub = document.createElement("div"); sub.className = "s";
     sub.textContent = `${fmtDate(ch.start_at)} – ${fmtDate(ch.end_at)} · ${fmt(ch.photo_count)} photos${ch.auto === 0 ? " · edited" : ""}`;
-    txt.append(title, sub); head.append(img, txt); sec.append(head);
+    const stb = document.createElement("button"); stb.className = "btn"; stb.textContent = "✍ Story"; stb.style.marginLeft = "auto";
+    stb.onclick = () => openStory("chapter", ch.id, ch.title);
+    txt.append(title, sub); head.append(img, txt); if (ch.id) head.append(stb); sec.append(head);
     const y0 = +ch.start_at.slice(0, 4), y1 = +ch.end_at.slice(0, 4);
     for (let y = y1; y >= y0; y--) {
       const inRange = m => m >= ch.start_at.slice(0, 7) && m <= ch.end_at.slice(0, 7);
@@ -1116,6 +1159,58 @@ document.addEventListener("keydown", e => {
   if (e.key === "ArrowRight") $("#rp-next").click();
 });
 
+// ---- stories
+const story = { kind: "", id: 0 };
+async function openStory(kind, id, title) {
+  story.kind = kind; story.id = id;
+  $("#story-title").textContent = title; $("#story").classList.remove("hidden");
+  $("#story-edit").classList.add("hidden"); $("#story-text").classList.remove("hidden"); $("#story-save").classList.add("hidden");
+  const s = await api(`/api/story?kind=${kind}&id=${id}`).catch(() => ({ text: "" }));
+  renderStory(s);
+}
+function renderStory(s) {
+  $("#story-text").textContent = s.text || "No story yet. Click \"Write with AI\" to draft one from the dates, places and people in these photos, then edit it into your own words.";
+  $("#story-meta").textContent = s.text ? (s.edited ? "Edited by you" : `Drafted by ${s.model}`) + (s.created ? " · " + new Date(s.created).toLocaleDateString() : "") : "";
+  $("#story-write").textContent = s.text ? "✍ Rewrite with AI" : "✍ Write with AI";
+  $("#story-edit").value = s.text || "";
+}
+$("#story-close").onclick = () => $("#story").classList.add("hidden");
+$("#story-write").onclick = async () => {
+  if ($("#story-edit").value && !confirm("Replace the current story with a new AI draft?")) return;
+  $("#story-note").textContent = "Writing… (about 20 seconds)"; $("#story-write").disabled = true;
+  try { renderStory(await api("/api/story/write", { kind: story.kind, id: story.id })); $("#story-note").textContent = ""; }
+  catch (e) { $("#story-note").textContent = e.message; }
+  $("#story-write").disabled = false;
+};
+$("#story-editbtn").onclick = () => { $("#story-edit").classList.remove("hidden"); $("#story-text").classList.add("hidden"); $("#story-save").classList.remove("hidden"); $("#story-edit").focus(); };
+$("#story-save").onclick = async () => {
+  try { renderStory(await api("/api/story/save", { kind: story.kind, id: story.id, text: $("#story-edit").value })); }
+  catch (e) { return toast(e.message); }
+  $("#story-edit").classList.add("hidden"); $("#story-text").classList.remove("hidden"); $("#story-save").classList.add("hidden");
+};
+
+// ---- ask my life
+function addMsg(cls, text, items) {
+  const m = document.createElement("div"); m.className = "msg " + cls; m.textContent = text;
+  if (items && items.length) {
+    const strip = document.createElement("div"); strip.className = "strip";
+    items.forEach((it, i) => { const im = document.createElement("img"); im.src = media("thumb", it.id); im.alt = ""; im.onclick = () => openLightbox(i, items); strip.append(im); });
+    m.append(strip);
+  }
+  $("#ask-log").append(m); m.scrollIntoView({ block: "end" });
+  return m;
+}
+$("#ask-form").onsubmit = async ev => {
+  ev.preventDefault();
+  const q = $("#ask-q").value.trim(); if (!q) return;
+  $("#ask-q").value = ""; addMsg("q", q);
+  const thinking = addMsg("a", "Looking through your library…"); $("#ask-send").disabled = true;
+  try { const r = await api("/api/ask", { question: q }); thinking.remove(); addMsg("a", r.answer || "I couldn't find an answer in your library.", r.items); }
+  catch (e) { thinking.textContent = e.message; }
+  $("#ask-send").disabled = false; $("#ask-q").focus();
+};
+$("#ask-reset").onclick = async () => { $("#ask-log").replaceChildren(); await api("/api/ask", { question: "(new conversation)", reset: true }).catch(() => {}); };
+
 // ---- trips
 async function loadTrips() {
   const list = await api("/api/trips").catch(e => { toast(e.message); return []; });
@@ -1136,7 +1231,10 @@ async function loadTrips() {
     b.onclick = () => { showTab("photos"); setFilters({ trip: t.id, tripTitle: `${t.title}, ${start.toLocaleDateString(undefined, { month: "short", year: "numeric" })}` }); };
     const play = document.createElement("button"); play.className = "btn primary"; play.textContent = "▶ Replay";
     play.style.margin = "0 14px 12px"; play.onclick = ev => { ev.stopPropagation(); openReplay({ trip: t.id }, t.title); };
-    b.append(play);
+    const st = document.createElement("button"); st.className = "btn"; st.textContent = "✍ Story";
+    st.style.margin = "0 14px 12px"; st.onclick = ev => { ev.stopPropagation(); openStory("trip", t.id, t.title); };
+    const rowb = document.createElement("div"); rowb.className = "row"; rowb.append(play, st);
+    b.append(rowb);
     return b;
   }));
 }

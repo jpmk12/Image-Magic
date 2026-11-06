@@ -258,4 +258,8 @@ Service features (flying log, squadron yearbook) slot into S2 (log) and S9 (year
   returns caption/keywords/setting/people count/text/quality as JSON per photo; downscaled,
   metadata-stripped copies; Private flag; cost estimate and spend tracking; descriptions feed
   the search box alongside smart search.
-- Next: S5 – Stories and "Ask my life".
+- **S5 – Stories and Ask: built** (v0.9.0). Claude Opus 5.5 with server-side fallback;
+  stories from a compact text context (days → places, people, sampled captions, milestones),
+  editable and persisted; Ask uses three tools (library_summary, search_photos, show_photos)
+  in a bounded loop, with per-session conversation history.
+- Next: S6 – Kids' stories (growing-up time-lapse, birthday reel, PDF book).

@@ -69,6 +69,12 @@ program only. Your photos and settings are kept.
   metadata removed is sent; nothing else about you is. Mark a photo **Private** in the viewer
   and it is never sent. Start with **Try on 25 photos**; the Home tab shows the estimated
   cost before you describe everything (about $3–4 for 16,000 photos with Haiku).
+- **Stories:** on a trip card or a chapter header, click **✍ Story**. Claude drafts 2–4 short
+  paragraphs from the dates, places, people and captions (text only, no photos are sent), and
+  you edit it into your own words. Your edits are kept.
+- **Ask:** the **Ask** tab answers questions about your own life ("When did we last go to the
+  beach?", "How many countries have the kids been to?") and shows the photos it found. Claude
+  reads the catalog through a few tools; it never sees the photos. Needs your API key.
 - **People:** turn it on once from the Home tab (about 290 MB of face models, verified by
   fingerprint). The app finds every face and groups them by person. On the **People** tab,
   click **"Who is this?"** to name a group, click the face to see all of that person's photos,
