@@ -22,10 +22,6 @@ FACE_PX = 320
 
 def ensure_schema(conn: sqlite3.Connection) -> None:
     faces.ensure_schema(conn)
-    have = {r["name"] for r in conn.execute("PRAGMA table_info(persons)")}
-    if "birthday" not in have:
-        conn.execute("ALTER TABLE persons ADD COLUMN birthday TEXT")
-        conn.commit()
 
 
 def set_birthday(conn: sqlite3.Connection, pid: int, birthday: str | None) -> None:
@@ -119,6 +115,8 @@ def make_gif(conn: sqlite3.Connection, originals: Path, library: Path, pid: int)
             label = f"{fr['age']} · {fr['date'][:7]}"
         ImageDraw.Draw(canvas).text((12, FACE_PX + 10), label, fill=(240, 240, 240), font=font)
         frames.append(canvas)
+    if not frames:
+        raise ValueError("Couldn't read any of this person's photos.")
     frames[0].save(out, save_all=True, append_images=frames[1:], duration=450, loop=0, optimize=False)
     return out
 

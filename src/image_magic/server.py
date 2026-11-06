@@ -33,6 +33,7 @@ STATIC_TYPES = {".js": "text/javascript", ".css": "text/css", ".png": "image/png
 class App:
     def __init__(self, settings_provider=Settings.load, on_quit=None):
         self.token = secrets.token_urlsafe(24)
+        self.nonce = secrets.token_urlsafe(16)   # for the page's inline script under CSP
         self.settings_provider = settings_provider
         self.jobs = JobRunner(settings_provider)
         self.on_quit = on_quit
@@ -40,43 +41,47 @@ class App:
         self.ask_history: list = []
 
     # ---- API handlers (return JSON-able dicts) -------------------------
+    _stats_cache: tuple[float, str, dict] = (0.0, "", {})
+
     def status(self) -> dict:
         s = self.settings_provider()
         stats = None
         if s.db.exists():
-            conn = catalog.connect(s.db)
-            try:
-                stats = catalog.stats(conn)
-            finally:
-                conn.close()
+            # Polled every 1.5 s by the page: reuse the numbers for a few seconds unless a job just changed state.
+            key = f"{s.db}|{self.jobs.state.state}|{self.jobs.state.finished}"
+            t, k, cached = self._stats_cache
+            if k == key and time.time() - t < 4:
+                stats = cached["stats"]
+            else:
+                conn = catalog.connect(s.db)
+                try:
+                    stats = catalog.stats(conn)
+                    extra = {"search": self.search_counts_conn(conn), "people": self.people_counts_conn(conn),
+                             "ai": self.ai_counts_conn(conn, s)}
+                finally:
+                    conn.close()
+                cached = {"stats": stats, **extra}
+                self._stats_cache = (time.time(), key, cached)
+                stats = cached["stats"]
+        else:
+            cached = {"search": None, "people": None, "ai": {"has_key": False}}
+            from . import describe
+            cached["ai"] = {"has_key": bool(describe.get_api_key())}
         return {
             "version": __version__,
             "configured": bool(s.apple_id),
             "map_online": s.map_online,
             "smart_search": s.smart_search,
-            "search": self.search_counts(s),
+            "search": cached["search"],
             "people_on": s.people,
-            "people": self.people_counts(s),
+            "people": cached["people"],
             "ai_on": s.ai_descriptions,
             "ai_model": s.ai_model,
-            "ai": self.ai_counts(s),
+            "ai": cached["ai"],
             "library": str(s.library),
             "stats": stats,
             "job": self.jobs.snapshot(),
         }
-
-    def search_counts(self, s):
-        if not s.db.exists():
-            return None
-        try:
-            from . import search
-            conn = catalog.connect(s.db)
-            try:
-                return search.counts(conn)
-            finally:
-                conn.close()
-        except ImportError:   # onnxruntime/numpy not installed
-            return None
 
     def ai_client(self):
         from . import describe
@@ -85,26 +90,18 @@ class App:
             raise ValueError("Add your Anthropic API key in Settings first.")
         return describe.make_client(key)
 
-    def ai_counts(self, s):
+    def ai_counts_conn(self, conn, s):
         from . import describe
-        if not s.db.exists():
-            return {"has_key": bool(describe.get_api_key())}
-        conn = catalog.connect(s.db)
-        try:
-            return describe.counts(conn, s.ai_model)
-        finally:
-            conn.close()
+        return describe.counts(conn, s.ai_model)
 
-    def people_counts(self, s):
-        if not s.db.exists():
-            return None
+    def people_counts_conn(self, conn):
+        from . import faces
+        return faces.counts(conn)
+
+    def search_counts_conn(self, conn):
         try:
-            from . import faces
-            conn = catalog.connect(s.db)
-            try:
-                return faces.counts(conn)
-            finally:
-                conn.close()
+            from . import search
+            return search.counts(conn)
         except ImportError:
             return None
 
@@ -139,7 +136,7 @@ def find_photos(conn, settings, q: dict) -> list[tuple[int, float]]:
     has_filters = any(q.get(k) for k in ("year", "country", "city", "trip", "kind", "person", "month", "day", "chapter"))
     allowed = None
     if has_filters:
-        allowed = {r["id"] for r in browse.photos(conn, q, 0, 10**9)["items"]}
+        allowed = browse.ids(conn, q)
     hits = [(i, 1.0) for i in describe.text_search(conn, text, allowed)]
     seen = {i for i, _ in hits}
     if search.model_ready():
@@ -162,6 +159,11 @@ def _open_folder(path: Path) -> None:
 
 def make_handler(app: App):
     page = (resources.files("image_magic") / "static" / "index.html").read_text(encoding="utf-8")
+    assert page.count("<script>\n") == 1, "expected exactly one inline script"
+    page = page.replace("<script>\n", f'<script nonce="{app.nonce}">\n', 1)
+    csp = ("default-src 'self'; script-src 'self' 'nonce-" + app.nonce + "'; style-src 'self' 'unsafe-inline'; "
+           "img-src 'self' data: blob: https://tile.openstreetmap.org; media-src 'self' blob:; connect-src 'self'; "
+           "frame-ancestors 'none'; base-uri 'none'; form-action 'self'; object-src 'none'")
 
     class Handler(BaseHTTPRequestHandler):
         server_version = "ImageMagic"
@@ -179,6 +181,9 @@ def make_handler(app: App):
             self.send_header("Content-Length", str(len(body)))
             self.send_header("Cache-Control", "no-store")
             self.send_header("X-Frame-Options", "DENY")
+            self.send_header("X-Content-Type-Options", "nosniff")
+            if ctype.startswith("text/html"):
+                self.send_header("Content-Security-Policy", csp)
             self.end_headers()
             self.wfile.write(body)
 
@@ -192,8 +197,10 @@ def make_handler(app: App):
             if not self._host_ok():
                 self._json(HTTPStatus.FORBIDDEN, {"error": "bad host"})
                 return False
-            # <img>/<video> tags can't send headers, so media URLs carry ?t=<token>.
-            token = self.headers.get("X-Token") or self._query().get("t", "")
+            # <img>/<video> tags can't send headers, so GET /media/* may carry ?t=<token>.
+            token = self.headers.get("X-Token") or ""
+            if not token and self.command == "GET" and self.path.startswith("/media/"):
+                token = self._query().get("t", "")
             if not secrets.compare_digest(token, app.token):
                 self._json(HTTPStatus.FORBIDDEN, {"error": "bad token"})
                 return False
@@ -427,7 +434,7 @@ def make_handler(app: App):
                     kids.set_birthday(conn, int(data["id"]), str(data.get("birthday") or "") or None)
                 elif action == "regroup":
                     faces.group_faces(conn)
-                if action in ("rename", "merge", "regroup", "birthday", "move-face"):
+                if action in ("rename", "merge", "regroup", "birthday", "move-face", "hide"):
                     from . import chapters
                     chapters.rebuild_milestones(conn)
                 else:
@@ -476,6 +483,7 @@ def make_handler(app: App):
             if partial:
                 self.send_header("Content-Range", f"bytes {start}-{end}/{size}")
             self.send_header("Cache-Control", "private, max-age=86400" if cache else "no-store")
+            self.send_header("X-Content-Type-Options", "nosniff")
             self.end_headers()
             with f.open("rb") as fh:
                 fh.seek(start)

@@ -164,7 +164,8 @@ def fetch_weather(lat: float, lon: float, day: str) -> dict | None:   # pragma: 
 
 def weather_for(conn: sqlite3.Connection, lat: float, lon: float, day: str, fetch=fetch_weather) -> dict | None:
     """Daily weather from Open-Meteo (free, no key), cached per ~1 km cell and day."""
-    conn.executescript(SCHEMA)
+    from .catalog import run_script
+    run_script(conn, SCHEMA)
     key = f"{lat:.2f},{lon:.2f},{day}"
     row = conn.execute("SELECT data FROM weather WHERE key = ?", (key,)).fetchone()
     if row:

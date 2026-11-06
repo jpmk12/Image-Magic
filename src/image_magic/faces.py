@@ -299,11 +299,8 @@ def load_for_faces(path: Path) -> Image.Image:
 # ---- catalog integration -------------------------------------------------------
 
 def ensure_schema(conn: sqlite3.Connection) -> None:
-    conn.executescript(SCHEMA)
-    have = {r["name"] for r in conn.execute("PRAGMA table_info(persons)")}
-    if "birthday" not in have:
-        conn.execute("ALTER TABLE persons ADD COLUMN birthday TEXT")
-        conn.commit()
+    from .catalog import run_script
+    run_script(conn, SCHEMA)
 
 
 def pending(conn: sqlite3.Connection) -> list[sqlite3.Row]:
@@ -357,7 +354,11 @@ def scan_photos(conn: sqlite3.Connection, originals: Path, model: FaceModel,
             im = load_for_faces(originals / row["path"])
             faces = model.detect(im)
         except Exception:
-            continue  # unreadable file: retried next time
+            # Unreadable file: remember that so it isn't retried forever.
+            conn.execute("INSERT OR REPLACE INTO face_scans (asset_id, model, n_faces) VALUES (?, ?, -1)",
+                         (row["id"], MODEL_NAME))
+            done += 1
+            continue
         for f in faces:
             size = f["box"][2] - f["box"][0]
             aligned = align_face(im, f["kps"]) if size >= MIN_FACE_PX else None
@@ -434,21 +435,27 @@ def group_faces(conn: sqlite3.Connection) -> dict:
             centres[pid] = centre(members[pid])
             assigned += 1
 
-    # 3. Leftovers form new groups.
+    # 3. Leftovers form new groups. Running sums in a preallocated matrix keep this
+    #    linear in the number of faces times the number of groups, with no copying.
     leftovers = [f for f in free if person_of[f] is None]
     new_groups: list[list[int]] = []
-    new_centres: list[np.ndarray] = []
+    sums = np.zeros((max(1, len(leftovers)), mat.shape[1]), dtype=np.float32)
+    cents = np.zeros_like(sums)
+    n_groups = 0
     for fid in leftovers:
         v = mat[index[fid]]
-        if new_centres:
-            sims = np.stack(new_centres) @ v
+        if n_groups:
+            sims = cents[:n_groups] @ v
             k = int(np.argmax(sims))
             if sims[k] >= JOIN_THRESHOLD:
                 new_groups[k].append(fid)
-                new_centres[k] = centre(new_groups[k])
+                sums[k] += v
+                cents[k] = sums[k] / max(np.linalg.norm(sums[k]), 1e-8)
                 continue
         new_groups.append([fid])
-        new_centres.append(v)
+        sums[n_groups] = v
+        cents[n_groups] = v
+        n_groups += 1
     for g in new_groups:
         if len(g) < MIN_GROUP:
             continue
@@ -460,34 +467,50 @@ def group_faces(conn: sqlite3.Connection) -> dict:
             person_of[fid] = pid
             assigned += 1
 
-    # 4. Merge near-identical unnamed groups (into named ones too).
-    changed = True
-    while changed and len(centres) > 1:
-        changed = False
-        pids = list(centres)
-        C = np.stack([centres[p] for p in pids])
+    # 4. Merge near-identical unnamed groups (into named ones too). The similarity
+    #    matrix is computed once; each merge updates one row/column.
+    pids = list(centres)
+    if len(pids) > 1:
+        C = np.stack([centres[p] for p in pids]).astype(np.float32)
         S = C @ C.T
         np.fill_diagonal(S, -1)
-        best = np.unravel_index(int(np.argmax(S)), S.shape)
-        a, b = pids[best[0]], pids[best[1]]
-        if S[best] >= MERGE_THRESHOLD and not (a in named and b in named):
+        alive = np.ones(len(pids), dtype=bool)
+        while True:
+            S[~alive, :] = -1
+            S[:, ~alive] = -1
+            i, j = np.unravel_index(int(np.argmax(S)), S.shape)
+            if S[i, j] < MERGE_THRESHOLD:
+                break
+            a, b = pids[i], pids[j]
+            if a in named and b in named:
+                S[i, j] = S[j, i] = -1
+                continue
             keep, drop = (a, b) if (a in named or a < b) and b not in named else (b, a)
-            for fid in members.pop(drop):
+            ki, di = (i, j) if keep == a else (j, i)
+            dropped = members.pop(drop)
+            for fid in dropped:
                 person_of[fid] = keep
-            members[keep] = members.get(keep, []) + [f for f in person_of if person_of[f] == keep and f not in members[keep]]
+            members[keep] = members.get(keep, []) + dropped
             centres[keep] = centre(members[keep])
+            C[ki] = centres[keep]
+            S[ki, :] = C @ C[ki]
+            S[:, ki] = S[ki, :]
+            S[ki, ki] = -1
+            alive[di] = False
             centres.pop(drop)
+            # Locked faces (your decisions) follow the merge too.
+            conn.execute("UPDATE faces SET person_id = ? WHERE person_id = ?", (keep, drop))
             conn.execute("DELETE FROM persons WHERE id = ?", (drop,))
-            changed = True
 
     conn.executemany("UPDATE faces SET person_id = ? WHERE id = ? AND locked = 0",
                      [(pid, fid) for fid, pid in person_of.items()])
-    # Remove unnamed persons left with too few faces; refresh covers.
+    # Remove unnamed persons left with too few faces (unless you placed a face there); refresh covers.
     for pid, fids in members.items():
         if pid in named:
             continue
-        if len(fids) < MIN_GROUP:
-            conn.execute("UPDATE faces SET person_id = NULL WHERE person_id = ? AND locked = 0", (pid,))
+        has_locked = conn.execute("SELECT 1 FROM faces WHERE person_id = ? AND locked = 1 LIMIT 1", (pid,)).fetchone()
+        if len(fids) < MIN_GROUP and not has_locked:
+            conn.execute("UPDATE faces SET person_id = NULL WHERE person_id = ?", (pid,))
             conn.execute("DELETE FROM persons WHERE id = ?", (pid,))
     refresh_covers(conn)
     conn.commit()
@@ -570,16 +593,18 @@ def face_crop(conn: sqlite3.Connection, originals: Path, library: Path, face_id:
     if not row:
         return None
     dest = library / "derived" / "faces" / (f"{face_id}.jpg" if size == 160 else f"{face_id}-{size}.jpg")
-    if dest.exists():
-        return dest
-    im = load_for_faces(originals / row["path"])
-    w, h = im.size
-    cx, cy = (row["x1"] + row["x2"]) / 2 * w, (row["y1"] + row["y2"]) / 2 * h
-    half = max(row["x2"] - row["x1"], row["y2"] - row["y1"]) * max(w, h) * 0.8
-    box = (int(max(0, cx - half)), int(max(0, cy - half)), int(min(w, cx + half)), int(min(h, cy + half)))
-    crop = im.crop(box).resize((size, size), Image.LANCZOS)
-    dest.parent.mkdir(parents=True, exist_ok=True)
-    tmp = dest.with_suffix(".tmp")
-    crop.save(tmp, "JPEG", quality=85)
-    tmp.replace(dest)
+    from .media import _lock_for
+    with _lock_for(str(dest)):
+        if dest.exists():
+            return dest
+        im = load_for_faces(originals / row["path"])
+        w, h = im.size
+        cx, cy = (row["x1"] + row["x2"]) / 2 * w, (row["y1"] + row["y2"]) / 2 * h
+        half = max(row["x2"] - row["x1"], row["y2"] - row["y1"]) * max(w, h) * 0.8
+        box = (int(max(0, cx - half)), int(max(0, cy - half)), int(min(w, cx + half)), int(min(h, cy + half)))
+        crop = im.crop(box).resize((size, size), Image.LANCZOS)
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        tmp = dest.with_suffix(".tmp")
+        crop.save(tmp, "JPEG", quality=85)
+        tmp.replace(dest)
     return dest

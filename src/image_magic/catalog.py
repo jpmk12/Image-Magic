@@ -67,11 +67,33 @@ def now_iso() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
+def run_script(conn: sqlite3.Connection, sql: str) -> None:
+    """Run DDL statement by statement (executescript would commit any open transaction)."""
+    buf = ""
+    for line in sql.splitlines():
+        buf += line + "\n"
+        if sqlite3.complete_statement(buf):
+            if buf.strip(" \n;"):
+                conn.execute(buf)
+            buf = ""
+    if buf.strip(" \n;") and not buf.strip().startswith("--"):
+        conn.execute(buf)
+
+
+class LibraryUnavailable(RuntimeError):
+    """The photo folder is missing or looks unplugged; nothing was changed."""
+
+
 def connect(db_file: Path) -> sqlite3.Connection:
     db_file.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(db_file)
+    conn = sqlite3.connect(db_file, timeout=30)
     conn.row_factory = sqlite3.Row
-    conn.executescript(SCHEMA)
+    try:
+        conn.execute("PRAGMA journal_mode=WAL")      # readers never block on a long write
+        conn.execute("PRAGMA synchronous=NORMAL")
+    except sqlite3.OperationalError:
+        pass
+    run_script(conn, SCHEMA)
     have = {row["name"] for row in conn.execute("PRAGMA table_info(assets)")}
     for col, typ in MIGRATIONS.items():
         if col not in have:
@@ -82,6 +104,14 @@ def connect(db_file: Path) -> sqlite3.Connection:
             conn.execute(f"ALTER TABLE trips ADD COLUMN {col} {typ}")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_assets_country ON assets(country_code)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_assets_trip ON assets(trip_id)")
+    # Every feature's tables exist from the start, so request handlers never run DDL.
+    from . import ask, chapters, describe, faces, kids, review, search
+    for mod in (faces, describe, search, chapters, ask):
+        run_script(conn, mod.SCHEMA if mod is not describe else describe.DB_SCHEMA)
+    run_script(conn, review.SCHEMA)
+    have_p = {row["name"] for row in conn.execute("PRAGMA table_info(persons)")}
+    if "birthday" not in have_p:
+        conn.execute("ALTER TABLE persons ADD COLUMN birthday TEXT")
     conn.commit()
     return conn
 
@@ -132,7 +162,7 @@ class ScanResult:
         return self.new + self.updated + self.unchanged
 
 
-def scan(conn: sqlite3.Connection, originals: Path, progress=None) -> ScanResult:
+def scan(conn: sqlite3.Connection, originals: Path, progress=None, cancelled=lambda: False) -> ScanResult:
     """Add new and changed files to the catalog; flag files that disappeared."""
     result = ScanResult()
     seen: set[str] = set()
@@ -140,9 +170,21 @@ def scan(conn: sqlite3.Connection, originals: Path, progress=None) -> ScanResult
         row["path"]: row
         for row in conn.execute("SELECT id, path, size, mtime, missing FROM assets")
     }
-    files = sorted(p for p in originals.rglob("*") if p.is_file()) if originals.exists() else []
+    if not originals.exists():
+        raise LibraryUnavailable(f"The photo folder {originals} is not there. Is the drive plugged in?")
+    files = sorted(p for p in originals.rglob("*") if p.is_file())
+    known = sum(1 for r in existing.values() if not r["missing"])
+    if known >= 20 and len(files) < known / 2:
+        raise LibraryUnavailable(
+            f"Only {len(files):,} files were found where {known:,} are expected. The catalog was left alone; "
+            "check that the photo folder is complete (drive plugged in, not renamed) and try again.")
 
     for i, path in enumerate(files, 1):
+        if cancelled():
+            conn.commit()
+            raise InterruptedError("stopped")
+        if progress and i % 100 == 0:
+            progress(i, len(files))
         rel = _rel(path, originals)
         if any(part.startswith(".") for part in Path(rel).parts):
             continue  # hidden/tool folders, e.g. .icloudpd-pruned
@@ -188,8 +230,8 @@ def scan(conn: sqlite3.Connection, originals: Path, progress=None) -> ScanResult
                 {**values, "first_seen": now_iso()},
             )
             result.new += 1
-        if progress and i % 100 == 0:
-            progress(i, len(files))
+        if (result.new + result.updated) % 200 == 0:
+            conn.commit()   # keep write transactions short so the UI stays responsive
 
     for rel, row in existing.items():
         if rel not in seen and not row["missing"]:
@@ -248,12 +290,19 @@ class VerifyResult:
     missing: list[str] = field(default_factory=list)
 
 
-def verify(conn: sqlite3.Connection, originals: Path, progress=None) -> VerifyResult:
+def verify(conn: sqlite3.Connection, originals: Path, progress=None, cancelled=lambda: False) -> VerifyResult:
     """Re-read every file and compare it with the checksum in the catalog."""
     result = VerifyResult()
     rows = conn.execute("SELECT id, path, sha256 FROM assets WHERE missing = 0").fetchall()
+    if not originals.exists():
+        raise LibraryUnavailable(f"The photo folder {originals} is not there. Is the drive plugged in?")
     stamp = now_iso()
     for i, row in enumerate(rows, 1):
+        if cancelled():
+            conn.commit()
+            raise InterruptedError("stopped")
+        if i % 200 == 0:
+            conn.commit()
         path = originals / row["path"]
         if not path.is_file():
             result.missing.append(row["path"])

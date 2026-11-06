@@ -64,6 +64,18 @@ def photos(conn: sqlite3.Connection, params: dict, offset: int = 0, limit: int =
     return {"total": total, "items": items}
 
 
+def ids(conn: sqlite3.Connection, params: dict) -> set[int]:
+    """Just the ids that match the filters (for intersecting with search results)."""
+    where, args = _filters(params)
+    return {r[0] for r in conn.execute(f"SELECT id FROM assets WHERE {where}", args)}
+
+
+def ids(conn: sqlite3.Connection, params: dict) -> set[int]:
+    """Just the ids that match the filters (for intersecting with search results)."""
+    where, args = _filters(params)
+    return {r[0] for r in conn.execute(f"SELECT id FROM assets WHERE {where}", args)}
+
+
 def replay(conn: sqlite3.Connection, params: dict, limit: int = 2000) -> list[dict]:
     """Items for the replay player: the filtered set in time order, with Live Photo clips."""
     where, args = _filters(params)

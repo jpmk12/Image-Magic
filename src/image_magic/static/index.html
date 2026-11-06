@@ -1139,13 +1139,17 @@ async function loadMorePhotos() {
     box.append(frag);
     grid.offset += res.items.length;
     $("#f-count").textContent = fmt(grid.total) + " items";
+    $("#load-more").classList.toggle("hidden", !(grid.items.length >= AUTO_LOAD_MAX && grid.offset < grid.total));
     $("#grid-empty").style.display = grid.total || grid.filters.q ? "none" : "";
   } catch (e) { toast(e.message); }
   finally { if (mine === grid) grid.loading = false; }
 }
+const AUTO_LOAD_MAX = 3000;   // beyond this, ask before adding more tiles to the page
 new IntersectionObserver(entries => {
-  if (entries.some(e => e.isIntersecting) && grid.loaded) loadMorePhotos();
+  if (entries.some(e => e.isIntersecting) && grid.loaded && grid.items.length < AUTO_LOAD_MAX) loadMorePhotos();
 }, { rootMargin: "800px" }).observe($("#grid-more"));
+$("#grid-more").innerHTML = '<button class="btn hidden" id="load-more">Show more</button>';
+$("#load-more").onclick = loadMorePhotos;
 
 // ---- lightbox
 let lbIndex = -1, lbItems = null;
@@ -1490,8 +1494,9 @@ async function loadMemories() {
       im.onclick = () => openLightbox(side === "then" ? 0 : 1, [p.then, p.now]); imgs.append(im);
     }
     const meta = document.createElement("div"); meta.className = "meta";
-    const l = document.createElement("span"); l.innerHTML = `<b>${p.then.taken_at.slice(0, 4)}</b>${p.place}`;
-    const r = document.createElement("span"); r.style.textAlign = "right"; r.innerHTML = `<b>${p.now.taken_at.slice(0, 4)}</b>${Math.round(p.days / 365)} years apart`;
+    const mk = (year, text, right) => { const s = document.createElement("span"); if (right) s.style.textAlign = "right";
+      const bb = document.createElement("b"); bb.textContent = year; s.append(bb, document.createTextNode(text)); return s; };
+    const l = mk(p.then.taken_at.slice(0, 4), p.place), r = mk(p.now.taken_at.slice(0, 4), `${Math.round(p.days / 365)} years apart`, true);
     meta.append(l, r); card.append(imgs, meta); return card;
   }));
 }
@@ -1592,7 +1597,10 @@ async function exportPerson(kind) {
   try {
     const r = await api(`/api/people/${kind}?id=${grow.pid}`);
     $("#grow-note").textContent = "Saved to the exports folder in your library.";
-    window.open(`/media/export/${encodeURIComponent(r.file)}?t=${encodeURIComponent(TOKEN)}`, "_blank");
+    const res = await fetch(`/media/export/${encodeURIComponent(r.file)}`, { headers: { "X-Token": TOKEN } });
+    const blob = await res.blob(), url = URL.createObjectURL(blob);
+    const a = document.createElement("a"); a.href = url; a.download = r.file; a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
   } catch (e) { $("#grow-note").textContent = e.message; }
 }
 $("#grow-gif").onclick = () => exportPerson("gif");

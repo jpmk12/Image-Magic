@@ -163,18 +163,15 @@ def describe_one(client, model: str, jpeg: bytes, context: str = "") -> dict:
 # ---- catalog integration -------------------------------------------------------
 
 def ensure_schema(conn: sqlite3.Connection) -> None:
-    conn.executescript(DB_SCHEMA)
-    have = {r["name"] for r in conn.execute("PRAGMA table_info(assets)")}
-    if "private" not in have:
-        conn.execute("ALTER TABLE assets ADD COLUMN private INTEGER NOT NULL DEFAULT 0")
-    conn.commit()
+    from .catalog import run_script
+    run_script(conn, DB_SCHEMA)
 
 
 def pending(conn: sqlite3.Connection) -> list[sqlite3.Row]:
     ensure_schema(conn)
     return conn.execute(
         """SELECT a.id, a.path, a.taken_at, a.city, a.country FROM assets a
-           LEFT JOIN descriptions d ON d.asset_id = a.id
+           LEFT JOIN descriptions d ON d.asset_id = a.id AND d.status != 'error'
            WHERE d.asset_id IS NULL AND a.kind = 'photo' AND a.missing = 0 AND a.duplicate_of IS NULL
              AND a.private = 0
            ORDER BY a.taken_at DESC""").fetchall()
@@ -209,10 +206,9 @@ def run(conn: sqlite3.Connection, originals: Path, client, model: str,
     lock = threading.Lock()
 
     def work(row):
-        ctx = ", ".join(x for x in [row["taken_at"][:10] if row["taken_at"] else "",
-                                    row["city"], row["country"]] if x)
+        # Only the picture goes out: no date, place or file name.
         jpeg = prepare_image(originals / row["path"])
-        return row["id"], describe_one(client, model, jpeg, ctx)
+        return row["id"], describe_one(client, model, jpeg)
 
     with ThreadPoolExecutor(max_workers=WORKERS) as pool:
         futures = {}
@@ -233,6 +229,7 @@ def run(conn: sqlite3.Connection, originals: Path, client, model: str,
                     asset_id = row["id"]
                     msg = str(e)
                     if "authentication" in msg.lower() or "401" in msg:
+                        pool.shutdown(wait=False, cancel_futures=True)
                         raise RuntimeError("The API key was rejected. Check it in Settings.") from e
                 if d is not None:
                     with lock:
@@ -254,10 +251,13 @@ def run(conn: sqlite3.Connection, originals: Path, client, model: str,
                         errors += 1
                 if progress:
                     progress(done + refused + errors, total)
-                if not cancelled():
-                    nxt = next(it, None)
-                    if nxt is not None:
-                        futures[pool.submit(work, nxt)] = nxt
+                if cancelled():
+                    pool.shutdown(wait=False, cancel_futures=True)
+                    futures.clear()
+                    break
+                nxt = next(it, None)
+                if nxt is not None:
+                    futures[pool.submit(work, nxt)] = nxt
                 break
     return {"described": done, "refused": refused, "errors": errors, "total": total}
 

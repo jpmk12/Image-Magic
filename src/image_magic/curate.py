@@ -142,15 +142,15 @@ def suggest_for_trip(conn: sqlite3.Connection, db_key: str, trip_id: int, seed_i
         cand = {r[0] for r in conn.execute(f"SELECT id FROM assets WHERE {VISIBLE} AND taken_at BETWEEN ? AND ? "
                                            "AND (trip_manual = 0 OR trip_id = ?)", (vlo, vhi, trip_id))}
         if rows:
-            centroid = mat[rows].astype(np.float32).mean(axis=0)
+            centroid = mat[rows].mean(axis=0)
             centroid /= max(np.linalg.norm(centroid), 1e-8)
-            sims = mat.astype(np.float32) @ centroid
+            sims = mat @ centroid
             for k in np.where(sims >= VISUAL_MIN)[0]:
                 aid = int(ids[k])
                 if aid in cand:
                     note(aid, float(sims[k]), f"looks like the trip's photos ({int(sims[k] * 100)}%)")
         if seed_id in index:
-            sims = mat.astype(np.float32) @ mat[index[seed_id]].astype(np.float32)
+            sims = mat @ mat[index[seed_id]]
             for k in np.where(sims >= SEED_MIN)[0]:
                 aid = int(ids[k])
                 if aid in cand and aid != seed_id:

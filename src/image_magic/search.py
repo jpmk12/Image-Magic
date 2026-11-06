@@ -187,18 +187,19 @@ def preprocess(im: Image.Image) -> np.ndarray:
 # ---- catalog integration --------------------------------------------------
 
 def ensure_schema(conn: sqlite3.Connection) -> None:
-    conn.executescript(SCHEMA)
+    from .catalog import run_script
+    run_script(conn, SCHEMA)
 
 
 def pending(conn: sqlite3.Connection) -> list[sqlite3.Row]:
     ensure_schema(conn)
     return conn.execute(
         """SELECT a.id, a.path, a.sha256 FROM assets a
-           LEFT JOIN embeddings e ON e.asset_id = a.id AND e.model = ?
+           LEFT JOIN embeddings e ON e.asset_id = a.id AND e.model IN (?, ?)
            WHERE e.asset_id IS NULL AND a.kind = 'photo' AND a.missing = 0
              AND a.duplicate_of IS NULL
            ORDER BY a.taken_at DESC""",
-        (MODEL_NAME,),
+        (MODEL_NAME, "failed:" + MODEL_NAME),
     ).fetchall()
 
 
@@ -230,7 +231,10 @@ def index_photos(conn: sqlite3.Connection, library: Path, originals: Path, model
                     images.append(im.copy())
                 ids.append(r["id"])
             except Exception:
-                continue  # unreadable file: skip, it'll be retried next time
+                # Unreadable file: remember that so it isn't retried forever.
+                conn.execute("INSERT OR REPLACE INTO embeddings (asset_id, model, vec) VALUES (?, ?, X'')",
+                             (r["id"], "failed:" + MODEL_NAME))
+                continue
         if images:
             vecs = model.encode_images(images).astype(np.float16)
             conn.executemany(
@@ -265,8 +269,8 @@ class _Index:
                 return hit[1], hit[2]
         rows = conn.execute("SELECT asset_id, vec FROM embeddings WHERE model = ?", (MODEL_NAME,)).fetchall()
         ids = np.array([r[0] for r in rows], dtype=np.int64)
-        mat = (np.frombuffer(b"".join(r[1] for r in rows), dtype=np.float16).reshape(len(rows), -1)
-               if rows else np.zeros((0, 512), dtype=np.float16))
+        mat = (np.frombuffer(b"".join(r[1] for r in rows), dtype=np.float16).reshape(len(rows), -1).astype(np.float32)
+               if rows else np.zeros((0, 512), dtype=np.float32))
         with cls._lock:
             cls._cache[db_key] = (n, ids, mat)
         return ids, mat
@@ -291,7 +295,7 @@ def search(conn: sqlite3.Connection, db_key: str, model, text: str,
     if not len(ids):
         return []
     q = query_vector(model, text).astype(np.float32)
-    scores = mat.astype(np.float32) @ q
+    scores = mat @ q
     order = np.argsort(-scores)
     best = float(scores[order[0]])
     out = []

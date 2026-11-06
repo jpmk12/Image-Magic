@@ -25,7 +25,31 @@ FORBIDDEN_FLAGS = frozenset({
 })
 
 # Port icloudpd's sign-in web page listens on (fixed by icloudpd).
-ICLOUDPD_WEBUI = "http://127.0.0.1:8080"
+ICLOUDPD_PORT = 8080
+ICLOUDPD_WEBUI = f"http://127.0.0.1:{ICLOUDPD_PORT}"
+ICLOUDPD_MARKER = "iCloud Photos Downloader"   # title of icloudpd's own sign-in page
+
+
+def port_in_use(port: int | None = None) -> bool:
+    """True if something already answers on 127.0.0.1:<port>."""
+    import socket
+    port = port or ICLOUDPD_PORT
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.settimeout(0.5)
+        return s.connect_ex(("127.0.0.1", port)) == 0
+
+
+def firewall_rule_present() -> bool | None:
+    """Windows only: is the installer's inbound block rule for icloudpd in place? None = unknown."""
+    if sys.platform != "win32":
+        return None
+    try:
+        out = subprocess.run(["netsh", "advfirewall", "firewall", "show", "rule", 'name=Image Magic sign-in helper'],
+                             capture_output=True, text=True, timeout=10,
+                             creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+        return "Image Magic sign-in helper" in out.stdout
+    except Exception:
+        return None
 
 
 class UnsafeCommandError(RuntimeError):

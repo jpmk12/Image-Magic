@@ -30,7 +30,8 @@ CREATE TABLE IF NOT EXISTS stories (
 
 
 def ensure_schema(conn: sqlite3.Connection) -> None:
-    conn.executescript(SCHEMA)
+    from .catalog import run_script
+    run_script(conn, SCHEMA)
     describe.ensure_schema(conn)
     faces.ensure_schema(conn)
 
@@ -41,20 +42,43 @@ def _items(conn: sqlite3.Connection, params: dict, limit: int = 40) -> list[dict
     """Photos matching the filters, newest first, with caption and people names."""
     params = {k: v for k, v in params.items() if v not in (None, "", 0)}
     res = browse.photos(conn, params, 0, limit)
-    return [_enrich(conn, it) for it in res["items"]], res["total"]
+    return enrich_all(conn, res["items"]), res["total"]
+
+
+def enrich_all(conn: sqlite3.Connection, items: list[dict]) -> list[dict]:
+    """Captions, keywords and people for many photos in two queries."""
+    if not items:
+        return []
+    ids = [it["id"] for it in items]
+    caps: dict[int, tuple[str, list]] = {}
+    names: dict[int, list[str]] = {}
+    private: set[int] = set()
+    for i in range(0, len(ids), 500):
+        chunk = ids[i:i + 500]
+        ph = ",".join("?" * len(chunk))
+        for r in conn.execute(f"SELECT asset_id, caption, keywords FROM descriptions WHERE status = 'ok' AND asset_id IN ({ph})", chunk):
+            caps[r[0]] = (r[1], json.loads(r[2] or "[]"))
+        for r in conn.execute(f"""SELECT f.asset_id, p.name FROM faces f JOIN persons p ON p.id = f.person_id
+                                  WHERE p.name IS NOT NULL AND p.hidden = 0 AND f.asset_id IN ({ph})""", chunk):
+            names.setdefault(r[0], []).append(r[1])
+        private |= {r[0] for r in conn.execute(f"SELECT id FROM assets WHERE private = 1 AND id IN ({ph})", chunk)}
+    out = []
+    for it in items:
+        if it["id"] in private:
+            continue
+        o = {"id": it["id"], "date": (it.get("taken_at") or "")[:16], "kind": it.get("kind"),
+             "place": ", ".join(x for x in [it.get("city"), it.get("country")] if x)}
+        if it["id"] in caps:
+            o["caption"], kws = caps[it["id"]]
+            o["keywords"] = kws[:6]
+        if it["id"] in names:
+            o["people"] = sorted(set(names[it["id"]]))
+        out.append(o)
+    return out
 
 
 def _enrich(conn: sqlite3.Connection, it: dict) -> dict:
-    d = describe.for_photo(conn, it["id"])
-    names = [f["name"] for f in faces.faces_in_photo(conn, it["id"]) if f.get("name") and not f.get("hidden")]
-    out = {"id": it["id"], "date": (it.get("taken_at") or "")[:16], "kind": it.get("kind"),
-           "place": ", ".join(x for x in [it.get("city"), it.get("country")] if x)}
-    if d and d.get("status") == "ok":
-        out["caption"] = d["caption"]
-        out["keywords"] = d["keywords"][:6]
-    if names:
-        out["people"] = names
-    return out
+    return (enrich_all(conn, [it]) or [{"id": it["id"], "date": "", "kind": it.get("kind"), "place": ""}])[0]
 
 
 def library_summary(conn: sqlite3.Connection) -> dict:
@@ -96,7 +120,6 @@ def story_context(conn: sqlite3.Connection, kind: str, ident: int) -> dict:
     else:
         raise ValueError("kind must be trip or chapter")
     items, total = _items(conn, {**params, "kind": "photo"}, limit=400)
-    items = [i for i in items if conn.execute("SELECT private FROM assets WHERE id = ?", (i["id"],)).fetchone()[0] == 0]
     # Compress: day-by-day places, the people seen, and a sample of captions.
     days: dict[str, Counter] = {}
     people: Counter = Counter()
@@ -221,11 +244,10 @@ class Asker:
             if args.get("query"):
                 hits = self.search_fn(conn, self.settings, {**params, "q": args["query"]})
                 ids = [i for i, _ in hits][:limit]
-                items = [_enrich(conn, it) for it in browse.by_ids(conn, ids)]
+                items = enrich_all(conn, browse.by_ids(conn, ids))
                 total = len(hits)
             else:
                 items, total = _items(conn, params, limit)
-            items = [i for i in items if conn.execute("SELECT private FROM assets WHERE id = ?", (i["id"],)).fetchone()[0] == 0]
             return json.dumps({"total_matches": total, "photos": items}, ensure_ascii=False)
         return json.dumps({"error": f"unknown tool {name}"})
 

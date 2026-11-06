@@ -52,7 +52,8 @@ VISIBLE = "missing = 0 AND duplicate_of IS NULL AND kind = 'photo'"
 
 
 def ensure_schema(conn: sqlite3.Connection) -> None:
-    conn.executescript(SCHEMA)
+    from .catalog import run_script
+    run_script(conn, SCHEMA)
     from . import faces
     faces.ensure_schema(conn)   # milestones look at people
 
@@ -161,7 +162,9 @@ def rebuild_chapters(conn: sqlite3.Connection) -> int:
     homes = home_by_month(conn)
     segs = _segments(homes)
     manual = conn.execute("SELECT start_at, end_at FROM chapters WHERE auto = 0").fetchall()
-    conn.execute("DELETE FROM chapters WHERE auto = 1")
+    # Keep ids stable: an automatic chapter with the same home and start month is updated in place.
+    existing = {(r["place_key"], r["start_at"][:7]): r["id"] for r in conn.execute("SELECT id, place_key, start_at FROM chapters WHERE auto = 1")}
+    kept: set[int] = set()
     last_photo = conn.execute(f"SELECT MAX(taken_at) FROM assets WHERE {VISIBLE}").fetchone()[0]
     made = 0
     for seg in segs:
@@ -184,11 +187,22 @@ def rebuild_chapters(conn: sqlite3.Connection) -> int:
                 AND lat IS NOT NULL ORDER BY taken_at LIMIT 1 OFFSET ?""",
             (start, after, max(0, n // 2 - 1))).fetchone()
         years = f"{start[:4]}–{end[:4]}" if start[:4] != end[:4] else start[:4]
-        conn.execute(
-            "INSERT INTO chapters (title, subtitle, start_at, end_at, place_key, lat, lon, cover_id, photo_count, auto) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)",
-            (seg["label"], years, start, end, seg["key"], seg["lat"], seg["lon"], cover[0] if cover else None, n))
+        cid = existing.get((seg["key"], start[:7]))
+        if cid:
+            conn.execute("UPDATE chapters SET title = ?, subtitle = ?, start_at = ?, end_at = ?, lat = ?, lon = ?, "
+                         "cover_id = COALESCE(cover_id, ?), photo_count = ? WHERE id = ?",
+                         (seg["label"], years, start, end, seg["lat"], seg["lon"], cover[0] if cover else None, n, cid))
+            kept.add(cid)
+        else:
+            cur = conn.execute(
+                "INSERT INTO chapters (title, subtitle, start_at, end_at, place_key, lat, lon, cover_id, photo_count, auto) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)",
+                (seg["label"], years, start, end, seg["key"], seg["lat"], seg["lon"], cover[0] if cover else None, n))
+            kept.add(cur.lastrowid)
         made += 1
+    for cid in existing.values():
+        if cid not in kept:
+            conn.execute("DELETE FROM chapters WHERE id = ?", (cid,))
     conn.commit()
     return made
 

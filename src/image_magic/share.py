@@ -36,8 +36,12 @@ def _visible_ids(conn: sqlite3.Connection, params: dict) -> list[int]:
     params = {k: v for k, v in params.items() if v not in (None, "", 0)}
     params.pop("kind", None)
     res = browse.photos(conn, {**params, "kind": "photo"}, 0, 5000)
-    return [i["id"] for i in res["items"]
-            if conn.execute("SELECT private FROM assets WHERE id = ?", (i["id"],)).fetchone()[0] == 0]
+    ids = [i["id"] for i in res["items"]]
+    private: set[int] = set()
+    for i in range(0, len(ids), 500):
+        chunk = ids[i:i + 500]
+        private |= {r[0] for r in conn.execute(f"SELECT id FROM assets WHERE private = 1 AND id IN ({','.join('?' * len(chunk))})", chunk)}
+    return [i for i in ids if i not in private]
 
 
 def check(conn: sqlite3.Connection, params: dict) -> dict:
@@ -45,10 +49,18 @@ def check(conn: sqlite3.Connection, params: dict) -> dict:
     describe.ensure_schema(conn)
     ids = _visible_ids(conn, params)
     flagged = []
+    descs: dict[int, sqlite3.Row] = {}
+    assets: dict[int, sqlite3.Row] = {}
+    for i in range(0, len(ids), 500):
+        chunk = ids[i:i + 500]
+        ph = ",".join("?" * len(chunk))
+        descs.update({r["asset_id"]: r for r in conn.execute(
+            f"SELECT asset_id, caption, keywords, text FROM descriptions WHERE status = 'ok' AND asset_id IN ({ph})", chunk)})
+        assets.update({r["id"]: r for r in conn.execute(f"SELECT id, city, taken_at FROM assets WHERE id IN ({ph})", chunk)})
     for aid in ids:
-        a = conn.execute("SELECT id, path, city, country, taken_at FROM assets WHERE id = ?", (aid,)).fetchone()
-        d = describe.for_photo(conn, aid)
-        d = d or {}
+        a = assets[aid]
+        dr = descs.get(aid)
+        d = {"caption": dr["caption"], "keywords": json.loads(dr["keywords"] or "[]"), "text": dr["text"]} if dr else {}
         text = " ".join([d.get("caption") or "", " ".join(d.get("keywords") or []),
                          d.get("text") or "", a["city"] or ""]).lower()
         hits = sorted({t for t in SENSITIVE_TERMS if re.search(r"(?<![a-z0-9])" + re.escape(t) + r"(?![a-z0-9])", text)})
@@ -91,7 +103,11 @@ def export(conn: sqlite3.Connection, originals: Path, library: Path, params: dic
     (folder / "images").mkdir(parents=True)
     items = []
     people_names = {}
-    for n, aid in enumerate(sorted(ids, key=lambda i: conn.execute("SELECT taken_at FROM assets WHERE id = ?", (i,)).fetchone()[0] or ""), 1):
+    order: dict[int, str] = {}
+    for i in range(0, len(ids), 500):
+        chunk = ids[i:i + 500]
+        order.update({r[0]: r[1] or "" for r in conn.execute(f"SELECT id, taken_at FROM assets WHERE id IN ({','.join('?' * len(chunk))})", chunk)})
+    for n, aid in enumerate(sorted(ids, key=lambda i: order.get(i, "")), 1):
         a = conn.execute("SELECT path, taken_at, city, country FROM assets WHERE id = ?", (aid,)).fetchone()
         name = f"images/{n:04d}.jpg"
         try:

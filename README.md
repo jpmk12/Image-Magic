@@ -74,7 +74,8 @@ program only. Your photos and settings are kept.
   you edit it into your own words. Your edits are kept.
 - **Ask:** the **Ask** tab answers questions about your own life ("When did we last go to the
   beach?", "How many countries have the kids been to?") and shows the photos it found. Claude
-  reads the catalog through a few tools; it never sees the photos. Needs your API key.
+  reads the catalog through a few tools (dates, places, trip and chapter names, people's names,
+  captions, and any notes you wrote on a chapter); it never sees the photos. Needs your API key.
 - **Growing up, birthdays and the book:** on a person's card, **Set birthday** adds ages
   everywhere and "Emma turns 3" milestones to the Timeline. **Growing up** plays their face
   through the years; **Save as GIF** exports it, and **Make the book** builds a printable PDF
@@ -140,7 +141,11 @@ Place names are looked up **on your computer** from a bundled list of about 145,
   analysed locally and never uploaded. The only network use is the one-time model download.
 - AI descriptions are the one opt-in feature that sends photo content off your laptop: a
   1024 px JPEG copy with no EXIF (no GPS, camera or date) goes to Anthropic's API under your
-  own key, and the caption comes back. Your API key is stored in `%APPDATA%\ImageMagic\secrets.json`.
+  own key, with no date, place name or file name attached, and the caption comes back.
+- The iCloud sign-in helper (icloudpd) opens a small web page on port 8080 while it waits
+  for your password. Image Magic refuses to start a sync if another program is already using
+  that port, only talks to that page once it has confirmed it is icloudpd's, and warns in the
+  Activity log if the installer's firewall rule is missing. Your API key is stored in `%APPDATA%\ImageMagic\secrets.json`.
 - Face recognition uses InsightFace's open models, also on your laptop. Face data (a numeric
   signature per face, not a photo) is stored only in your library's catalog file.
 - The only outside connections are to **Apple** (downloading) and, if enabled,
@@ -150,6 +155,15 @@ Place names are looked up **on your computer** from a bundled list of about 145,
   must carry a random access code that's created at each launch and given only to your
   browser, so other websites and other accounts on the laptop can't use it.
 - Image Magic never deletes anything in iCloud (see the top of this page).
+
+**What was reviewed**
+- The code had an independent security and privacy review and a bugs-and-performance review
+  (v0.16.0). Everything they found was fixed: the sign-in helper is only ever spoken to after
+  it is confirmed to be icloudpd's own page and never when its port is held by another program;
+  the launcher checks that a running instance is really Image Magic before opening it; the
+  access code is accepted in a URL only for loading photos; every page carries a strict
+  Content-Security-Policy; AI descriptions send only the picture; the release pipeline runs
+  with read-only permissions except for the publish step and ships a checksum file.
 
 **Honest limits**
 - icloudpd is a popular open-source tool, but it isn't made by Apple, and Apple could change

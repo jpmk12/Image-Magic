@@ -55,12 +55,34 @@ def _clear_session(token: str) -> None:
             pass
 
 
-def _already_running(port: int) -> bool:
+def _already_running(port: int) -> str:
+    """'ours' if our own app answers on the port with the saved token, 'foreign' if
+    something else is listening, '' if the port is free."""
     try:
         with urllib.request.urlopen(f"http://127.0.0.1:{port}/", timeout=2) as resp:
-            return b"Image Magic" in resp.read(4096)
+            resp.read(4096)
     except Exception:
-        return False
+        return ""
+    s = _read_session()
+    try:
+        req = urllib.request.Request(f"http://127.0.0.1:{port}/api/status", headers={"X-Token": (s or {}).get("token", "")})
+        with urllib.request.urlopen(req, timeout=2) as resp:
+            if resp.status == 200 and "version" in json.loads(resp.read().decode("utf-8")):
+                return "ours"
+    except Exception:
+        pass
+    return "foreign"
+
+
+def _alert(message: str) -> None:
+    """Tell the user something when there is no console (windowed exe)."""
+    print(message)
+    if sys.platform == "win32":
+        try:
+            import ctypes
+            ctypes.windll.user32.MessageBoxW(None, message, "Image Magic", 0x10)
+        except Exception:
+            pass
 
 
 def app_url(port: int, token: str) -> str:
@@ -82,6 +104,8 @@ def self_test(out_path: str, download: bool) -> int:
 
         from . import describe
         report["ai_client_ok"] = bool(describe.make_client("sk-ant-not-a-real-key"))   # SDK bundled, no network
+        from reportlab.pdfgen import canvas as _pdf   # noqa: F401  (book export bundled)
+        report["pdf_ok"] = True
         report["providers"] = ort.get_available_providers()
         report["tokens"] = Tokenizer().encode("a photo of a cat")
         report["place"] = places.lookup(30.3285, 35.4444).city
@@ -127,12 +151,17 @@ def main(argv: list[str] | None = None) -> int:
     if args.self_test:
         return self_test(args.self_test, args.self_test_download)
 
-    if _already_running(args.port):
+    running = _already_running(args.port)
+    if running == "ours":
         # Second double-click: reopen the existing app with its token.
         s = _read_session()
         if not args.no_browser and s and s.get("port") == args.port:
             webbrowser.open(app_url(args.port, s["token"]))
         return 0
+    if running == "foreign":
+        _alert(f"Another program is using port {args.port} on this computer, so Image Magic can't start. "
+               "Close it, or start Image Magic with --port <number>.")
+        return 1
 
     stop = threading.Event()
     app = App(on_quit=stop.set)

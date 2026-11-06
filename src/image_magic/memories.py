@@ -113,7 +113,7 @@ def similar(conn: sqlite3.Connection, db_key: str, asset_id: int, n: int = SIMIL
     if not len(ids):
         return []
     q = np.frombuffer(row["vec"], dtype=np.float16).astype(np.float32)
-    scores = mat.astype(np.float32) @ q
+    scores = mat @ q
     order = np.argsort(-scores)
     me = conn.execute("SELECT substr(taken_at, 1, 10) FROM assets WHERE id = ?", (asset_id,)).fetchone()[0]
     out: list[int] = []

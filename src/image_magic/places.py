@@ -133,7 +133,7 @@ def _homes_by_year(photos: list) -> dict[int, tuple[float, float]]:
 def rebuild_trips(conn: sqlite3.Connection) -> int:
     """Group photos taken away from home into trips. Returns the number of trips."""
     rows = conn.execute(
-        """SELECT id, taken_at, lat, lon, city, country_code, country FROM assets
+        """SELECT id, taken_at, lat, lon, city, country_code, country, trip_manual FROM assets
            WHERE lat IS NOT NULL AND taken_at IS NOT NULL AND missing = 0
              AND duplicate_of IS NULL AND kind = 'photo'
            ORDER BY taken_at"""
@@ -179,7 +179,7 @@ def rebuild_trips(conn: sqlite3.Connection) -> int:
     conn.execute("UPDATE assets SET trip_id = NULL WHERE trip_manual = 0")
     matched: set[int] = set()
     for g in groups:
-        g = [p for p in g if not conn.execute("SELECT trip_manual FROM assets WHERE id = ?", (p["id"],)).fetchone()[0]]
+        g = [p for p in g if not p["trip_manual"]]
         if len(g) < MIN_TRIP_PHOTOS:
             continue
         country_counts = Counter(p["country"] for p in g if p["country"])

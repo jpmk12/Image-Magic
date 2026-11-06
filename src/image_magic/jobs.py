@@ -70,6 +70,7 @@ class JobRunner:
         self.state = JobState()
         self.log: deque[tuple[int, str]] = deque(maxlen=2000)
         self._log_seq = 0
+        self._helper_ok = False   # True once the page on the helper port is confirmed to be icloudpd's
 
     # ---- public API ----------------------------------------------------
     @property
@@ -109,6 +110,11 @@ class JobRunner:
         """Forward the password or 2FA code to icloudpd's sign-in page."""
         if field_name not in ("password", "code"):
             raise ValueError(field_name)
+        proc = self._proc
+        if proc is None or proc.poll() is not None or not self._helper_ok:
+            self.state.auth_error = True
+            self._add_log("Refused to send sign-in details: the iCloud sign-in helper is not running.")
+            return False
         data = urllib.parse.urlencode({field_name: value}).encode()
         req = urllib.request.Request(f"{sync.ICLOUDPD_WEBUI}/{field_name}", data=data, method="POST")
         try:
@@ -124,8 +130,9 @@ class JobRunner:
 
     # ---- internals -----------------------------------------------------
     def _add_log(self, line: str) -> None:
-        self._log_seq += 1
-        self.log.append((self._log_seq, line))
+        with self._lock:
+            self._log_seq += 1
+            self.log.append((self._log_seq, line))
 
     def _finish(self, state: str, message: str, result: dict | None = None) -> None:
         self.state.state = state
@@ -147,6 +154,10 @@ class JobRunner:
             self._finish("done", f"Catalog updated: {r.new:,} new, {r.total:,} total, {r.missing:,} missing, "
                                  f"{r.trips:,} trips.",
                          {"new": r.new, "total": r.total, "missing": r.missing})
+        except InterruptedError:
+            self._finish("cancelled", "Cataloging stopped. Run it again to continue.")
+        except InterruptedError:
+            self._finish("cancelled", "Cataloging stopped. Run it again to continue.")
         except Exception as e:  # report, never crash the app
             self._finish("failed", f"Cataloging failed: {e}")
 
@@ -154,7 +165,8 @@ class JobRunner:
         self.state.message = "Cataloging files..."
         conn = catalog.connect(settings.db)
         try:
-            return catalog.scan(conn, settings.originals, progress=self._progress("Cataloged"))
+            return catalog.scan(conn, settings.originals, progress=self._progress("Cataloged"),
+                                cancelled=self._cancel.is_set)
         finally:
             conn.close()
 
@@ -176,7 +188,8 @@ class JobRunner:
                 self.state.message = f"Downloading smart search model: {done / 1e6:,.0f} of {total / 1e6:,.0f} MB"
             search.download_model(dl, cancelled=self._cancel.is_set)
             if self._cancel.is_set():
-                self._finish("cancelled", "Stopped. The download resumes where it left off next time.")
+                if standalone:
+                    self._finish("cancelled", "Stopped. The download resumes where it left off next time.")
                 return 0
         self.state.downloaded, self.state.total = 0, None
         self.state.message = "Loading smart search model..."
@@ -219,7 +232,8 @@ class JobRunner:
                 self.state.message = f"Downloading face models: {done / 1e6:,.0f} of {total / 1e6:,.0f} MB"
             faces.download_model(dl, cancelled=self._cancel.is_set)
             if self._cancel.is_set():
-                self._finish("cancelled", "Stopped. The download resumes where it left off next time.")
+                if standalone:
+                    self._finish("cancelled", "Stopped. The download resumes where it left off next time.")
                 return 0
         self.state.downloaded, self.state.total = 0, None
         self.state.message = "Loading face models..."
@@ -289,7 +303,8 @@ class JobRunner:
             self.state.message = "Checking files..."
             conn = catalog.connect(settings.db)
             try:
-                r = catalog.verify(conn, settings.originals, progress=self._progress("Checked"))
+                r = catalog.verify(conn, settings.originals, progress=self._progress("Checked"),
+                                   cancelled=self._cancel.is_set)
             finally:
                 conn.close()
             for p in r.changed[:50]:
@@ -300,6 +315,10 @@ class JobRunner:
             self._finish("done" if not bad else "failed",
                          f"Check finished: {r.ok:,} OK, {len(r.changed)} changed, {len(r.missing)} missing.",
                          {"ok": r.ok, "changed": len(r.changed), "missing": len(r.missing)})
+        except InterruptedError:
+            self._finish("cancelled", "Check stopped.")
+        except InterruptedError:
+            self._finish("cancelled", "Check stopped.")
         except Exception as e:
             self._finish("failed", f"Check failed: {e}")
 
@@ -312,6 +331,14 @@ class JobRunner:
             self._finish("failed", f"Could not start: {e}")
             return
 
+        if sync.port_in_use():
+            self._finish("failed", f"Another program on this computer is using port {sync.ICLOUDPD_PORT}, which the "
+                         "iCloud sign-in helper needs. Close that program and try again.")
+            return
+        if sync.firewall_rule_present() is False:
+            self._add_log("Warning: the firewall rule for the sign-in helper is missing. Re-run the installer and keep "
+                          "'Block network access to the iCloud sign-in helper' ticked, or click Cancel if Windows Firewall asks.")
+        self._helper_ok = False
         self.state.message = "Connecting to iCloud..."
         self._add_log(f"Starting {mode} sync of {settings.apple_id}")
         extra: dict = {}
@@ -344,6 +371,9 @@ class JobRunner:
                 self.state.message = f"Downloaded {self.state.downloaded:,} new{total}"
         code = self._proc.wait()
         self._proc = None
+        self._helper_ok = False
+        downloaded = self.state.downloaded
+        downloaded = self.state.downloaded
 
         if self._cancel.is_set():
             self._finish("cancelled", "Sync stopped. Run it again any time; it picks up where it left off.")
@@ -357,33 +387,40 @@ class JobRunner:
         conn.close()
         try:
             r = self._scan(settings)
+        except InterruptedError:
+            self._finish("cancelled", f"Sync stopped after downloading {downloaded:,}; cataloging will finish next time.")
+            return
         except Exception as e:
             self._finish("failed", f"Download finished but cataloging failed: {e}")
             return
-        if settings.smart_search:
+        for enabled, step, label in ((settings.smart_search, self._index, "Smart search indexing"),
+                                     (settings.people, self._faces, "Finding faces"),
+                                     (settings.ai_descriptions, self._describe, "AI descriptions")):
+            if not enabled:
+                continue
+            if self._cancel.is_set():
+                self._finish("cancelled", f"Sync stopped after downloading {downloaded:,}. Later steps will run next time.")
+                return
             try:
-                self._index(settings, standalone=False)
+                step(settings, standalone=False)
             except Exception as e:
-                self._add_log(f"Smart search indexing failed: {e}")
-        if settings.people:
-            try:
-                self._faces(settings, standalone=False)
-            except Exception as e:
-                self._add_log(f"Finding faces failed: {e}")
-        if settings.ai_descriptions:
-            try:
-                self._describe(settings, standalone=False)
-            except Exception as e:
-                self._add_log(f"AI descriptions failed: {e}")
-        self._finish("done",
-                     f"Sync complete: {self.state.downloaded:,} downloaded, {r.total:,} items in your library, "
+                self._add_log(f"{label} failed: {e}")
+        self._finish("cancelled" if self._cancel.is_set() else "done",
+                     f"Sync complete: {downloaded:,} downloaded, {r.total:,} items in your library, "
                      f"{r.trips:,} trips.",
-                     {"downloaded": self.state.downloaded, "total": r.total, "missing": r.missing})
+                     {"downloaded": downloaded, "total": r.total, "missing": r.missing})
 
     def _watch_auth(self) -> None:
         """Poll icloudpd's sign-in page to learn when it needs a password or code."""
         while self._proc is not None and self._proc.poll() is None:
             try:
+                if not self._helper_ok:
+                    # Only ever talk to icloudpd's own page, never to whatever else might sit on the port.
+                    with urllib.request.urlopen(f"{sync.ICLOUDPD_WEBUI}/", timeout=3) as resp:
+                        if sync.ICLOUDPD_MARKER not in resp.read(20000).decode("utf-8", "replace"):
+                            time.sleep(1.5)
+                            continue
+                    self._helper_ok = True
                 with urllib.request.urlopen(f"{sync.ICLOUDPD_WEBUI}/status", timeout=3) as resp:
                     html = resp.read().decode("utf-8", "replace")
                 if 'name="password"' in html:

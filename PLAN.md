@@ -281,5 +281,11 @@ Service features (flying log, squadron yearbook) slot into S2 (log) and S9 (year
   trips and renames survive rebuilds; "find more photos from this trip" (time window from the
   trip's core, visual similarity to the trip and the picked photo, caption keywords, distance
   penalty); face "not this person" / "this is…"; caption editing.
+- **Review and hardening** (v0.16.0): two independent reviews (security/privacy; bugs/
+  performance). Fixed: helper-port hijack, launcher spoofing, token-in-URL scope, CSP/nosniff,
+  place names no longer sent with photos, CI least-privilege + checksums; WAL + short write
+  transactions, cancellable scan/verify, unplugged-library guard, scalable face grouping with
+  locked faces carried through merges, stable chapter ids, retry of failed descriptions,
+  unreadable files recorded, batched queries, status cache, grid cap.
 - Phase 4 complete. Next: real-library feedback, then tuning (trip and chapter heuristics,
   face thresholds on children), and a signed installer.

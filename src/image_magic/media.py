@@ -29,6 +29,8 @@ def _lock_for(key: str) -> threading.Lock:
 def _render(src: Path, dest: Path, px: int, quality: int) -> Path:
     with _lock_for(str(dest)):
         if dest.exists():
+            with _locks_guard:
+                _locks.pop(str(dest), None)
             return dest
         dest.parent.mkdir(parents=True, exist_ok=True)
         with Image.open(src) as im:
