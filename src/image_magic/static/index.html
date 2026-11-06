@@ -134,6 +134,10 @@
   .grow .strip img { width: 56px; height: 56px; border-radius: 6px; object-fit: cover; cursor: pointer; opacity: .6; flex: none; }
   .grow .strip img.on { opacity: 1; outline: 2px solid var(--accent); }
   .person .acts { flex-wrap: wrap; }
+  .yr { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin: 12px 0; }
+  .yr .stat .n { font-size: 26px; }
+  .yr-best { display: flex; gap: 6px; overflow-x: auto; padding: 4px 0; }
+  .yr-best .tile { width: 110px; flex: none; }
   .mem-row { display: flex; gap: 6px; flex-wrap: wrap; }
   .mem-row .tile { width: 120px; flex: none; }
   .shuffle { display: grid; grid-template-columns: 1fr 300px; gap: 18px; align-items: start; }
@@ -320,6 +324,15 @@
       <p class="muted small" style="margin:0">Your life in chapters, found from where you lived. Click a chapter title to rename it, a bar to see that month, a pin to open it.</p>
       <button class="btn" id="tl-rebuild" title="Recompute chapters and milestones from your photos">Rebuild</button>
     </div>
+    <div class="panel" id="yr-panel">
+      <div class="row" style="justify-content:space-between">
+        <div class="row"><h2 style="margin:0">Your year in review</h2><select id="yr-year"></select></div>
+        <button class="btn primary" id="yr-play">▶ The year in 30 seconds</button>
+      </div>
+      <div class="yr" id="yr-stats"></div>
+      <div id="yr-lines" class="small"></div>
+      <div class="yr-best" id="yr-best"></div>
+    </div>
     <div id="timeline"></div>
     <p class="muted" id="tl-empty" style="display:none">Nothing here yet. Chapters appear once photos with dates and locations are downloaded.</p>
   </section>
@@ -465,6 +478,9 @@
 
       <div class="panel">
         <h2>Privacy</h2>
+        <label class="check"><input type="checkbox" name="weather_online">
+          <span>Show the weather for a memory (from Open-Meteo)
+          <small>Sends the date and a location rounded to about 1 km to open-meteo.com, a free weather archive. Off by default.</small></span></label>
         <label class="check"><input type="checkbox" name="map_online">
           <span>Show map background (from OpenStreetMap)
           <small>The map background is downloaded from OpenStreetMap, which can see which areas
@@ -1040,6 +1056,13 @@ async function openLightbox(i, items) {
     add("File", d.path);
     add("Privacy", d.private ? "🔒 Private — never sent to AI or shared. Click to make normal." : "Normal — click to mark Private (never sent to AI or shared)",
         async () => { await api("/api/private", { id: d.id, private: !d.private }).catch(e => toast(e.message)); openLightbox(lbIndex, lbItems === grid.items ? undefined : lbItems); });
+    api("/api/context/" + it.id).then(c => {
+      if (lbIndex !== i || !c.sun) return;
+      const parts = [];
+      if (c.sun.sunrise) parts.push(`sunrise ${c.sun.sunrise}`); if (c.sun.sunset) parts.push(`sunset ${c.sun.sunset}`);
+      if (c.weather) parts.push(`${Math.round(c.weather.tmin_c)}–${Math.round(c.weather.tmax_c)} °C (${Math.round(c.weather.tmin_c * 9 / 5 + 32)}–${Math.round(c.weather.tmax_c * 9 / 5 + 32)} °F), ${c.weather.text}`);
+      add("That day", parts.join(" · "));
+    }).catch(() => {});
     api("/api/similar/" + it.id).then(sim => {
       if (lbIndex !== i || !sim.length) return;
       const div = document.createElement("div"), b = document.createElement("b"); b.textContent = "Similar moments"; div.append(b);
@@ -1072,7 +1095,30 @@ document.addEventListener("keydown", e => {
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 function fmtDate(iso) { return new Date(iso.slice(0, 10) + "T00:00:00").toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }); }
 function goPhotos(filters) { showTab("photos"); setFilters(filters); }
+async function loadReview(year) {
+  const r = await api("/api/review" + (year ? "?year=" + year : "")).catch(() => null);
+  const panel = $("#yr-panel");
+  if (!r || !r.stats) { panel.classList.add("hidden"); return; }
+  panel.classList.remove("hidden");
+  const sel = $("#yr-year"); sel.length = 0; for (const y of r.years) sel.add(new Option(y, y)); sel.value = r.stats.year;
+  const s = r.stats;
+  const tiles = [[fmt(s.photos), "Photos"], [fmt(s.videos), "Videos"], [s.countries.length, "Countries"], [fmt(s.cities), "Places"],
+    [fmt(s.km) + " km", "Travelled"], [s.trips.length, "Trips"]];
+  $("#yr-stats").replaceChildren(...tiles.map(([n, l]) => { const d = document.createElement("div"); d.className = "stat";
+    d.innerHTML = `<div class="n"></div><div class="l"></div>`; d.firstChild.textContent = n; d.lastChild.textContent = l; return d; }));
+  const lines = [];
+  if (s.countries.length) lines.push("Countries: " + s.countries.map(c => `${c.country} (${fmt(c.n)})`).join(", "));
+  if (s.new_countries.length) lines.push("First time in: " + s.new_countries.join(", "));
+  if (s.longest_trip) lines.push(`Longest trip: ${s.longest_trip.title}, ${s.longest_trip.days} days, ${fmt(s.longest_trip.photo_count)} photos`);
+  if (s.people.length) lines.push("Most photographed: " + s.people.map(p => `${p.name} (${fmt(p.n)})${p.new ? " · new this year" : ""}`).join(", "));
+  if (s.busiest_day) lines.push(`Busiest day: ${fmtDate(s.busiest_day.day)}, ${fmt(s.busiest_day.n)} photos`);
+  $("#yr-lines").replaceChildren(...lines.map(t => { const p = document.createElement("div"); p.textContent = t; return p; }));
+  $("#yr-best").replaceChildren(...s.best.map((it, i) => tileFor(it, s.best, i)));
+  $("#yr-play").onclick = () => openReplay({ year: s.year, best: 1 }, s.year + " in 30 seconds");
+}
+$("#yr-year").onchange = e => loadReview(e.target.value);
 async function loadTimeline() {
+  loadReview();
   const t = await api("/api/timeline").catch(e => { toast(e.message); return null; });
   if (!t) return;
   const box = $("#timeline");
@@ -1161,7 +1207,7 @@ const rp = { items: [], i: -1, timer: null, playing: false, map: null, line: nul
 $("#f-replay").onclick = () => openReplay(grid.filters, $("#f-trip").textContent.replace("✕", ""));
 async function openReplay(filters, title) {
   const q = new URLSearchParams();
-  for (const k of ["trip", "day", "month", "person", "chapter", "year", "country", "city"]) if (filters[k]) q.set(k, filters[k]);
+  for (const k of ["trip", "day", "month", "person", "chapter", "year", "country", "city", "best"]) if (filters[k]) q.set(k, filters[k]);
   let items;
   try { items = await api("/api/replay?" + q); } catch (e) { return toast(e.message); }
   if (!items.length) return toast("Nothing to replay here.");

@@ -267,4 +267,7 @@ Service features (flying log, squadron yearbook) slot into S2 (log) and S9 (year
   PDF book with reportlab.
 - **S7 – Memories: built** (v0.11.0). On this day, shuffle (quality → people → trips), then &
   now by ~55 m GPS cell and ≥ 1 year, similar moments via CLIP image-image similarity.
-- Next: S8 – Year in review and context (sunrise, weather).
+- **S8 – Year in review and context: built** (v0.12.0). Per-year stats, best-of-year
+  selection by slot, 30-second replay; local sunrise/sunset (NOAA approximation); optional
+  Open-Meteo weather, cached, off by default.
+- Next: S9 – Films and sharing.

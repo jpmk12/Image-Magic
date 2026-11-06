@@ -51,6 +51,7 @@ class Settings:
     advanced_data_protection: bool = False
     auto_sync_hours: int = 0           # 0 = off; otherwise quick sync every N hours while open
     map_online: bool = True            # load map background tiles from OpenStreetMap
+    weather_online: bool = False       # fetch that day's weather from open-meteo.com (sends rounded location)
     smart_search: bool = False         # index photos for "search by description" after each sync
     people: bool = False               # find and group faces after each sync
     ai_descriptions: bool = False      # describe new photos with Claude after each sync (paid)

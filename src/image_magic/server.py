@@ -231,7 +231,7 @@ def make_handler(app: App):
                     return self._json(200, app.jobs.log_since(since))
                 if path.startswith(("/api/photos", "/api/photo/", "/api/facets", "/api/trips", "/api/replay",
                                     "/api/map", "/api/people", "/api/timeline", "/api/story", "/api/memories",
-                                    "/api/shuffle", "/api/similar/", "/media/")):
+                                    "/api/shuffle", "/api/similar/", "/api/review", "/api/context/", "/media/")):
                     return self._browse(path, self._query())
             except Exception as e:
                 return self._json(500, {"error": str(e)})
@@ -263,6 +263,9 @@ def make_handler(app: App):
                     return self._json(200, browse.photos(
                         conn, q, int(q.get("offset") or 0), min(int(q.get("limit") or 200), 500)))
                 if path == "/api/replay":
+                    if q.get("best") and q.get("year"):
+                        from . import review
+                        return self._json(200, browse.replay_items(conn, [i["id"] for i in review.best_of_year(conn, q["year"], 30)]))
                     return self._json(200, browse.replay(conn, q))
                 if path == "/api/facets":
                     return self._json(200, browse.facets(conn))
@@ -272,6 +275,11 @@ def make_handler(app: App):
                     from . import ask
                     key = f"{q.get('kind')}:{int(q.get('id') or 0)}"
                     return self._json(200, ask.get_story(conn, key) or {"key": key, "text": ""})
+                if path == "/api/review":
+                    from . import review
+                    ys = review.years(conn)
+                    y = q.get("year") or (ys[0] if ys else None)
+                    return self._json(200, {"years": ys, "stats": review.year_stats(conn, y) if y else None})
                 if path == "/api/memories":
                     from . import memories
                     return self._json(200, {"on_this_day": memories.on_this_day(conn),
@@ -305,6 +313,9 @@ def make_handler(app: App):
                     ctype = "application/pdf" if f.suffix == ".pdf" else "image/gif" if f.suffix == ".gif" else "application/octet-stream"
                     return self._file(f, ctype)
                 asset_id = int(ident)
+                if kind == "/api/context":
+                    from . import review
+                    return self._json(200, review.context(conn, asset_id, settings.weather_online))
                 if kind == "/api/similar":
                     from . import memories
                     return self._json(200, memories.similar(conn, str(settings.db), asset_id))

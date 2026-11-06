@@ -85,6 +85,12 @@ program only. Your photos and settings are kept.
   day** shows photos from today's date in past years. **Then & now** pairs photos taken at the
   same spot at least a year apart. In the viewer, **Similar moments** shows look-alike photos
   from other days (needs smart search).
+- **Your year in review:** at the top of the Timeline: photos, videos, countries (and first
+  visits), places, kilometres travelled, trips, most-photographed people, busiest day, and the
+  best photos spread across the year. **▶ The year in 30 seconds** replays them.
+- **That day:** the viewer shows sunrise and sunset for a photo's place and date (computed on
+  your laptop). Turn on **Show the weather** in Settings → Privacy to add that day's weather
+  from Open-Meteo (sends the date and a location rounded to about 1 km).
 - **People:** turn it on once from the Home tab (about 290 MB of face models, verified by
   fingerprint). The app finds every face and groups them by person. On the **People** tab,
   click **"Who is this?"** to name a group, click the face to see all of that person's photos,

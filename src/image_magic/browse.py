@@ -76,6 +76,19 @@ def replay(conn: sqlite3.Connection, params: dict, limit: int = 2000) -> list[di
     return [dict(r) for r in rows]
 
 
+def replay_items(conn: sqlite3.Connection, ids: list[int]) -> list[dict]:
+    """Replay rows for specific photos, in the given order."""
+    if not ids:
+        return []
+    rows = conn.execute(
+        f"""SELECT id, kind, taken_at, lat, lon, city, country, width, height,
+                   (SELECT v.id FROM assets v WHERE v.live_pair_id = assets.id AND v.kind = 'live_video'
+                      AND v.missing = 0 LIMIT 1) AS live_video_id
+            FROM assets WHERE id IN ({','.join('?' * len(ids))})""", ids).fetchall()
+    by = {r["id"]: dict(r) for r in rows}
+    return [by[i] for i in ids if i in by]
+
+
 def by_ids(conn: sqlite3.Connection, ids: list[int]) -> list[dict]:
     """Rows for the given ids, in the given order (e.g. search ranking)."""
     if not ids:
