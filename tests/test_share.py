@@ -34,8 +34,8 @@ def test_export_strips_metadata_and_respects_exclusions(library):  # noqa: F811
     assert folder.name == "share-jordan-2019"
     images = sorted((folder / "images").glob("*.jpg"))
     assert len(images) == 10                      # 12 - 1 private - 1 excluded
-    im = Image.open(images[0])
-    assert not im.getexif() and max(im.size) <= share.EXPORT_PX
+    with Image.open(images[0]) as im:
+        assert not im.getexif() and max(im.size) <= share.EXPORT_PX
     page = (folder / "index.html").read_text(encoding="utf-8")
     assert "Our week in Jordan." in page and "Petra, Jordan" in page and page.count("<figure>") == 10
     assert "Red sandstone" in page              # captions travel with the photos
@@ -43,3 +43,12 @@ def test_export_strips_metadata_and_respects_exclusions(library):  # noqa: F811
     # re-export replaces the folder cleanly
     folder2 = share.export(conn, lib / "originals", lib, {"trip": trip}, "Jordan 2019")
     assert len(list((folder2 / "images").glob("*.jpg"))) == 11
+    # if the folder can't be removed (a file is open), export goes to a numbered folder
+    import shutil as _sh
+    orig_rmtree = _sh.rmtree
+    _sh.rmtree = lambda *a, **k: (_ for _ in ()).throw(OSError("busy"))
+    try:
+        folder3 = share.export(conn, lib / "originals", lib, {"trip": trip}, "Jordan 2019")
+    finally:
+        _sh.rmtree = orig_rmtree
+    assert folder3.name == "share-jordan-2019-2" and (folder3 / "index.html").exists()

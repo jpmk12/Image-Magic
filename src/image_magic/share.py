@@ -78,9 +78,16 @@ def export(conn: sqlite3.Connection, originals: Path, library: Path, params: dic
     ids = [i for i in _visible_ids(conn, params) if i not in exclude]
     if not ids:
         raise ValueError("Nothing to share after your exclusions.")
-    folder = library / "exports" / f"share-{_slug(title)}"
+    base = library / "exports" / f"share-{_slug(title)}"
+    folder = base
     if folder.exists():
-        shutil.rmtree(folder)
+        try:
+            shutil.rmtree(folder)
+        except OSError:   # a file is open elsewhere (Windows): use a fresh folder instead
+            n = 2
+            while (base.parent / f"{base.name}-{n}").exists():
+                n += 1
+            folder = base.parent / f"{base.name}-{n}"
     (folder / "images").mkdir(parents=True)
     items = []
     people_names = {}
