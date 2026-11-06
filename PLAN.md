@@ -302,6 +302,9 @@ Service features (flying log, squadron yearbook) slot into S2 (log) and S9 (year
   (55 m cells seen in ≥ 3 years); people at home; "a year at home" replay.
 - **Ask → do** (v0.20.0): action tools with the shared filter schema (incl. events and
   "best"); actions returned to the page (replay, photos, share dialog, person book).
+- **Voice notes** (v0.21.0): MediaRecorder in the page, raw-body upload (25 MB cap, audio
+  types only) to <library>/voice/, per photo/event/trip/chapter; replay holds a slide while its
+  note plays; share export includes audio only when ticked.
 
 ---
 
@@ -325,7 +328,7 @@ stories, Ask, memories, year review, books and share cover the "relive" side.
    events are the small one. Events become the unit for stories, replay and sharing.
 3. **The home story** (built, v0.19.0). Trips get all the attention; most of life is at home. "A year at home"
    views: seasons, the backyard through the years, the kitchen table, first days of school.
-4. **Narration and voice.** Stories are read aloud by the browser voice today. A recorded
+4. **Narration and voice** (built, v0.21.0). Stories are read aloud by the browser voice today. A recorded
    voice note per photo or event ("their voices" from the plan) is the most personal layer
    possible and needs only the microphone in the browser.
 5. **Music for films.** The film maker takes a file; a small bundled set of royalty-free

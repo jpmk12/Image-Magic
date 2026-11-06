@@ -243,7 +243,7 @@ def make_handler(app: App):
                     return self._json(200, app.jobs.log_since(since))
                 if path.startswith(("/api/photos", "/api/photo/", "/api/facets", "/api/trips", "/api/replay",
                                     "/api/map", "/api/people", "/api/timeline", "/api/story", "/api/memories",
-                                    "/api/shuffle", "/api/similar/", "/api/review", "/api/context/", "/api/curate/", "/api/events", "/api/home", "/media/")):
+                                    "/api/shuffle", "/api/similar/", "/api/review", "/api/context/", "/api/curate/", "/api/events", "/api/home", "/api/voice/", "/media/")):
                     return self._browse(path, self._query())
             except Exception as e:
                 return self._json(500, {"error": str(e)})
@@ -357,7 +357,18 @@ def make_handler(app: App):
                         d["quality"] = quality.detail(conn, asset_id)
                         from . import events
                         d["event"] = events.event_for(conn, asset_id)
+                        from . import notes
+                        d["voice"] = notes.list_for(conn, "photo", asset_id)
                     return self._json(200, d) if d else self._json(404, {"error": "not found"})
+                if kind == "/media/voice":
+                    from . import notes
+                    found = notes.path_of(conn, settings.library, asset_id)
+                    if not found:
+                        return self._json(404, {"error": "not found"})
+                    return self._file(found[0], found[1])
+                if kind == "/api/voice":
+                    from . import notes
+                    return self._json(200, notes.list_for(conn, q.get("kind", "photo"), asset_id))
                 if kind == "/media/face":
                     from . import faces
                     f = faces.face_crop(conn, settings.originals, settings.library, asset_id)
@@ -379,6 +390,21 @@ def make_handler(app: App):
                 f, ctype = media.viewable(settings.library, settings.originals, row["path"], row["sha256"])
                 return self._file(f, ctype, cache=True)
             return self._json(404, {"error": "not found"})
+
+        def _voice_upload(self, q: dict):
+            """POST /api/voice?kind=photo&id=N&seconds=S with the audio as the raw body."""
+            from . import notes
+            n = int(self.headers.get("Content-Length") or 0)
+            if n <= 0 or n > notes.MAX_BYTES:
+                raise ValueError("The recording is empty or too large")
+            data = self.rfile.read(n)
+            settings, conn = app.db()
+            try:
+                note = notes.save(conn, settings.library, q.get("kind", "photo"), int(q.get("id") or 0), data,
+                                  self.headers.get("Content-Type", ""), float(q["seconds"]) if q.get("seconds") else None)
+            finally:
+                conn.close()
+            return self._json(200, note)
 
         def _ai_action(self, path: str, data: dict):
             from . import ask
@@ -523,7 +549,17 @@ def make_handler(app: App):
                 return
             path = self.path.split("?", 1)[0]
             try:
+                if path == "/api/voice":
+                    return self._voice_upload(self._query())
                 data = self._body()
+                if path == "/api/voice/delete":
+                    from . import notes
+                    settings, conn = app.db()
+                    try:
+                        notes.delete(conn, settings.library, int(data["id"]))
+                    finally:
+                        conn.close()
+                    return self._json(200, {"ok": True})
                 if path == "/api/settings":
                     from . import describe
                     if "anthropic_api_key" in data:
@@ -597,7 +633,7 @@ def make_handler(app: App):
                         folder = share.export(conn, settings.originals, settings.library, filters,
                                               str(data.get("title") or "My photos")[:80],
                                               exclude=[int(i) for i in data.get("exclude") or []],
-                                              story_key=data.get("story_key"))
+                                              story_key=data.get("story_key"), voice=bool(data.get("voice")))
                         try:
                             _open_folder(folder)
                         except Exception:

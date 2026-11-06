@@ -86,7 +86,9 @@ def replay(conn: sqlite3.Connection, params: dict, limit: int = 2000) -> list[di
     rows = conn.execute(
         f"""SELECT id, kind, taken_at, lat, lon, city, country, width, height,
                    (SELECT v.id FROM assets v WHERE v.live_pair_id = assets.id AND v.kind = 'live_video'
-                      AND v.missing = 0 LIMIT 1) AS live_video_id
+                      AND v.missing = 0 LIMIT 1) AS live_video_id,
+                   (SELECT n.id FROM voice_notes n WHERE n.kind = 'photo' AND n.ref_id = assets.id
+                      ORDER BY n.created DESC LIMIT 1) AS voice_id
             FROM assets WHERE {where} AND taken_at IS NOT NULL
             ORDER BY taken_at, id LIMIT ?""", [*args, max(1, min(limit, 5000))]).fetchall()
     return [dict(r) for r in rows]
@@ -99,7 +101,9 @@ def replay_items(conn: sqlite3.Connection, ids: list[int]) -> list[dict]:
     rows = conn.execute(
         f"""SELECT id, kind, taken_at, lat, lon, city, country, width, height,
                    (SELECT v.id FROM assets v WHERE v.live_pair_id = assets.id AND v.kind = 'live_video'
-                      AND v.missing = 0 LIMIT 1) AS live_video_id
+                      AND v.missing = 0 LIMIT 1) AS live_video_id,
+                   (SELECT n.id FROM voice_notes n WHERE n.kind = 'photo' AND n.ref_id = assets.id
+                      ORDER BY n.created DESC LIMIT 1) AS voice_id
             FROM assets WHERE id IN ({','.join('?' * len(ids))})""", ids).fetchall()
     by = {r["id"]: dict(r) for r in rows}
     return [by[i] for i in ids if i in by]

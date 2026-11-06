@@ -153,6 +153,11 @@ program only. Your photos and settings are kept.
   season (the best photos of each winter, spring, summer and autumn, with **▶ A year at home**
   replays), the spots you photographed again and again through the years (the backyard, the
   front door), and who was there most. Trips are left out so home gets its own story.
+- **Voice notes:** in the viewer, **🎙 Record your voice** on any photo (or **🎙 Note** on an
+  event card) records a voice note with your microphone: who was there, what happened, how it
+  felt. Notes are stored only in your library folder and play back during replays, holding the
+  photo until you finish speaking. A share export leaves them out unless you tick **Include my
+  voice notes**.
 - **Fixing mistakes:** everything the app works out can be corrected, and your corrections
   stick through rebuilds. In the viewer: **Trip ✎ change** moves a photo to another trip, a
   new trip, or no trip, and **Find more photos from this trip** suggests other photos that

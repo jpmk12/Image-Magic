@@ -20,7 +20,7 @@ from pathlib import Path
 
 from PIL import Image, ImageOps
 
-from . import ask, browse, describe, faces
+from . import ask, browse, describe, faces, notes
 
 EXPORT_PX = 1600
 SENSITIVE_TERMS = [
@@ -84,7 +84,7 @@ def _slug(s: str) -> str:
 
 
 def export(conn: sqlite3.Connection, originals: Path, library: Path, params: dict, title: str,
-           exclude: list[int] | None = None, story_key: str | None = None) -> Path:
+           exclude: list[int] | None = None, story_key: str | None = None, voice: bool = False) -> Path:
     """Write exports/share-<slug>/ with index.html and images/. Returns the folder."""
     exclude = set(exclude or [])
     ids = [i for i in _visible_ids(conn, params) if i not in exclude]
@@ -116,10 +116,17 @@ def export(conn: sqlite3.Connection, originals: Path, library: Path, params: dic
             continue
         d = describe.for_photo(conn, aid)
         names = [f["name"] for f in faces.faces_in_photo(conn, aid) if f.get("name") and not f.get("hidden")]
+        audio = ""
+        if voice:
+            vn = notes.list_for(conn, "photo", aid)
+            found = notes.path_of(conn, library, vn[-1]["id"]) if vn else None
+            if found:
+                audio = f"images/{n:04d}{found[0].suffix}"
+                shutil.copyfile(found[0], folder / audio)
         items.append({"src": name, "w": w, "h": h, "date": (a["taken_at"] or "")[:10],
                       "place": ", ".join(x for x in [a["city"], a["country"]] if x),
                       "caption": (d or {}).get("caption", "") if d and d.get("status") == "ok" else "",
-                      "people": names})
+                      "people": names, "audio": audio})
     story = ask.get_story(conn, story_key) if story_key else None
     (folder / "index.html").write_text(_page(title, story["text"] if story else "", items), encoding="utf-8")
     (folder / "README.txt").write_text(
@@ -135,7 +142,8 @@ def _page(title: str, story: str, items: list[dict]) -> str:
         f'<figure><img src="{it["src"]}" loading="lazy" alt="" width="{it["w"]}" height="{it["h"]}">'
         f'<figcaption>{esc(" · ".join(x for x in [it["date"], it["place"]] if x))}'
         f'{("<br>" + esc(it["caption"])) if it["caption"] else ""}'
-        f'{("<br><small>" + esc(", ".join(it["people"])) + "</small>") if it["people"] else ""}</figcaption></figure>'
+        f'{("<br><small>" + esc(", ".join(it["people"])) + "</small>") if it["people"] else ""}'
+        f'{("<br><audio controls preload=\"none\" src=\"" + it["audio"] + "\"></audio>") if it.get("audio") else ""}</figcaption></figure>'
         for it in items)
     paras = "".join(f"<p>{esc(p.strip())}</p>" for p in story.split("\n") if p.strip())
     return f"""<!doctype html>

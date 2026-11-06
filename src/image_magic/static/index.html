@@ -674,6 +674,7 @@
     <label class="field"><span>Title</span><input type="text" id="share-title"></label>
     <div id="share-check" class="small"></div>
     <div id="share-flags"></div>
+    <label class="check"><input type="checkbox" id="share-voice"><span>Include my voice notes (your voice goes with the photos)</span></label>
     <div class="row" style="margin-top:14px"><button class="btn primary" id="share-go">Export</button><span class="small muted" id="share-note"></span></div>
   </div>
 </div>
@@ -717,6 +718,21 @@
   </div>
 </div>
 
+<div class="story hidden" id="voice-dlg">
+  <div class="card" style="width:min(520px,100%)">
+    <div class="row" style="justify-content:space-between">
+      <h2 id="voice-title" style="margin:0">Voice note</h2>
+      <button class="btn" id="voice-close">✕</button>
+    </div>
+    <p class="muted small">Say what this moment was: who, what, how it felt. Stored on this computer only, played back in replays.</p>
+    <div id="voice-list" class="small"></div>
+    <div class="row" style="margin-top:12px">
+      <button class="btn primary" id="voice-rec">● Record</button>
+      <button class="btn hidden" id="voice-stop">■ Stop</button>
+      <span class="small muted" id="voice-note"></span>
+    </div>
+  </div>
+</div>
 <div class="story hidden" id="home-dlg">
   <div class="card" style="width:min(960px,100%)">
     <div class="row" style="justify-content:space-between">
@@ -1294,6 +1310,12 @@ async function openLightbox(i, items) {
       const e = document.createElement("a"); e.className = "edit"; e.textContent = "✎ change"; e.onclick = ev => { ev.stopPropagation(); tripMenu(e, d); };
       div.append(v, e); info.append(div);
     }
+    {
+      const div = document.createElement("div"), b = document.createElement("b"); b.textContent = "Voice note"; div.append(b);
+      const v = document.createElement("a"); v.textContent = d.voice && d.voice.length ? `🎙 ${d.voice.length} note${d.voice.length > 1 ? "s" : ""} · play / record` : "🎙 Record your voice";
+      v.onclick = () => openVoice("photo", d.id, "Voice note for this photo");
+      div.append(v); info.append(div);
+    }
     if (d.event) add("Event", `${d.event.title} (${d.event.photo_count} photos)`, () => { closeLightbox(); showTab("photos"); setFilters({ event: d.event.id, eventTitle: d.event.title }); });
     if (d.taken_at) add("Replay", d.event ? "▶ This event" : "▶ This day", () => { closeLightbox(); d.event ? openReplay({ event: d.event.id }, d.event.title) : openReplay({ day: d.taken_at.slice(0, 10) }, fmtDate(d.taken_at)); });
     const known = (d.faces || []).filter(f => f.person_id && !f.hidden);
@@ -1508,6 +1530,12 @@ function showReplay(i) {
   else { el = document.createElement("img"); el.src = media("view", it.id); }
   stage.prepend(el);
   if (i + 1 < rp.items.length) { const pre = new Image(); pre.src = media("view", rp.items[i + 1].id); }
+  if (rp.audio) { rp.audio.pause(); rp.audio = null; }
+  let hold = 0;
+  if (it.voice_id) {
+    rp.audio = new Audio(media("voice", it.voice_id)); rp.audio.play().catch(() => {});
+    hold = 1; rp.audio.onended = () => { if (rp.playing && rp.i === i) rp.timer = setTimeout(() => showReplay(i + 1), 800); };
+  }
   const d = new Date(it.taken_at);
   const place = [it.city, it.country].filter(Boolean).join(", ");
   $("#rp-cap").innerHTML = `<b></b><span></span>`;
@@ -1524,13 +1552,13 @@ function showReplay(i) {
     const far = !rp.map.getBounds().pad(-0.3).contains(ll);
     rp.map.flyTo(ll, far ? Math.min(rp.map.getZoom(), 12) : rp.map.getZoom(), { duration: 1.2 });
   } catch (e) { /* map not ready: keep playing */ }
-  if (rp.playing) {
+  if (rp.playing && !hold) {
     const secs = parseFloat($("#rp-speed").value) * (it.kind === "video" ? 3 : 1);
     rp.timer = setTimeout(() => showReplay(i + 1), secs * 1000);
   }
 }
-function pauseReplay() { rp.playing = false; clearTimeout(rp.timer); $("#rp-play").textContent = "▶"; }
-function closeReplay() { pauseReplay(); $("#rp").classList.add("hidden"); $("#rp-stage").querySelectorAll("img,video").forEach(n => n.remove()); }
+function pauseReplay() { rp.playing = false; clearTimeout(rp.timer); $("#rp-play").textContent = "▶"; if (rp.audio) rp.audio.pause(); }
+function closeReplay() { pauseReplay(); rp.audio = null; $("#rp").classList.add("hidden"); $("#rp-stage").querySelectorAll("img,video").forEach(n => n.remove()); }
 $("#rp-play").onclick = () => { if (rp.playing) pauseReplay(); else { rp.playing = true; $("#rp-play").textContent = "❚❚"; showReplay(rp.i + 1 < rp.items.length ? rp.i + (rp.i < 0 ? 1 : 0) : 0); } };
 $("#rp-prev").onclick = () => showReplay(Math.max(0, rp.i - 1));
 $("#rp-next").onclick = () => showReplay(Math.min(rp.items.length - 1, rp.i + 1));
@@ -1806,7 +1834,7 @@ $("#share-go").onclick = async () => {
   const f = shareState.filters;
   const story_key = f.trip ? "trip:" + f.trip : f.chapter ? "chapter:" + f.chapter : null;
   $("#share-note").textContent = "Exporting…"; $("#share-go").disabled = true;
-  try { const r = await api("/api/share/export", { filters: f, title: $("#share-title").value, exclude, story_key }); $("#share-note").textContent = "Done: " + r.folder; }
+  try { const r = await api("/api/share/export", { filters: f, title: $("#share-title").value, exclude, story_key, voice: $("#share-voice").checked }); $("#share-note").textContent = "Done: " + r.folder; }
   catch (e) { $("#share-note").textContent = e.message; }
   $("#share-go").disabled = false;
 };
@@ -1953,12 +1981,58 @@ async function loadEvents() {
     play.style.margin = "0 14px 12px"; play.onclick = ev => { ev.stopPropagation(); openReplay({ event: e.id }, e.title); };
     const sh = document.createElement("button"); sh.className = "btn"; sh.textContent = "↗ Share";
     sh.style.margin = "0 14px 12px"; sh.onclick = ev => { ev.stopPropagation(); openShare({ event: e.id }, e.title); };
-    const rowb = document.createElement("div"); rowb.className = "row"; rowb.append(play, sh);
+    const vn = document.createElement("button"); vn.className = "btn"; vn.textContent = "🎙 Note"; vn.title = "Record a voice note for this event";
+    vn.style.margin = "0 14px 12px"; vn.onclick = ev => { ev.stopPropagation(); openVoice("event", e.id, e.title); };
+    const rowb = document.createElement("div"); rowb.className = "row"; rowb.append(play, sh, vn);
     b.append(rowb);
     return b;
   }));
 }
 $("#events-year").onchange = loadEvents;
+
+// ---- voice notes
+const voice = { kind: "photo", id: 0, rec: null, chunks: [], t0: 0, stream: null };
+async function openVoice(kind, id, title) {
+  voice.kind = kind; voice.id = id; $("#voice-title").textContent = title || "Voice note";
+  $("#voice-dlg").classList.remove("hidden"); $("#voice-note").textContent = "";
+  await listVoice();
+}
+async function listVoice() {
+  const list = await api(`/api/voice/${voice.id}?kind=${voice.kind}`).catch(() => []);
+  const box = $("#voice-list"); box.replaceChildren();
+  if (!list.length) { box.textContent = "No voice note yet."; return; }
+  for (const n of list) {
+    const row = document.createElement("div"); row.className = "row"; row.style.margin = "6px 0";
+    const a = document.createElement("audio"); a.controls = true; a.src = media("voice", n.id); a.style.height = "32px";
+    const when = document.createElement("span"); when.className = "muted small"; when.textContent = new Date(n.created).toLocaleDateString() + (n.seconds ? ` · ${Math.round(n.seconds)} s` : "");
+    const del = document.createElement("button"); del.className = "btn"; del.textContent = "Delete";
+    del.onclick = async () => { if (confirm("Delete this voice note?")) { await api("/api/voice/delete", { id: n.id }).catch(e => toast(e.message)); listVoice(); } };
+    row.append(a, when, del); box.append(row);
+  }
+}
+$("#voice-close").onclick = () => { if (voice.rec && voice.rec.state === "recording") $("#voice-stop").click(); $("#voice-dlg").classList.add("hidden"); };
+$("#voice-rec").onclick = async () => {
+  try { voice.stream = await navigator.mediaDevices.getUserMedia({ audio: true }); }
+  catch (e) { $("#voice-note").textContent = "Microphone not available: " + e.message; return; }
+  const mime = ["audio/webm;codecs=opus", "audio/webm", "audio/ogg", "audio/mp4"].find(m => MediaRecorder.isTypeSupported(m)) || "";
+  voice.rec = new MediaRecorder(voice.stream, mime ? { mimeType: mime } : {}); voice.chunks = []; voice.t0 = performance.now();
+  voice.rec.ondataavailable = e => { if (e.data.size) voice.chunks.push(e.data); };
+  voice.rec.onstop = async () => {
+    voice.stream.getTracks().forEach(t => t.stop());
+    const secs = (performance.now() - voice.t0) / 1000;
+    const blob = new Blob(voice.chunks, { type: (voice.rec.mimeType || mime || "audio/webm").split(";")[0] });
+    $("#voice-note").textContent = "Saving…";
+    try {
+      const res = await fetch(`/api/voice?kind=${voice.kind}&id=${voice.id}&seconds=${secs.toFixed(1)}`, { method: "POST", headers: { "X-Token": TOKEN, "Content-Type": blob.type }, body: blob });
+      const data = await res.json().catch(() => ({})); if (!res.ok) throw new Error(data.error || res.statusText);
+      $("#voice-note").textContent = "Saved."; listVoice();
+      if (lbIndex >= 0) openLightbox(lbIndex, lbItems === grid.items ? undefined : lbItems);
+    } catch (e) { $("#voice-note").textContent = e.message; }
+  };
+  voice.rec.start(); $("#voice-rec").classList.add("hidden"); $("#voice-stop").classList.remove("hidden");
+  $("#voice-note").textContent = "Recording… click Stop when you're done.";
+};
+$("#voice-stop").onclick = () => { if (voice.rec) voice.rec.stop(); $("#voice-rec").classList.remove("hidden"); $("#voice-stop").classList.add("hidden"); };
 
 // ---- map
 let map = null, cluster = null;
