@@ -818,6 +818,21 @@ def make_handler(app: App):
                             from . import events
                             events.rename(conn, int(data["id"]), str(data.get("title", "")))
                             return self._json(200, {"ok": True})
+                        if action == "trip-delete":
+                            n = curate.delete_trip(conn, int(data["id"]))
+                            from . import chapters
+                            chapters.rebuild_milestones(conn)
+                            return self._json(200, {"released": n})
+                        if action == "trip-merge":
+                            curate.merge_trips(conn, int(data["from"]), int(data["into"]))
+                            return self._json(200, {"ok": True})
+                        if action == "trip-split":
+                            return self._json(200, {"trip": curate.split_trip(conn, int(data["id"]), str(data.get("at", "")), data.get("title"))})
+                        if action == "trip-dates":
+                            return self._json(200, curate.set_trip_dates(conn, int(data["id"]), str(data.get("start", "")), str(data.get("end", ""))))
+                        if action == "trip-cover":
+                            curate.set_trip_cover(conn, int(data["id"]), int(data["asset"]))
+                            return self._json(200, {"ok": True})
                         if action == "trip-rename":
                             curate.rename_trip(conn, int(data["id"]), str(data.get("title", "")))
                             return self._json(200, {"ok": True})

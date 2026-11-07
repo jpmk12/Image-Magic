@@ -368,6 +368,9 @@ Service features (flying log, squadron yearbook) slot into S2 (log) and S9 (year
   pages for index/chapters/trips/events/albums (+ years with everything), stories and
   milestones inline, optional voice notes; `archive` job with progress; Home panel.
 - Phase 6 complete.
+- **Trip editing + multi-select** (v0.39.0): curate.delete_trip (members released with
+  trip_manual so the automatic pass leaves them), merge_trips, split_trip, set_trip_dates,
+  set_trip_cover; Edit menu on trip cards; Select mode on Photos with bulk trip/album/trash.
 
 ---
 

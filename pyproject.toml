@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "image-magic"
-version = "0.38.1"
+version = "0.39.0"
 description = "Back up, catalog and (soon) categorize an iCloud photo library."
 readme = "README.md"
 requires-python = ">=3.10"

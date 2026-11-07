@@ -234,6 +234,13 @@ program only. Your photos and settings are kept.
   sends a trashed photo again at the next sync, it goes straight back to the trash. The viewer
   also has a **Move to the app's trash** link. To remove a photo from iCloud itself, do that in
   Apple Photos.
+- **Editing trips:** every trip card has **✎ Edit**: rename, change the first and last day
+  (photos in the new range join, others leave), split at a date into two trips, merge into
+  another trip, choose the cover (from the viewer), or **Not a trip**, which takes the trip out
+  while its photos stay and are never grouped into it again. All of these survive rebuilds.
+- **Select mode:** **☑ Select** on the Photos tab lets you tick many photos (or **Select all
+  shown**) and then move them to a trip or a new trip, take them out of their trips, add them
+  to an album, or move them to the trash in one go.
 - **Fixing mistakes:** everything the app works out can be corrected, and your corrections
   stick through rebuilds. In the viewer: **Trip ✎ change** moves a photo to another trip, a
   new trip, or no trip, and as soon as you do, the app suggests other photos that belong with

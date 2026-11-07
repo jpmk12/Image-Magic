@@ -108,3 +108,36 @@ def test_curate_api(library):  # noqa: F811
         assert get(f"/api/trips")[1]["title"] == "Jordan 2019"
     finally:
         srv.shutdown()
+
+
+def test_trip_editing(library):  # noqa: F811
+    conn, _, lib = library
+    jordan = _jordan(conn)
+    n_before = jordan["photo_count"]
+    # split at a day inside the trip; both halves are kept across a rebuild
+    new = curate.split_trip(conn, jordan["id"], "2019-03-13", "Petra days")
+    titles = {t["title"]: t for t in browse.trips(conn)}
+    assert "Petra days" in titles and titles["Jordan"]["photo_count"] + titles["Petra days"]["photo_count"] == n_before
+    places.rebuild_trips(conn)
+    titles = {t["title"]: t for t in browse.trips(conn)}
+    assert "Petra days" in titles and "Jordan" in titles
+    # merge back
+    curate.merge_trips(conn, new, jordan["id"])
+    assert _jordan(conn)["photo_count"] == n_before and "Petra days" not in {t["title"] for t in browse.trips(conn)}
+    # redraw the dates: a day shorter loses photos, a day longer gains the home photo taken then
+    r = curate.set_trip_dates(conn, jordan["id"], "2019-03-11", "2019-03-15")
+    assert r["removed"] >= 2 and _jordan(conn)["start_at"].startswith("2019-03-11")
+    cover = conn.execute("SELECT id FROM assets WHERE trip_id = ? LIMIT 1", (jordan["id"],)).fetchone()[0]
+    curate.set_trip_cover(conn, jordan["id"], cover)
+    assert _jordan(conn)["cover_id"] == cover
+    import pytest
+    with pytest.raises(ValueError):
+        curate.set_trip_dates(conn, jordan["id"], "2019-03-15", "2019-03-11")
+    with pytest.raises(ValueError):
+        curate.split_trip(conn, jordan["id"], "2030-01-01")
+    # delete: photos stay, leave the trip, and the automatic pass does not bring the trip back
+    released = curate.delete_trip(conn, jordan["id"])
+    assert released > 0 and "Jordan" not in {t["title"] for t in browse.trips(conn)}
+    places.rebuild_trips(conn)
+    assert "Jordan" not in {t["title"] for t in browse.trips(conn)}
+    assert conn.execute("SELECT COUNT(*) FROM assets WHERE path LIKE 'jo/%' AND missing = 0").fetchone()[0] == 13

@@ -71,6 +71,74 @@ def rename_trip(conn: sqlite3.Connection, trip_id: int, title: str) -> None:
     conn.commit()
 
 
+def delete_trip(conn: sqlite3.Connection, trip_id: int) -> int:
+    """'Not a trip': the photos stay, leave the trip, and are remembered so the automatic pass
+    doesn't group them again. Returns how many photos were released."""
+    ids = [r[0] for r in conn.execute("SELECT id FROM assets WHERE trip_id = ?", (trip_id,))]
+    conn.execute("UPDATE assets SET trip_id = NULL, trip_manual = 1 WHERE trip_id = ?", (trip_id,))
+    conn.execute("DELETE FROM trips WHERE id = ?", (trip_id,))
+    conn.execute("DELETE FROM stories WHERE key = ?", (f"trip:{trip_id}",))
+    conn.commit()
+    return len(ids)
+
+
+def merge_trips(conn: sqlite3.Connection, src: int, dst: int) -> None:
+    """Fold trip `src` into `dst` (your decision: the result is kept across rebuilds)."""
+    if src == dst or not conn.execute("SELECT 1 FROM trips WHERE id = ?", (dst,)).fetchone():
+        raise ValueError("Pick a different trip to merge into")
+    conn.execute("UPDATE assets SET trip_id = ?, trip_manual = 1 WHERE trip_id = ?", (dst, src))
+    conn.execute("UPDATE trips SET manual = 1, title_locked = 1 WHERE id = ?", (dst,))
+    conn.execute("DELETE FROM trips WHERE id = ?", (src,))
+    _recount(conn, dst)
+    conn.commit()
+
+
+def split_trip(conn: sqlite3.Connection, trip_id: int, at_day: str, new_title: str | None = None) -> int:
+    """Photos from `at_day` (YYYY-MM-DD) onward become a new trip. Returns the new trip's id."""
+    day = str(at_day)[:10]
+    datetime.fromisoformat(day)
+    t = conn.execute("SELECT title FROM trips WHERE id = ?", (trip_id,)).fetchone()
+    if not t:
+        raise ValueError("Unknown trip")
+    ids = [r[0] for r in conn.execute("SELECT id FROM assets WHERE trip_id = ? AND substr(taken_at, 1, 10) >= ?", (trip_id, day))]
+    if not ids or len(ids) == conn.execute("SELECT COUNT(*) FROM assets WHERE trip_id = ?", (trip_id,)).fetchone()[0]:
+        raise ValueError("That date doesn't split the trip; pick a day inside it")
+    new = set_trip(conn, ids, None, new_title=(new_title or f"{t['title']} (part 2)"))
+    conn.execute("UPDATE assets SET trip_manual = 1 WHERE trip_id = ?", (trip_id,))
+    conn.execute("UPDATE trips SET manual = 1 WHERE id = ?", (trip_id,))
+    _recount(conn, trip_id)
+    conn.commit()
+    return new
+
+
+def set_trip_dates(conn: sqlite3.Connection, trip_id: int, start: str, end: str) -> dict:
+    """Redraw a trip's dates: photos inside the new range join it, photos outside leave it."""
+    s, e = str(start)[:10], str(end)[:10]
+    datetime.fromisoformat(s); datetime.fromisoformat(e)
+    if e < s:
+        raise ValueError("The end is before the start")
+    if not conn.execute("SELECT 1 FROM trips WHERE id = ?", (trip_id,)).fetchone():
+        raise ValueError("Unknown trip")
+    out = [r[0] for r in conn.execute("SELECT id FROM assets WHERE trip_id = ? AND (substr(taken_at, 1, 10) < ? OR substr(taken_at, 1, 10) > ?)",
+                                      (trip_id, s, e))]
+    inside = [r[0] for r in conn.execute(
+        """SELECT id FROM assets WHERE missing = 0 AND kind != 'live_video' AND substr(taken_at, 1, 10) BETWEEN ? AND ?
+           AND (trip_id IS NULL OR trip_id = ?) AND trashed_at IS NULL""", (s, e, trip_id))]
+    if out:
+        set_trip(conn, out, None)
+    if inside:
+        set_trip(conn, inside, trip_id)
+    conn.execute("UPDATE trips SET manual = 1 WHERE id = ?", (trip_id,))
+    _recount(conn, trip_id)
+    conn.commit()
+    return {"added": len(inside), "removed": len(out)}
+
+
+def set_trip_cover(conn: sqlite3.Connection, trip_id: int, asset_id: int) -> None:
+    conn.execute("UPDATE trips SET cover_id = ? WHERE id = ?", (asset_id, trip_id))
+    conn.commit()
+
+
 def set_caption(conn: sqlite3.Connection, asset_id: int, caption: str, keywords: list[str] | None) -> dict:
     describe.ensure_schema(conn)
     caption = caption.strip()[:500]

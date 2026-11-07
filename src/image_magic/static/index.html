@@ -143,6 +143,10 @@
   .tile .badge { position: absolute; left: 8px; bottom: 8px; background: rgba(0,0,0,.6); color: #fff; backdrop-filter: blur(4px);
                  font-size: 10px; font-weight: 700; letter-spacing: .08em; padding: 2px 7px; border-radius: 99px; }
   .tile.video { display: grid; place-items: center; color: var(--muted); font-size: 30px; }
+  .grid.selecting .tile::after { content: ""; position: absolute; top: 8px; left: 8px; width: 22px; height: 22px; border-radius: 50%; border: 2px solid #fff; background: rgba(0,0,0,.35); }
+  .grid.selecting .tile.sel::after { content: "✓"; background: var(--accent); color: #fff; font-weight: 700; display: grid; place-items: center; font-size: 14px; }
+  .grid.selecting .tile.sel { outline: 3px solid var(--accent); }
+  #selbar { position: sticky; bottom: 10px; z-index: 5; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 10px 14px; box-shadow: var(--shadow); margin-top: 10px; }
 
   /* ---- timeline */
   .tl-chapter { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); margin-bottom: 16px; overflow: hidden; box-shadow: var(--shadow); }
@@ -517,9 +521,19 @@
       <button class="btn hidden" id="f-replay" title="Watch these photos in order, on the map">▶ Replay</button>
       <button class="btn hidden" id="f-share" title="Export a page with these photos, metadata removed">↗ Share</button>
       <button class="btn hidden" id="f-save-album" title="Keep this search as a smart album that updates itself">＋ Save as album</button>
+      <button class="btn" id="f-select" title="Tick several photos, then move them to a trip, an album or the trash">☑ Select</button>
       <span class="muted small" id="f-count"></span>
     </div>
     <div class="grid" id="grid"></div>
+    <div id="selbar" class="row hidden">
+      <b id="sel-count">0 selected</b>
+      <button class="btn" id="sel-all">Select all shown</button>
+      <button class="btn" id="sel-trip">Move to trip…</button>
+      <button class="btn" id="sel-notrip">Not part of a trip</button>
+      <button class="btn" id="sel-album">Add to album…</button>
+      <button class="btn" id="sel-trash">🗑 Trash</button>
+      <button class="btn" id="sel-done">Done</button>
+    </div>
     <p class="muted" id="grid-empty" style="display:none">No photos here yet. Download some from the Home tab.</p>
     <div id="grid-more" style="height:40px"></div>
   </section>
@@ -1553,6 +1567,43 @@ $("#f-kind").onchange = e => setFilters({ ...grid.filters, kind: e.target.value 
 $("#f-best").onchange = e => setFilters({ ...grid.filters, best: e.target.checked ? "1" : "" });
 $("#f-fav").onchange = e => setFilters({ ...grid.filters, favorite: e.target.checked ? "1" : "" });
 
+// ---- multi-select
+const sel = { on: false, ids: new Set() };
+function toggleSel(id, el) { if (sel.ids.has(id)) sel.ids.delete(id); else sel.ids.add(id); if (el) el.classList.toggle("sel", sel.ids.has(id)); $("#sel-count").textContent = `${sel.ids.size} selected`; }
+function setSelectMode(on) {
+  sel.on = on; if (!on) sel.ids.clear();
+  $("#grid").classList.toggle("selecting", on); $("#selbar").classList.toggle("hidden", !on); $("#f-select").classList.toggle("primary", on);
+  $$("#grid .tile").forEach(t => t.classList.toggle("sel", on && sel.ids.has(+t.dataset.id))); $("#sel-count").textContent = `${sel.ids.size} selected`;
+}
+$("#f-select").onclick = () => setSelectMode(!sel.on);
+$("#sel-done").onclick = () => setSelectMode(false);
+$("#sel-all").onclick = () => { grid.items.forEach(it => sel.ids.add(it.id)); setSelectMode(true); };
+const selIds = () => [...sel.ids];
+$("#sel-trip").onclick = async ev => {
+  if (!sel.ids.size) return toast("Tick some photos first.");
+  const anchor = ev.currentTarget;
+  const trips = await api("/api/trips").catch(() => []);
+  const items = [{ head: `Move ${sel.ids.size} photos to…` }];
+  const go = async trip => { await api("/api/curate/trip", { ids: selIds(), trip }).catch(e => toast(e.message)); toast("Moved"); setSelectMode(false); setFilters(grid.filters); };
+  for (const t of trips.slice(0, 15)) items.push({ label: `${t.title} · ${new Date(t.start_at).toLocaleDateString(undefined, { month: "short", year: "numeric" })}`, run: () => go(t.id) });
+  items.push("-", { label: "A new trip…", run: () => { const n = prompt("Name the trip:"); if (n && n.trim()) go({ new: n.trim() }); } });
+  showMenu(anchor, items);
+};
+$("#sel-notrip").onclick = async () => { if (!sel.ids.size) return toast("Tick some photos first."); await api("/api/curate/trip", { ids: selIds(), trip: "none" }).catch(e => toast(e.message)); toast("Taken out of their trips"); setSelectMode(false); setFilters(grid.filters); };
+$("#sel-album").onclick = async ev => {
+  if (!sel.ids.size) return toast("Tick some photos first.");
+  const anchor = ev.currentTarget;
+  const list = (await api("/api/albums").catch(() => [])).filter(a => a.kind === "manual");
+  const items = [{ head: `Add ${sel.ids.size} photos to…` }];
+  for (const a of list.slice(0, 12)) items.push({ label: a.title, run: async () => { await api("/api/albums/add", { id: a.id, ids: selIds() }).catch(e => toast(e.message)); toast("Added to " + a.title); setSelectMode(false); } });
+  items.push("-", { label: "New album…", run: async () => { const n = prompt("Album name:"); if (n && n.trim()) { await api("/api/albums/create", { title: n, kind: "manual", ids: selIds() }).catch(e => toast(e.message)); toast("Album made"); setSelectMode(false); } } });
+  showMenu(anchor, items);
+};
+$("#sel-trash").onclick = async () => {
+  if (!sel.ids.size) return toast("Tick some photos first.");
+  if (!confirm(`Move ${sel.ids.size} photos to the app's trash? They stay in iCloud and can be restored from the Home tab.`)) return;
+  await api("/api/cleanup/trash", { ids: selIds() }).catch(e => toast(e.message)); setSelectMode(false); setFilters(grid.filters); refresh();
+};
 async function loadMorePhotos() {
   if (grid.loading || (grid.offset && grid.offset >= grid.total)) return;
   grid.loading = true;
@@ -1585,7 +1636,8 @@ async function loadMorePhotos() {
         img.src = media("thumb", it.id); img.alt = ""; b.append(img);
       }
       if (it.live) { const s = document.createElement("span"); s.className = "badge"; s.textContent = "LIVE"; b.append(s); }
-      b.onclick = () => openLightbox(idx);
+      b.dataset.id = it.id; if (sel.on && sel.ids.has(it.id)) b.classList.add("sel");
+      b.onclick = () => { if (sel.on) { toggleSel(it.id, b); } else openLightbox(idx); };
       frag.append(b);
     }
     box.append(frag);
@@ -2121,6 +2173,7 @@ async function tripMenu(anchor, d) {
   if (d.trip_id) {
     items.push("-", { label: "Not part of a trip", run: () => setTrip("none") });
     items.push({ label: "Rename this trip…", run: async () => { const name = prompt("Trip title:", d.trip_title); if (name && name.trim()) { await api("/api/curate/trip-rename", { id: d.trip_id, title: name }).catch(e => toast(e.message)); refreshView(); } } });
+    items.push({ label: "Use as the trip's cover", run: async () => { await api("/api/curate/trip-cover", { id: d.trip_id, asset: d.id }).catch(e => toast(e.message)); toast("Cover set"); } });
     items.push("-", { label: "🔍 Find more photos from this trip", run: () => openSuggestions(d.trip_id, d.trip_title, d.id) });
   }
   showMenu(anchor, items);
@@ -2490,7 +2543,9 @@ async function loadTrips() {
     st.style.margin = "0 14px 12px"; st.onclick = ev => { ev.stopPropagation(); openStory("trip", t.id, t.title); };
     const bk = document.createElement("button"); bk.className = "btn"; bk.textContent = "📖 Book"; bk.title = "A printable PDF: cover, story, a page per day";
     bk.style.margin = "0 14px 12px"; bk.onclick = ev => { ev.stopPropagation(); downloadBook("trip", t.id); };
-    const rowb = document.createElement("div"); rowb.className = "row"; rowb.append(play, st, more, bk);
+    const ed = document.createElement("button"); ed.className = "btn"; ed.textContent = "✎ Edit"; ed.title = "Rename, change dates, merge, split, cover, or not a trip";
+    ed.style.margin = "0 14px 12px"; ed.onclick = ev => { ev.stopPropagation(); tripEditMenu(ed, t, list); };
+    const rowb = document.createElement("div"); rowb.className = "row"; rowb.append(play, st, more, bk, ed);
     b.append(rowb);
     return b;
   }));
@@ -2530,6 +2585,22 @@ async function albumMenu(anchor, d) {
   for (const a of list.slice(0, 12)) items.push({ label: a.title, run: async () => { await api("/api/albums/add", { id: a.id, ids: [d.id] }).catch(e => toast(e.message)); toast("Added to " + a.title); refreshView(); } });
   items.push("-", { label: "New album…", run: async () => { const n = prompt("Album name:"); if (n && n.trim()) { await api("/api/albums/create", { title: n, kind: "manual", ids: [d.id] }).catch(e => toast(e.message)); refreshView(); } } });
   for (const a of d.albums || []) items.push({ label: `Remove from ${a.title}`, run: async () => { await api("/api/albums/remove", { id: a.id, ids: [d.id] }).catch(e => toast(e.message)); refreshView(); } });
+  showMenu(anchor, items);
+}
+function tripEditMenu(anchor, t, all) {
+  const call = async (path, body, msg) => { try { await api(path, body); toast(msg || "Updated"); } catch (e) { toast(e.message); } loadTrips(); };
+  const d0 = t.start_at.slice(0, 10), d1 = t.end_at.slice(0, 10);
+  const items = [{ head: t.title },
+    { label: "Rename…", run: () => { const n = prompt("Trip title:", t.title); if (n && n.trim()) call("/api/curate/trip-rename", { id: t.id, title: n }); } },
+    { label: `Change dates… (${d0} → ${d1})`, run: () => { const s = prompt("First day (YYYY-MM-DD):", d0); if (!s) return; const e = prompt("Last day (YYYY-MM-DD):", d1); if (!e) return; call("/api/curate/trip-dates", { id: t.id, start: s.trim(), end: e.trim() }, "Dates changed: photos in the new range joined, others left"); } },
+    { label: "Split at a date…", run: () => { const d = prompt("The new trip starts on (YYYY-MM-DD):", d1); if (!d) return; const n = prompt("Name for the second part:", t.title + " (part 2)"); if (n === null) return; call("/api/curate/trip-split", { id: t.id, at: d.trim(), title: n.trim() || null }, "Split"); } },
+    { label: "Merge into another trip…", run: () => {
+        const sub = [{ head: "Merge into…" }];
+        for (const o of all.filter(x => x.id !== t.id).slice(0, 15)) sub.push({ label: `${o.title} · ${new Date(o.start_at).toLocaleDateString(undefined, { month: "short", year: "numeric" })}`, run: () => { if (confirm(`Merge "${t.title}" into "${o.title}"?`)) call("/api/curate/trip-merge", { from: t.id, into: o.id }, "Merged"); } });
+        setTimeout(() => showMenu(anchor, sub), 0); } },
+    { label: "Choose the cover…", run: () => { toast("Open a photo of this trip and use Trip ✎ change → Use as the trip's cover."); goPhotos({ trip: t.id, tripTitle: t.title }); } },
+    "-",
+    { label: "Not a trip (take it out; photos stay)", run: () => { if (confirm(`Take out the trip "${t.title}"? Its ${fmt(t.photo_count)} photos stay in your library and won't be grouped into this trip again.`)) call("/api/curate/trip-delete", { id: t.id }, "Trip taken out"); } }];
   showMenu(anchor, items);
 }
 async function loadEvents() {
