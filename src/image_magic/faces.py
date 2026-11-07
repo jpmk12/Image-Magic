@@ -212,25 +212,11 @@ class FaceModel:
         d = model_dir()
         providers = _providers()
 
-        def session(name: str, test_input: dict):
-            opts = ort.SessionOptions()
-            opts.log_severity_level = 3
-            if "DmlExecutionProvider" in providers:
-                opts.enable_mem_pattern = False
-                opts.execution_mode = ort.ExecutionMode.ORT_SEQUENTIAL
-            try:
-                s = ort.InferenceSession(str(d / name), opts, providers=providers)
-                s.run(None, test_input)
-                return s
-            except Exception:
-                cpu = ort.SessionOptions()
-                cpu.log_severity_level = 3
-                return ort.InferenceSession(str(d / name), cpu, providers=["CPUExecutionProvider"])
-
-        self.det = session("det_10g.onnx", {"input.1": np.zeros((1, 3, DET_SIZE, DET_SIZE), np.float32)})
-        self.rec = session("w600k_r50.onnx", {"input.1": np.zeros((1, 3, 112, 112), np.float32)})
-        used = self.det.get_providers()[0]
-        self.device = {"CUDAExecutionProvider": "GPU (CUDA)", "DmlExecutionProvider": "GPU (DirectML)"}.get(used, "CPU")
+        self._dir = d
+        self.det = self._session("det_10g.onnx", {"input.1": np.zeros((1, 3, DET_SIZE, DET_SIZE), np.float32)}, providers)
+        self.rec = self._session("w600k_r50.onnx", {"input.1": np.zeros((1, 3, 112, 112), np.float32)}, providers)
+        self._set_device()
+        self.fell_back = False
         self._det_out = [o.name for o in self.det.get_outputs()]
         self._centers: dict[int, np.ndarray] = {}
         for s in STRIDES:
@@ -238,6 +224,46 @@ class FaceModel:
             c = np.stack(np.mgrid[:n, :n][::-1], axis=-1).astype(np.float32).reshape(-1, 2) * s
             self._centers[s] = np.repeat(c, ANCHORS_PER_CELL, axis=0)
         self._lock = threading.Lock()
+
+    @staticmethod
+    def _session(path_name, test_input: dict, providers: list[str]):
+        import onnxruntime as ort
+        d = model_dir()
+        opts = ort.SessionOptions()
+        opts.log_severity_level = 3
+        if "DmlExecutionProvider" in providers:
+            opts.enable_mem_pattern = False
+            opts.execution_mode = ort.ExecutionMode.ORT_SEQUENTIAL
+        try:
+            s = ort.InferenceSession(str(d / path_name), opts, providers=providers)
+            s.run(None, test_input)
+            return s
+        except Exception:
+            cpu = ort.SessionOptions()
+            cpu.log_severity_level = 3
+            return ort.InferenceSession(str(d / path_name), cpu, providers=["CPUExecutionProvider"])
+
+    def _set_device(self) -> None:
+        used = self.det.get_providers()[0]
+        self.device = {"CUDAExecutionProvider": "GPU (CUDA)", "DmlExecutionProvider": "GPU (DirectML)"}.get(used, "CPU")
+        self.on_gpu = used != "CPUExecutionProvider"
+
+    def _to_cpu(self) -> None:
+        """The GPU driver rejected a run (DirectML does this on some models): carry on with the CPU."""
+        self.det = self._session("det_10g.onnx", {"input.1": np.zeros((1, 3, DET_SIZE, DET_SIZE), np.float32)}, ["CPUExecutionProvider"])
+        self.rec = self._session("w600k_r50.onnx", {"input.1": np.zeros((1, 3, 112, 112), np.float32)}, ["CPUExecutionProvider"])
+        self._set_device()
+        self.fell_back = True
+
+    def _run(self, which: str, inputs: dict, outputs=None):
+        """Run a session; on a GPU-side failure switch both sessions to the CPU and retry once."""
+        try:
+            return getattr(self, which).run(outputs, inputs)
+        except Exception:
+            if not self.on_gpu:
+                raise
+            self._to_cpu()
+            return getattr(self, which).run(outputs, inputs)
 
     @classmethod
     def get(cls) -> "FaceModel":
@@ -255,7 +281,7 @@ class FaceModel:
         canvas.paste(im.resize((nw, nh), Image.BILINEAR), (0, 0))
         blob = ((np.asarray(canvas, dtype=np.float32) - 127.5) / 128.0).transpose(2, 0, 1)[None]
         with self._lock:
-            outs = self.det.run(self._det_out, {"input.1": blob})
+            outs = self._run("det", {"input.1": blob}, self._det_out)
         dets, kpss = [], []
         for i, s in enumerate(STRIDES):
             scores = outs[i].reshape(-1)
@@ -289,7 +315,11 @@ class FaceModel:
         arr = np.stack([(np.asarray(a.convert("RGB"), dtype=np.float32) - 127.5) / 127.5 for a in aligned])
         blob = arr.transpose(0, 3, 1, 2)
         with self._lock:
-            out = self.rec.run(None, {"input.1": blob})[0].astype(np.float32)
+            if self.on_gpu and self.device == "GPU (DirectML)":
+                # DirectML wants the shape it was warmed up with: one face at a time.
+                out = np.concatenate([self._run("rec", {"input.1": blob[i:i + 1]})[0] for i in range(len(blob))]).astype(np.float32)
+            else:
+                out = self._run("rec", {"input.1": blob})[0].astype(np.float32)
         return out / np.maximum(np.linalg.norm(out, axis=1, keepdims=True), 1e-8)
 
 
@@ -356,13 +386,13 @@ def scan_photos(conn: sqlite3.Connection, originals: Path, model: FaceModel,
             break
         try:
             im = load_for_faces(originals / row["path"])
-            faces = model.detect(im)
         except Exception:
             # Unreadable file: remember that so it isn't retried forever.
             conn.execute("INSERT OR REPLACE INTO face_scans (asset_id, model, n_faces) VALUES (?, ?, -1)",
                          (row["id"], MODEL_NAME))
             done += 1
             continue
+        faces = model.detect(im)
         for f in faces:
             size = f["box"][2] - f["box"][0]
             aligned = align_face(im, f["kps"]) if size >= MIN_FACE_PX else None

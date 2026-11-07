@@ -195,3 +195,39 @@ def test_real_models_group_same_person(monkeypatch, tmp_path):
     assert len(obama) == 1 and {"obama2.jpg", "two_people.jpg", "obama-240p.jpg"} <= obama[0]
     biden = [g for g in groups.values() if "biden.jpg" in g]
     assert len(biden) == 1 and "two_people.jpg" in biden[0] and "obama.jpg" not in biden[0]
+
+
+def test_gpu_failure_falls_back_to_cpu(tmp_path, monkeypatch):
+    """A DirectML-style failure mid-run switches both sessions to the CPU and the run completes."""
+    import numpy as np
+    from PIL import Image
+
+    class FlakySession:
+        def __init__(self, provider, fail_batches_over=1):
+            self.provider, self.limit = provider, fail_batches_over
+        def get_providers(self):
+            return [self.provider]
+        def get_outputs(self):
+            return [type("O", (), {"name": f"o{i}"})() for i in range(9)]
+        def run(self, outputs, inputs):
+            x = inputs["input.1"]
+            if self.provider == "DmlExecutionProvider" and x.shape[0] > self.limit:
+                raise RuntimeError("[ONNXRuntimeError] : 6 : RUNTIME_EXCEPTION : BatchNormalization ... The parameter is incorrect.")
+            if x.shape[-1] == 112:
+                return [np.ones((x.shape[0], 512), np.float32)]
+            return [np.zeros((1,), np.float32)] * 9
+
+    made = []
+    def fake_session(path_name, test_input, providers):
+        made.append(providers[0]); return FlakySession(providers[0])
+    monkeypatch.setattr(faces.FaceModel, "_session", staticmethod(fake_session))
+    monkeypatch.setattr(faces, "_providers", lambda: ["DmlExecutionProvider", "CPUExecutionProvider"])
+    m = faces.FaceModel()
+    assert m.device == "GPU (DirectML)" and not m.fell_back
+    # on DirectML faces are embedded one at a time, so a batch of 3 works on the GPU
+    v = m.embed([Image.new("RGB", (112, 112))] * 3)
+    assert v.shape == (3, 512) and not m.fell_back
+    # a GPU error on the detector switches to the CPU and the call still returns
+    m.det = FlakySession("DmlExecutionProvider", fail_batches_over=0)
+    assert m.detect(Image.new("RGB", (200, 100))) == [] and m.fell_back and m.device == "CPU"
+    assert made[-2:] == ["CPUExecutionProvider", "CPUExecutionProvider"]

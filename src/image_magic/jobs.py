@@ -339,6 +339,9 @@ class JobRunner:
 
             def prog(done, total):
                 self.state.downloaded, self.state.total = done, total
+                if getattr(model, "fell_back", False) and not getattr(self, "_fallback_logged", False):
+                    self._fallback_logged = True
+                    self._add_log("The graphics card rejected the face models part-way; continuing on the CPU (slower, same results).")
                 self.state.message = f"Finding faces: {done:,} of {total:,} photos ({model.device})"
             n = faces.scan_photos(conn, settings.originals, model, progress=prog, cancelled=self._cancel.is_set)
             self.state.message = "Grouping faces by person..."

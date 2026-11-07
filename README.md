@@ -333,6 +333,12 @@ Place names are looked up **on your computer** from a bundled list of about 145,
   in your browser and save it where the error message says (the folder under
   `%APPDATA%\ImageMagic\models`). The app checks the fingerprint either way.
 
+**If People stops with a graphics-card error**
+- Some graphics drivers reject the face models part-way through (an "ONNXRuntimeError …
+  BatchNormalization … The parameter is incorrect" message). The app now notices this, switches
+  the face models to the CPU on the spot and carries on; the Activity log says so. Results are
+  the same, it just takes longer. Smart search is unaffected.
+
 **Honest limits**
 - icloudpd is a popular open-source tool, but it isn't made by Apple, and Apple could change
   iCloud in a way that breaks it until it's updated.
