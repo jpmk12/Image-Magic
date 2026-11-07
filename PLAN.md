@@ -332,6 +332,12 @@ Service features (flying log, squadron yearbook) slot into S2 (log) and S9 (year
   under contributed/<name>/<Y>/<Y-M>/, catalog.add_file, place lookup); contributor column
   and filter; Pairing persisted (hashed tokens + names); /api/contribute allowed for phones.
 - Phase 5 complete.
+- **Robust locations** (v0.30.0): location_source per asset (exif/icloud/video/nearby/none);
+  .xmp sidecars parsed (iCloud GPS as decimal or Adobe DMS, CreateDate, Rating→favorite/
+  rejected, Make=Screenshot, title, keywords); QuickTime/MP4 atom walker (mvhd creation time,
+  ©xyz / Apple keyed ISO6709, tkhd size); nearby inference (±20 min, interpolate when
+  neighbours agree within 5 km, else nearer in time; recomputed each scan; dropped when the
+  neighbour goes); located videos join trips by date; favourite filter; summary on Home.
 
 ---
 

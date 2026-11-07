@@ -208,6 +208,15 @@ program only. Your photos and settings are kept.
   care about (strangers in the background). Photos show who's in them in the viewer. New
   photos are scanned after each sync.
 
+**Where locations come from.** Most photos carry GPS from the camera. For the rest the app
+looks further: iCloud's own location record, which icloudpd saves next to each file as a
+`.xmp` sidecar (keep *Favorites, titles, keywords* on in Settings) and which often knows a
+place the file itself lacks, such as received or edited photos; the location and date inside
+a video's own metadata; and finally photos taken within 20 minutes of a located photo, which
+take that location ("the same afternoon at the beach"). The viewer says which source a place
+came from, and the Home tab's library panel counts them. Those sidecars also bring your
+♥ **favourites** (a filter on the Photos tab), titles and screenshot flags into the catalog.
+
 Place names are looked up **on your computer** from a bundled list of about 145,000 places
 (GeoNames, CC BY 4.0). Your locations are never sent anywhere.
 

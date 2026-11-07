@@ -174,7 +174,7 @@ def find_photos(conn, settings, q: dict) -> list[tuple[int, float]]:
     """Text query + filters -> [(asset_id, score)]: AI-description word matches first, then smart search."""
     from . import describe, search
     text = (q.get("q") or "").strip()[:200]
-    has_filters = any(q.get(k) for k in ("year", "country", "city", "trip", "kind", "person", "month", "day", "chapter", "event", "best"))
+    has_filters = any(q.get(k) for k in ("year", "country", "city", "trip", "kind", "person", "month", "day", "chapter", "event", "best", "favorite", "flying", "contributor"))
     allowed = None
     if has_filters:
         allowed = browse.ids(conn, q)

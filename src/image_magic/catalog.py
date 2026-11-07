@@ -63,6 +63,10 @@ MIGRATIONS = {
     "burst_best": "INTEGER NOT NULL DEFAULT 1",    # the keeper of its burst
     "event_id": "INTEGER",                         # small cluster of photos: a party, a hike (events.py)
     "contributor": "TEXT",                         # family member who added it from their phone (family.py)
+    "location_source": "TEXT",                     # exif | icloud | video | nearby | none (locations.py)
+    "favorite": "INTEGER NOT NULL DEFAULT 0",      # hearted in iCloud Photos (from the .xmp sidecar)
+    "screenshot": "INTEGER NOT NULL DEFAULT 0",
+    "title": "TEXT",                               # caption typed in Photos
 }
 TRIP_MIGRATIONS = {"manual": "INTEGER NOT NULL DEFAULT 0", "title_locked": "INTEGER NOT NULL DEFAULT 0"}
 
@@ -239,7 +243,7 @@ def scan(conn: sqlite3.Connection, originals: Path, progress=None, cancelled=lam
         if row:
             sets = ", ".join(f"{k} = :{k}" for k in values)
             conn.execute(
-                f"UPDATE assets SET {sets}, missing = 0, last_verified = NULL WHERE id = :id",
+                f"UPDATE assets SET {sets}, missing = 0, last_verified = NULL, location_source = NULL WHERE id = :id",
                 {**values, "id": row["id"]},
             )
             result.updated += 1
@@ -264,6 +268,8 @@ def scan(conn: sqlite3.Connection, originals: Path, progress=None, cancelled=lam
     _link_live_photos(conn)
     _mark_duplicates(conn)
     conn.commit()
+    from . import locations
+    locations.refresh(conn, originals, progress=progress, cancelled=cancelled)
     from . import places  # local import: places is optional data-heavy code
     result.places_added, result.trips = places.refresh(conn)
     from . import chapters, events
@@ -369,6 +375,7 @@ def stats(conn: sqlite3.Connection) -> dict:
         "countries": q(f"SELECT COUNT(DISTINCT country_code) FROM assets WHERE {live}"),
         "trips": q("SELECT COUNT(*) FROM trips"),
         "with_gps": q(f"SELECT COUNT(*) FROM assets WHERE {live} AND lat IS NOT NULL"),
+        "locations": __import__("image_magic.locations", fromlist=["summary"]).summary(conn),
         "bytes": q(f"SELECT COALESCE(SUM(size), 0) FROM assets WHERE {live}"),
         "first": q(f"SELECT MIN(taken_at) FROM assets WHERE {live}"),
         "last": q(f"SELECT MAX(taken_at) FROM assets WHERE {live}"),

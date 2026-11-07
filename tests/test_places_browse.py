@@ -88,7 +88,7 @@ def test_trips_found(library):
 def test_filters_and_facets(library):
     conn, _, _ = library
     jo = browse.photos(conn, {"country": "JO"})
-    assert jo["total"] == 15                     # 12 trip + 3 later Petra photos
+    assert jo["total"] == 16                     # 12 trip + 3 later Petra photos + the trip video (location inferred)
     petra = browse.photos(conn, {"country": "JO", "city": "Petra"})
     assert petra["total"] == 10
     f = browse.facets(conn)

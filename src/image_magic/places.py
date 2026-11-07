@@ -209,8 +209,8 @@ def rebuild_trips(conn: sqlite3.Connection) -> int:
                          (t["title"] if t["title_locked"] else title, ", ".join(cities), start.isoformat(), end.isoformat(),
                           t["cover_id"] or cover["id"], lat, lon, trip_id))
         matched.add(trip_id)
-        # Every photo/video in the trip's time window joins the trip, including
-        # ones without GPS (videos, photos from apps that strip location).
+        # Every photo/video in the trip's time window joins the trip: videos (located
+        # or not) and photos without GPS (from apps that strip location).
         id_list = [p["id"] for p in g]
         for i in range(0, len(id_list), 500):
             chunk = id_list[i:i + 500]
@@ -219,7 +219,7 @@ def rebuild_trips(conn: sqlite3.Connection) -> int:
                 [trip_id, *chunk])
         conn.execute(
             """UPDATE assets SET trip_id = ? WHERE trip_manual = 0 AND missing = 0 AND kind != 'live_video'
-               AND taken_at IS NOT NULL AND lat IS NULL AND taken_at >= ? AND taken_at <= ?""",
+               AND taken_at IS NOT NULL AND (lat IS NULL OR kind != 'photo') AND taken_at >= ? AND taken_at <= ?""",
             (trip_id, start.isoformat(), (end + timedelta(seconds=1)).isoformat()))
     for tid in list(existing):
         if tid not in matched and tid not in keep_ids:

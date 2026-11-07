@@ -44,6 +44,8 @@ def _filters(params: dict, alias: str = "") -> tuple[str, list]:
     if params.get("burst"):
         where.append(f"{a}burst_id = ?")
         args.append(int(params["burst"]))
+    if params.get("favorite"):
+        where.append(f"{a}favorite = 1")
     if params.get("contributor"):
         where.append(f"{a}contributor = ?")
         args.append(str(params["contributor"]))
@@ -129,6 +131,7 @@ def photo_detail(conn: sqlite3.Connection, asset_id: int) -> dict | None:
     row = conn.execute(
         """SELECT a.id, a.path, a.kind, a.taken_at, a.city, a.region, a.country, a.lat, a.lon,
                   a.camera_make, a.camera_model, a.width, a.height, a.size, a.trip_id, a.contributor,
+                  a.location_source, a.favorite, a.title,
                   t.title AS trip_title,
                   (SELECT v.id FROM assets v WHERE v.live_pair_id = a.id AND v.kind = 'live_video'
                      AND v.missing = 0 LIMIT 1) AS live_video_id

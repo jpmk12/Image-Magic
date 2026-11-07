@@ -473,6 +473,7 @@
       <select id="f-city" class="hidden"><option value="">All cities</option></select>
       <select id="f-kind"><option value="">Photos &amp; videos</option><option value="photo">Photos only</option><option value="video">Videos only</option></select>
       <label class="chip" title="Only well-exposed, sharp photos; one per burst"><input type="checkbox" id="f-best"> Best only</label>
+      <label class="chip" title="Photos you hearted in iCloud Photos"><input type="checkbox" id="f-fav"> ♥ Favourites</label>
       <span id="f-trip" class="chip hidden"></span>
       <button class="btn hidden" id="f-replay" title="Watch these photos in order, on the map">▶ Replay</button>
       <button class="btn hidden" id="f-share" title="Export a page with these photos, metadata removed">↗ Share</button>
@@ -932,6 +933,17 @@ function renderStats(s) {
     if (l.startsWith("Last")) a.style.fontSize = "14px";
     d.append(a, b); return d;
   }));
+  const loc = s.locations;
+  if (loc && loc.total) {
+    const p = document.createElement("p"); p.className = "small muted"; p.style.gridColumn = "1 / -1";
+    const by = loc.by_source || {}, parts = [];
+    if (by.exif) parts.push(`${fmt(by.exif)} from the camera`); if (by.icloud) parts.push(`${fmt(by.icloud)} from iCloud's record`);
+    if (by.video) parts.push(`${fmt(by.video)} from the video`); if (by.nearby) parts.push(`${fmt(by.nearby)} from photos taken minutes apart`);
+    p.textContent = `Locations: ${fmt(loc.located)} of ${fmt(loc.total)} items (${parts.join(", ")}); ${fmt(by.none || 0)} have none.`
+      + (loc.no_sidecars && !by.icloud ? " iCloud's own location records (.xmp sidecars) weren't found next to your photos; keep \"Favorites, titles, keywords\" on in Settings and run Get new photos to fetch them." : "")
+      + (loc.favorites ? ` ♥ ${fmt(loc.favorites)} favourites.` : "");
+    box.append(p);
+  }
 }
 
 let lastSigninState = "";
@@ -1319,7 +1331,7 @@ function fillCities() {
 function setFilters(f) {
   grid = { filters: f, offset: 0, total: 0, items: [], loading: false, lastMonth: "", loaded: true };
   $("#grid").replaceChildren();
-  $("#f-year").value = f.year || ""; $("#f-country").value = f.country || ""; $("#f-kind").value = f.kind || ""; $("#f-best").checked = !!f.best;
+  $("#f-year").value = f.year || ""; $("#f-country").value = f.country || ""; $("#f-kind").value = f.kind || ""; $("#f-best").checked = !!f.best; $("#f-fav").checked = !!f.favorite;
   $("#f-q").value = f.q || ""; $("#f-q-clear").classList.toggle("hidden", !f.q);
   fillCities();
   const chip = $("#f-trip");
@@ -1353,13 +1365,14 @@ $("#f-country").onchange = e => setFilters({ ...grid.filters, country: e.target.
 $("#f-city").onchange = e => setFilters({ ...grid.filters, city: e.target.value, trip: "" });
 $("#f-kind").onchange = e => setFilters({ ...grid.filters, kind: e.target.value });
 $("#f-best").onchange = e => setFilters({ ...grid.filters, best: e.target.checked ? "1" : "" });
+$("#f-fav").onchange = e => setFilters({ ...grid.filters, favorite: e.target.checked ? "1" : "" });
 
 async function loadMorePhotos() {
   if (grid.loading || (grid.offset && grid.offset >= grid.total)) return;
   grid.loading = true;
   const mine = grid;
   const q = new URLSearchParams({ offset: grid.offset, limit: PAGE });
-  for (const k of ["q", "year", "country", "city", "trip", "kind", "person", "month", "day", "chapter", "event", "best", "burst", "flying", "contributor"]) if (grid.filters[k]) q.set(k, grid.filters[k]);
+  for (const k of ["q", "year", "country", "city", "trip", "kind", "person", "month", "day", "chapter", "event", "best", "burst", "flying", "contributor", "favorite"]) if (grid.filters[k]) q.set(k, grid.filters[k]);
   try {
     const res = await api("/api/photos?" + q);
     if (mine !== grid) return;  // filters changed meanwhile
@@ -1447,7 +1460,9 @@ async function openLightbox(i, items) {
       if (desc && desc.text) add("Text in photo", desc.text);
     }
     add("Taken", d.taken_at ? new Date(d.taken_at).toLocaleString() : "");
-    add("Place", [d.city, d.region, d.country].filter(Boolean).join(", "));
+    add("Place", [d.city, d.region, d.country].filter(Boolean).join(", ") + ({ nearby: " (from photos taken minutes apart)", icloud: " (from iCloud's record)", video: " (from the video)" }[d.location_source] || ""));
+    if (d.title) add("Title", d.title);
+    if (d.favorite) add("Favourite", "♥ Hearted in iCloud Photos");
     {
       const div = document.createElement("div"), b = document.createElement("b"); b.textContent = "Trip"; div.append(b);
       const tc = d.confidence && d.confidence.trip;
