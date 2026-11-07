@@ -124,7 +124,8 @@ class JobRunner:
             target = {"sync": self._run_sync, "scan": self._run_scan, "verify": self._run_verify,
                       "index": self._run_index, "faces": self._run_faces,
                       "describe": self._run_describe, "import_check": self._run_import_check,
-                      "import": self._run_import, "quality": self._run_quality, "backup": self._run_backup}[kind]
+                      "import": self._run_import, "quality": self._run_quality, "backup": self._run_backup,
+                      "archive": self._run_archive}[kind]
             threading.Thread(target=target, args=(mode,), daemon=True).start()
 
     def cancel(self) -> None:
@@ -208,6 +209,23 @@ class JobRunner:
         self.state.message = "Finding events..."
         events.rebuild(conn)
         return n
+
+    def _run_archive(self, _mode: str) -> None:
+        from . import archive
+        try:
+            settings = self._settings_provider()
+            self.state.message = "Writing the archive..."
+            conn = catalog.connect(settings.db)
+            try:
+                folder = archive.export(conn, settings.originals, settings.library, everything=bool(self.payload.get("everything")),
+                                        voice=bool(self.payload.get("voice")), progress=self._progress("Copied"), cancelled=self._cancel.is_set)
+            finally:
+                conn.close()
+            n = len(list((folder / "images").glob("*.jpg")))
+            self._finish("cancelled" if self._cancel.is_set() else "done",
+                         f"Archive {'stopped' if self._cancel.is_set() else 'written'}: {n:,} photos in {folder}", {"folder": str(folder), "photos": n})
+        except Exception as e:
+            self._finish("failed", f"Archive failed: {e}")
 
     def _run_backup(self, _mode: str) -> None:
         from . import backup

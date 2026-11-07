@@ -793,6 +793,9 @@ def make_handler(app: App):
                         raise ValueError("Enter the folder to import from.")
                     app.jobs.start("import_check", payload={"folder": folder})
                     return self._json(200, app.jobs.snapshot())
+                if path == "/api/archive":
+                    app.jobs.start("archive", payload={"everything": bool(data.get("everything")), "voice": bool(data.get("voice"))})
+                    return self._json(200, app.jobs.snapshot())
                 if path == "/api/import/run":
                     app.jobs.start("import", payload={"include_near": bool(data.get("include_near"))})
                     return self._json(200, app.jobs.snapshot())

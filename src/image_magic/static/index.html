@@ -452,6 +452,21 @@
       </div>
     </div>
 
+    <div class="panel" id="archivepanel">
+      <div class="row" style="justify-content:space-between">
+        <h2 style="margin:0">Archive</h2>
+        <span class="small muted">For a USB stick, a family archive or your own web host.</span>
+      </div>
+      <p class="small">Your whole story as a self-contained web site: chapters with their stories and milestones, trips, events,
+        albums and the best photos of each, as downscaled copies with all metadata removed. Private photos are never included.</p>
+      <div class="row">
+        <label class="small"><input type="checkbox" id="archive-all"> Every photo (a page per year; much bigger)</label>
+        <label class="small"><input type="checkbox" id="archive-voice"> Include voice notes</label>
+        <button class="btn primary" id="archive-go">Write the archive</button>
+        <span class="small muted" id="archive-note"></span>
+      </div>
+    </div>
+
     <div class="panel" id="qualitypanel">
       <div class="row" style="justify-content:space-between">
         <h2 style="margin:0">Best photos</h2>
@@ -1018,7 +1033,7 @@ function renderJob(j) {
   $$("[data-run]").forEach(b => b.disabled = busy);
   $("#job-msg").textContent = j.message || "Working...";
   const bar = $("#job-bar");
-  if (j.total && ["sync", "index", "faces", "describe", "import_check", "import", "backup", "quality"].includes(j.kind)) {
+  if (j.total && ["sync", "index", "faces", "describe", "import_check", "import", "backup", "quality", "archive"].includes(j.kind)) {
     bar.classList.remove("indeterminate");
     bar.firstElementChild.style.width = Math.min(100, 100 * j.downloaded / j.total) + "%";
   } else {
@@ -1228,6 +1243,7 @@ function renderQualityPanel(st) {
   $("#quality-note").textContent = !q ? "" : q.pending ? `${fmt(q.pending)} photos not rated yet.`
     : `${fmt(q.scored)} photos rated: ${fmt(q.good)} keepers, ${fmt(q.bursts)} bursts.`;
 }
+$("#archive-go").onclick = () => api("/api/archive", { everything: $("#archive-all").checked, voice: $("#archive-voice").checked }).then(renderJob).catch(e => toast(e.message));
 $("#quality-run").onclick = () => api("/api/run", { kind: "quality" }).then(renderJob).catch(e => toast(e.message));
 
 function renderPeoplePanel(st) {

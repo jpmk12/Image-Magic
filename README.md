@@ -199,6 +199,12 @@ program only. Your photos and settings are kept.
   on later runs), read back and checked against its SHA-256 in the catalog, and a consistent
   snapshot of the catalog goes with it. Nothing is ever deleted from the backup folder; an
   unplugged drive or a folder with other files in it is refused.
+- **Archive:** **Write the archive** on the Home tab produces a self-contained web site of your
+  whole story in the `exports` folder: an index, a page per chapter (story, milestones, trips,
+  events, best photos), per trip, per event and per album, and with **Every photo** ticked a
+  page per year with everything. Images are downscaled copies with all metadata removed,
+  private photos are never included, voice notes only when ticked. Copy the folder to a USB
+  stick or any web host and open `index.html`.
 - **Best photos:** every photo gets a local quality rating (sharpness, exposure, contrast,
   computed on your laptop from the thumbnail, free) and bursts of near-identical shots are
   grouped so one keeper stands for the burst. Tick **Best only** on the Photos tab, and the
