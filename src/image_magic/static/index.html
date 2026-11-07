@@ -396,6 +396,17 @@
       </div>
     </div>
 
+    <div class="panel" id="cleanpanel">
+      <div class="row" style="justify-content:space-between">
+        <h2 style="margin:0">Clean up</h2>
+        <div class="row"><button class="btn primary" id="clean-find">Find clutter</button></div>
+      </div>
+      <p class="small">Blurry shots, pocket shots, screenshots, exact copies and spare burst frames, for you to review and move to the
+        app's trash. The trash keeps the files until you empty it, and <b>nothing is ever deleted from iCloud</b>: a trashed photo that
+        iCloud sends again goes straight back to the trash.</p>
+      <div id="clean-trash" class="small muted"></div>
+    </div>
+
     <div class="panel" id="familypanel">
       <div class="row" style="justify-content:space-between">
         <h2 style="margin:0">Family</h2>
@@ -790,6 +801,14 @@
   </div>
 </div>
 
+<div class="story share hidden" id="clean-dlg">
+  <div class="card" style="width:min(1000px,100%)">
+    <div class="row" style="justify-content:space-between"><h2 style="margin:0">Clean up</h2><button class="btn" id="clean-close">✕</button></div>
+    <p class="small muted" id="clean-sum"></p>
+    <div id="clean-groups"></div>
+    <div class="row" style="margin-top:14px"><button class="btn primary" id="clean-go">🗑 Move selected to trash</button><span class="small" id="clean-note"></span></div>
+  </div>
+</div>
 <div class="story hidden" id="voice-dlg">
   <div class="card" style="width:min(520px,100%)">
     <div class="row" style="justify-content:space-between">
@@ -923,7 +942,7 @@ function renderStats(s) {
     [bytes(s.bytes), "Space used"], [fmt(s.with_gps), "With location"],
     [fmt(s.countries), "Countries"], [fmt(s.trips), "Trips"],
     [s.first ? s.first.slice(0, 4) + "–" + s.last.slice(0, 4) : "–", "Years"],
-    [fmt(s.duplicates), "Exact duplicates"], [fmt(s.missing), "Missing files"],
+    [fmt(s.duplicates), "Exact duplicates"], [fmt(s.missing), "Missing files"], [fmt(s.trashed), "In trash"],
     [when(s.last_sync), "Last sync"], [when(s.last_verify), "Last check"],
   ];
   box.replaceChildren(...items.map(([n, l]) => {
@@ -996,7 +1015,7 @@ async function refresh() {
     renderAiPanel(st);
     renderQualityPanel(st);
     renderBackupPanel(st);
-    if (!refresh.queued || Date.now() - refresh.queued > 60000) { refresh.queued = Date.now(); loadReviewQueue(); loadFamily(); }
+    if (!refresh.queued || Date.now() - refresh.queued > 60000) { refresh.queued = Date.now(); loadReviewQueue(); loadFamily(); loadCleanTrash(); }
     renderImport(st.job);
   } catch (e) { /* app may be quitting */ }
 }
@@ -1026,6 +1045,54 @@ $("#smart-on").onclick = async () => {
 };
 $("#smart-update").onclick = () => api("/api/run", { kind: "index" }).then(renderJob).catch(e => toast(e.message));
 
+const CLEAN_GROUPS = [["blurry", "Blurry", true], ["dark", "Too dark or accidental", true], ["duplicates", "Exact copies", true],
+  ["screenshots", "Screenshots and documents", false], ["bursts", "Spare burst frames", false]];
+function renderTrash(t) {
+  const box = $("#clean-trash"); box.replaceChildren();
+  if (!t || !t.photos) { box.textContent = "Trash is empty."; return; }
+  box.append(document.createTextNode(`${fmt(t.photos)} photos in the trash (${bytes(t.bytes)}). `));
+  if (t.restorable) {
+    const r = document.createElement("button"); r.className = "btn"; r.textContent = "Restore all"; r.style.marginRight = "6px";
+    r.onclick = async () => { await api("/api/cleanup/restore", {}).catch(e => toast(e.message)); refresh(); loadCleanTrash(); };
+    const e = document.createElement("button"); e.className = "btn"; e.textContent = "Empty trash";
+    e.onclick = async () => { if (!confirm(`Delete ${fmt(t.photos)} trashed photos from this laptop for good? They stay in iCloud.`)) return; const r2 = await api("/api/cleanup/empty", {}).catch(x => toast(x.message)); if (r2) toast(`Freed ${bytes(r2.bytes)}.`); refresh(); loadCleanTrash(); };
+    box.append(r, e);
+  } else box.append(document.createTextNode("Already emptied; the app keeps them out if iCloud sends them again."));
+}
+async function loadCleanTrash() { const c = await api("/api/cleanup").catch(() => null); if (c) renderTrash(c.trash); }
+$("#clean-find").onclick = async () => {
+  $("#clean-dlg").classList.remove("hidden"); $("#clean-groups").replaceChildren(); $("#clean-sum").textContent = "Looking through your photos…"; $("#clean-note").textContent = "";
+  let c; try { c = await api("/api/cleanup"); } catch (e) { $("#clean-sum").textContent = e.message; return; }
+  renderTrash(c.trash);
+  const total = Object.values(c.counts).reduce((a, b) => a + b, 0);
+  $("#clean-sum").textContent = total ? `${fmt(total)} candidates (${bytes(c.bytes)}). Tick what should go; click a photo to look at it first.` : "Nothing looks like clutter. Nice library.";
+  for (const [key, label, on] of CLEAN_GROUPS) {
+    const items = c.groups[key]; if (!items.length) continue;
+    const h = document.createElement("div"); h.className = "row"; h.style.justifyContent = "space-between"; h.style.marginTop = "12px";
+    const cb = document.createElement("input"); cb.type = "checkbox"; cb.checked = on; const lab = document.createElement("label"); lab.append(cb, document.createTextNode(` ${label} · ${items.length}`)); lab.style.fontWeight = "600";
+    h.append(lab, Object.assign(document.createElement("span"), { className: "small muted", textContent: items[0].reason }));
+    const grid = document.createElement("div"); grid.className = "mem-row"; grid.dataset.group = key;
+    for (const it of items) {
+      const w = document.createElement("label"); w.style.position = "relative"; w.style.width = "110px";
+      const c2 = document.createElement("input"); c2.type = "checkbox"; c2.value = it.id; c2.checked = on; c2.style.position = "absolute"; c2.style.top = "4px"; c2.style.left = "4px"; c2.style.zIndex = "2";
+      const t = tileFor({ id: it.id, kind: "photo" }, items.map(x => ({ id: x.id, kind: "photo" })), items.indexOf(it)); t.style.width = "110px";
+      const cap = document.createElement("div"); cap.className = "small muted"; cap.textContent = (it.taken_at || "").slice(0, 10) + (it.score != null ? ` · ${Math.round(it.score)}/100` : "");
+      w.append(c2, t, cap); grid.append(w);
+    }
+    cb.onchange = () => grid.querySelectorAll("input").forEach(i => i.checked = cb.checked);
+    $("#clean-groups").append(h, grid);
+  }
+};
+$("#clean-close").onclick = () => $("#clean-dlg").classList.add("hidden");
+$("#clean-go").onclick = async () => {
+  const ids = [...$$("#clean-groups .mem-row input:checked")].map(i => +i.value);
+  if (!ids.length) return toast("Nothing ticked.");
+  if (!confirm(`Move ${ids.length} photos to the app's trash? They stay in iCloud and can be restored until you empty the trash.`)) return;
+  $("#clean-note").textContent = "Moving…"; $("#clean-go").disabled = true;
+  try { const r = await api("/api/cleanup/trash", { ids }); $("#clean-note").textContent = `${r.trashed} moved to the trash${r.failed.length ? `, ${r.failed.length} failed` : ""}.`; renderTrash(r.trash); refresh(); if (grid.loaded) setFilters(grid.filters); }
+  catch (e) { $("#clean-note").textContent = e.message; }
+  $("#clean-go").disabled = false;
+};
 async function loadFamily() {
   const f = await api("/api/family").catch(() => null); if (!f) return;
   const box = $("#family-list"); box.replaceChildren();
@@ -1501,6 +1568,10 @@ async function openLightbox(i, items) {
     add("Camera", [d.camera_make, d.camera_model].filter(Boolean).join(" "));
     add("Size", d.width ? `${d.width} × ${d.height} · ${bytes(d.size)}` : bytes(d.size));
     add("File", d.path);
+    add("Trash", "🗑 Move to the app's trash (stays in iCloud)", async () => {
+      if (!confirm("Move this photo to the app's trash? It stays in iCloud and can be restored from the Home tab.")) return;
+      await api("/api/cleanup/trash", { ids: [d.id] }).catch(e => toast(e.message)); closeLightbox(); if (grid.loaded) setFilters(grid.filters); refresh();
+    });
     add("Privacy", d.private ? "🔒 Private — never sent to AI or shared. Click to make normal." : "Normal — click to mark Private (never sent to AI or shared)",
         async () => { await api("/api/private", { id: d.id, private: !d.private }).catch(e => toast(e.message)); openLightbox(lbIndex, lbItems === grid.items ? undefined : lbItems); });
     api("/api/context/" + it.id).then(c => {
@@ -1895,7 +1966,14 @@ let tripsCache = [];
 async function tripMenu(anchor, d) {
   tripsCache = await api("/api/trips").catch(() => []);
   const refreshView = () => openLightbox(lbIndex, lbItems === grid.items ? undefined : lbItems);
-  const setTrip = async trip => { await api("/api/curate/trip", { ids: [d.id], trip }).catch(e => toast(e.message)); toast("Updated"); refreshView(); };
+  const setTrip = async trip => {
+    let r; try { r = await api("/api/curate/trip", { ids: [d.id], trip }); } catch (e) { return toast(e.message); }
+    toast("Updated"); refreshView();
+    if (r && r.trip) {                       // now find the rest of that trip, seeded by this photo
+      const t = (await api("/api/trips").catch(() => [])).find(x => x.id === r.trip);
+      openSuggestions(r.trip, t ? t.title : "this trip", d.id);
+    }
+  };
   const items = [{ head: "This photo is from…" }];
   for (const t of tripsCache.slice(0, 12)) if (t.id !== d.trip_id)
     items.push({ label: `${t.title} · ${new Date(t.start_at).toLocaleDateString(undefined, { month: "short", year: "numeric" })}`, run: () => setTrip(t.id) });

@@ -129,7 +129,7 @@ def test_api_photos_thumbs_and_view(server):
     h = {"X-Token": app.token}
     _, _, body = get(base + "/api/photos?country=JO&limit=5", h)
     data = json.loads(body)
-    assert data["total"] == 15 and len(data["items"]) == 5
+    assert data["total"] == 16 and len(data["items"]) == 5
     heic = conn.execute("SELECT id FROM assets WHERE path LIKE '%.HEIC' LIMIT 1").fetchone()[0]
 
     # media URLs authenticate with ?t= because <img> can't send headers

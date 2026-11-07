@@ -194,10 +194,19 @@ program only. Your photos and settings are kept.
   felt. Notes are stored only in your library folder and play back during replays, holding the
   photo until you finish speaking. A share export leaves them out unless you tick **Include my
   voice notes**.
+- **Clean up:** **Find clutter** on the Home tab gathers blurry shots, pocket and blank shots,
+  exact copies, screenshots and documents, and spare burst frames for you to review (the first
+  three are ticked for you, the last two are not). Ticked photos go to the app's **trash**
+  inside your library folder, together with their Live Photo clip and sidecar, and can be
+  restored exactly until you **Empty trash**. Nothing is ever deleted from iCloud; if iCloud
+  sends a trashed photo again at the next sync, it goes straight back to the trash. The viewer
+  also has a **Move to the app's trash** link. To remove a photo from iCloud itself, do that in
+  Apple Photos.
 - **Fixing mistakes:** everything the app works out can be corrected, and your corrections
   stick through rebuilds. In the viewer: **Trip ✎ change** moves a photo to another trip, a
-  new trip, or no trip, and **Find more photos from this trip** suggests other photos that
-  belong with it (by date, by how they look, and by their captions) for you to tick and add.
+  new trip, or no trip, and as soon as you do, the app suggests other photos that belong with
+  it (by date, by how they look, and by their captions) for you to tick and add. **Find more**
+  on a trip card does the same at any time.
   Click a person's name tag for **Not this person** or **This is someone else**. **About ✎ edit**
   rewrites a caption and keywords. Chapters can be renamed on the Timeline, milestones
   dismissed, trips renamed on their cards.

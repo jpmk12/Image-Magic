@@ -67,6 +67,7 @@ MIGRATIONS = {
     "favorite": "INTEGER NOT NULL DEFAULT 0",      # hearted in iCloud Photos (from the .xmp sidecar)
     "screenshot": "INTEGER NOT NULL DEFAULT 0",
     "title": "TEXT",                               # caption typed in Photos
+    "trashed_at": "TEXT",                          # moved to <library>/trash by you (cleanup.py); stays out of iCloud's way
 }
 TRIP_MIGRATIONS = {"manual": "INTEGER NOT NULL DEFAULT 0", "title_locked": "INTEGER NOT NULL DEFAULT 0"}
 
@@ -105,8 +106,8 @@ def connect(db_file: Path) -> sqlite3.Connection:
         pass
     run_script(conn, SCHEMA)
     # Every feature's tables exist from the start, so request handlers never run DDL.
-    from . import ask, chapters, confidence, describe, events, faces, flying, notes, review, search
-    for mod in (faces, describe, search, chapters, ask, notes, flying, confidence):
+    from . import ask, chapters, cleanup, confidence, describe, events, faces, flying, notes, review, search
+    for mod in (faces, describe, search, chapters, ask, notes, flying, confidence, cleanup):
         run_script(conn, mod.SCHEMA if mod is not describe else describe.DB_SCHEMA)
     run_script(conn, review.SCHEMA)
     conn.commit()
@@ -181,6 +182,7 @@ class ScanResult:
     skipped: list[str] = field(default_factory=list)
     places_added: int = 0
     trips: int = 0
+    retrashed: int = 0
 
     @property
     def total(self) -> int:
@@ -193,8 +195,9 @@ def scan(conn: sqlite3.Connection, originals: Path, progress=None, cancelled=lam
     seen: set[str] = set()
     existing = {
         row["path"]: row
-        for row in conn.execute("SELECT id, path, size, mtime, missing FROM assets")
+        for row in conn.execute("SELECT id, path, size, mtime, missing, trashed_at FROM assets")
     }
+    retrash: list[int] = []
     if not originals.exists():
         raise LibraryUnavailable(f"The photo folder {originals} is not there. Is the drive plugged in?")
     files = sorted(p for p in originals.rglob("*") if p.is_file())
@@ -218,9 +221,12 @@ def scan(conn: sqlite3.Connection, originals: Path, progress=None, cancelled=lam
             if path.suffix.lower() != ".xmp":
                 result.skipped.append(rel)
             continue
+        row = existing.get(rel)
+        if row and row["trashed_at"]:
+            retrash.append(row["id"])       # iCloud sent it again; your decision stands
+            continue
         seen.add(rel)
         st = path.stat()
-        row = existing.get(rel)
         if row and row["size"] == st.st_size and abs(row["mtime"] - st.st_mtime) < 1e-6:
             if row["missing"]:
                 conn.execute("UPDATE assets SET missing = 0 WHERE id = ?", (row["id"],))
@@ -259,6 +265,8 @@ def scan(conn: sqlite3.Connection, originals: Path, progress=None, cancelled=lam
             conn.commit()   # keep write transactions short so the UI stays responsive
 
     for rel, row in existing.items():
+        if row["trashed_at"]:
+            continue
         if rel not in seen and not row["missing"]:
             conn.execute("UPDATE assets SET missing = 1 WHERE id = ?", (row["id"],))
             result.missing += 1
@@ -268,6 +276,10 @@ def scan(conn: sqlite3.Connection, originals: Path, progress=None, cancelled=lam
     _link_live_photos(conn)
     _mark_duplicates(conn)
     conn.commit()
+    if retrash:
+        from . import cleanup
+        cleanup.trash(conn, originals.parent, originals, retrash)
+        result.retrashed = len(retrash)
     from . import locations
     locations.refresh(conn, originals, progress=progress, cancelled=cancelled)
     from . import places  # local import: places is optional data-heavy code
@@ -371,7 +383,8 @@ def stats(conn: sqlite3.Connection) -> dict:
         "videos": q(f"SELECT COUNT(*) FROM assets WHERE {live} AND kind = 'video'"),
         "live_videos": q(f"SELECT COUNT(*) FROM assets WHERE {live} AND kind = 'live_video'"),
         "duplicates": q(f"SELECT COUNT(*) FROM assets WHERE {live} AND duplicate_of IS NOT NULL"),
-        "missing": q("SELECT COUNT(*) FROM assets WHERE missing = 1"),
+        "missing": q("SELECT COUNT(*) FROM assets WHERE missing = 1 AND trashed_at IS NULL"),
+        "trashed": q("SELECT COUNT(*) FROM assets WHERE trashed_at IS NOT NULL AND kind != 'live_video'"),
         "countries": q(f"SELECT COUNT(DISTINCT country_code) FROM assets WHERE {live}"),
         "trips": q("SELECT COUNT(*) FROM trips"),
         "with_gps": q(f"SELECT COUNT(*) FROM assets WHERE {live} AND lat IS NOT NULL"),

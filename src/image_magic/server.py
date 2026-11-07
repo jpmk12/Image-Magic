@@ -297,7 +297,7 @@ def make_handler(app: App):
                     return self._json(200, app.jobs.log_since(since))
                 if path.startswith(("/api/photos", "/api/photo/", "/api/facets", "/api/trips", "/api/replay",
                                     "/api/map", "/api/people", "/api/timeline", "/api/story", "/api/memories",
-                                    "/api/shuffle", "/api/similar/", "/api/review", "/api/context/", "/api/curate/", "/api/events", "/api/home", "/api/voice/", "/api/compare/", "/api/flying", "/api/book", "/api/review-queue", "/api/family", "/media/")):
+                                    "/api/shuffle", "/api/similar/", "/api/review", "/api/context/", "/api/curate/", "/api/events", "/api/home", "/api/voice/", "/api/compare/", "/api/flying", "/api/book", "/api/review-queue", "/api/family", "/api/cleanup", "/media/")):
                     return self._browse(path, self._query())
             except Exception as e:
                 return self._json(500, {"error": str(e)})
@@ -392,6 +392,9 @@ def make_handler(app: App):
                     from . import books
                     f = books.make(conn, settings.originals, settings.library, str(q.get("kind")), str(q.get("id") or ""))
                     return self._json(200, {"file": f.name})
+                if path == "/api/cleanup":
+                    from . import cleanup
+                    return self._json(200, cleanup.candidates(conn, settings.library, settings.originals))
                 if path == "/api/family":
                     from . import family
                     return self._json(200, {"contributors": family.contributors(conn), "phones": app.pairing.phones()})
@@ -768,6 +771,26 @@ def make_handler(app: App):
                         conn.close()
                 if path in ("/api/story/write", "/api/story/save", "/api/ask"):
                     return self._ai_action(path, data)
+                if path.startswith("/api/cleanup/"):
+                    from . import cleanup
+                    settings, conn = app.db()
+                    try:
+                        action = path.rsplit("/", 1)[1]
+                        ids = [int(i) for i in data.get("ids") or []]
+                        if action == "trash":
+                            r = cleanup.trash(conn, settings.library, settings.originals, ids)
+                        elif action == "restore":
+                            r = {"restored": cleanup.restore(conn, settings.library, settings.originals, ids or None)}
+                        elif action == "empty":
+                            r = cleanup.empty(conn, settings.library)
+                        else:
+                            return self._json(404, {"error": "not found"})
+                        if action in ("trash", "restore"):
+                            from . import chapters, events, places
+                            places.refresh(conn); events.rebuild(conn); chapters.rebuild_milestones(conn)
+                        return self._json(200, {**r, "trash": cleanup.trash_summary(conn)})
+                    finally:
+                        conn.close()
                 if path == "/api/review-queue/decide":
                     from . import confidence
                     settings, conn = app.db()

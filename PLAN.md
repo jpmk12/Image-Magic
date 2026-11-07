@@ -338,6 +338,11 @@ Service features (flying log, squadron yearbook) slot into S2 (log) and S9 (year
   ©xyz / Apple keyed ISO6709, tkhd size); nearby inference (±20 min, interpolate when
   neighbours agree within 5 km, else nearer in time; recomputed each scan; dropped when the
   neighbour goes); located videos join trips by date; favourite filter; summary on Home.
+- **Clean up + auto suggestions** (v0.31.0): cleanup.candidates (blur by Laplacian sharpness,
+  dark/blank by exposure/contrast, screenshots from sidecar or captions, exact copies, burst
+  extras); trash moves file + live clip + sidecar under <library>/trash keeping the path,
+  trashed_at marks rows (missing, not counted as missing), restore and empty; scan re-trashes
+  re-downloads; assigning a photo to a trip opens suggestions seeded by it.
 
 ---
 

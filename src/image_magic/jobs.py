@@ -179,7 +179,7 @@ class JobRunner:
             settings = self._settings_provider()
             r = self._scan(settings)
             self._finish("done", f"Catalog updated: {r.new:,} new, {r.total:,} total, {r.missing:,} missing, "
-                                 f"{r.trips:,} trips.",
+                                 f"{r.trips:,} trips." + (f" {r.retrashed} re-downloaded photos went back to the trash." if r.retrashed else ""),
                          {"new": r.new, "total": r.total, "missing": r.missing})
         except InterruptedError:
             self._finish("cancelled", "Cataloging stopped. Run it again to continue.")
