@@ -76,7 +76,8 @@ def download_model(progress: Callable[[int, int], None] | None = None,
         req = urllib.request.Request(url, headers={"User-Agent": "ImageMagic"})
         if have:
             req.add_header("Range", f"bytes={have}-")
-        with urllib.request.urlopen(req, timeout=60) as resp:
+        from . import net
+        with net.urlopen(req, timeout=60, manual=f"save {url} as {final}") as resp:
             if have and resp.status != 206:   # server ignored Range: start over
                 have = 0
             with part.open("ab" if have else "wb") as f:

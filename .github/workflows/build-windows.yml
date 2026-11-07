@@ -31,7 +31,7 @@ jobs:
       - name: Build app
         run: >
           pyinstaller --noconfirm --clean --windowed --name ImageMagic
-          --collect-data image_magic --hidden-import pillow_heif
+          --collect-data image_magic --collect-data certifi --hidden-import pillow_heif
           --collect-all onnxruntime
           packaging/launcher.py
 

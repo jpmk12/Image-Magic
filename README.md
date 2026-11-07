@@ -270,6 +270,15 @@ Place names are looked up **on your computer** from a bundled list of about 145,
   Content-Security-Policy; AI descriptions send only the picture; the release pipeline runs
   with read-only permissions except for the publish step and ships a checksum file.
 
+**If a model download says the connection could not be verified**
+- Smart search and People download their models over HTTPS and check each file against a
+  fixed fingerprint. If Windows is missing a root certificate, or security software or a work
+  network inspects HTTPS, the download can fail with "certificate verify failed". The app
+  verifies against both the Windows store and a bundled, current set of public roots, so this
+  is rare. If it still happens: run Windows Update, try from home Wi-Fi, or download the file
+  in your browser and save it where the error message says (the folder under
+  `%APPDATA%\ImageMagic\models`). The app checks the fingerprint either way.
+
 **Honest limits**
 - icloudpd is a popular open-source tool, but it isn't made by Apple, and Apple could change
   iCloud in a way that breaks it until it's updated.

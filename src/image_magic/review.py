@@ -140,8 +140,9 @@ def fetch_weather(lat: float, lon: float, day: str) -> dict | None:   # pragma: 
     qs = urllib.parse.urlencode({"latitude": f"{lat:.2f}", "longitude": f"{lon:.2f}", "start_date": day, "end_date": day,
                                  "daily": "temperature_2m_max,temperature_2m_min,weather_code,precipitation_sum",
                                  "timezone": "auto"})
+    from . import net
     req = urllib.request.Request(f"{WEATHER_URL}?{qs}", headers={"User-Agent": "ImageMagic"})
-    with urllib.request.urlopen(req, timeout=15) as resp:
+    with net.urlopen(req, timeout=15) as resp:
         return json.loads(resp.read().decode("utf-8"))
 
 
