@@ -358,6 +358,9 @@ Service features (flying log, squadron yearbook) slot into S2 (log) and S9 (year
 - **Phase 6.7** (v0.35.0): datewords.parse (people by library names, Nth birthday from the
   birthday, year/season/month/holiday incl. Easter and Thanksgiving, "the week we moved",
   leftover query); from/to/days/birthday_md filters; date-only searches skip the model.
+- **Phase 6.8** (v0.36.0): daily.memory_of_day (best on-this-day, else a day-seeded shuffle),
+  week_ahead (days, birthdays, trips, milestones), Windows toast via PowerShell WinRT once a
+  day from the app loop (meta last_daily_notice), Home card, days_md filter.
 
 ---
 
@@ -383,7 +386,7 @@ Ordered by how much they add for the effort. Each one is local and private unles
    deleting anything. Also a "one of each burst" tidy-up for the Photos grid.
 7. **Plain-English dates in search** (built, v0.35.0). "last summer", "Christmas 2019", "Emma's 3rd birthday",
    "the week we moved" parsed on the laptop, no AI needed; plus person AND person filters.
-8. **Memory of the day.** A Windows notification each morning the app is open ("8 years ago
+8. **Memory of the day** (built, v0.36.0). A Windows notification each morning the app is open ("8 years ago
    today: Petra"), and a weekly digest page.
 9. **TV mode.** A full-screen ambient slideshow of best memories, openable from a TV or
    tablet browser through phone access, with the family's voice notes.

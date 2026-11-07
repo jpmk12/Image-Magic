@@ -354,6 +354,12 @@
       <p id="job-last" class="small"></p>
     </div>
 
+    <div class="panel hidden" id="dailypanel">
+      <div class="row" style="justify-content:space-between"><h2 style="margin:0">Memory of the day</h2><button class="btn" id="daily-week">This week</button></div>
+      <div class="shuffle" id="daily-box" style="margin-top:12px"></div>
+      <div id="daily-weekbox" class="small hidden" style="margin-top:12px"></div>
+    </div>
+
     <div class="panel" id="smart">
       <div class="row" style="justify-content:space-between">
         <h2 style="margin:0">Smart search</h2>
@@ -722,6 +728,9 @@
 
       <div class="panel">
         <h2>Phone access</h2>
+        <label class="check"><input type="checkbox" name="daily_memory">
+          <span>Memory of the day notification
+          <small>Once a day while the app is open, a Windows notification with a photo from this date in a past year. Nothing leaves the computer.</small></span></label>
         <label class="check"><input type="checkbox" name="phone_access">
           <span>Let my phone open the app on this Wi-Fi
           <small>Off by default: the app only answers this computer. When on, phones on the same Wi-Fi can open it over HTTPS
@@ -1044,7 +1053,7 @@ async function refresh() {
     renderAiPanel(st);
     renderQualityPanel(st);
     renderBackupPanel(st);
-    if (!refresh.queued || Date.now() - refresh.queued > 60000) { refresh.queued = Date.now(); loadReviewQueue(); loadFamily(); loadCleanTrash(); }
+    if (!refresh.queued || Date.now() - refresh.queued > 60000) { refresh.queued = Date.now(); loadReviewQueue(); loadFamily(); loadCleanTrash(); loadDaily(); }
     renderImport(st.job);
   } catch (e) { /* app may be quitting */ }
 }
@@ -1147,6 +1156,29 @@ $("#contrib-files").onchange = async ev => {
   $("#contrib-note").textContent = `${added} added, ${dup} already in the library, ${failed} failed. Trips and events pick them up at the next catalog update.`;
   ev.target.value = ""; loadFamily(); refresh();
 };
+async function loadDaily() {
+  const d = await api("/api/daily").catch(() => null); if (!d || !d.memory) { $("#dailypanel").classList.add("hidden"); return; }
+  $("#dailypanel").classList.remove("hidden");
+  const m = d.memory, box = $("#daily-box"); box.replaceChildren();
+  const img = document.createElement("img"); img.src = media("view", m.id); img.alt = ""; img.onclick = () => openLightbox(0, [m]);
+  const side = document.createElement("div");
+  const h = document.createElement("div"); h.className = "cap"; h.textContent = m.headline;
+  const meta = document.createElement("p"); meta.className = "muted"; meta.textContent = [fmtDate(m.taken_at), m.caption, m.trip_title ? "Trip: " + m.trip_title : ""].filter(Boolean).join(" · ");
+  const acts = document.createElement("div"); acts.className = "row";
+  const rp = document.createElement("button"); rp.className = "btn primary"; rp.textContent = "▶ Replay that day"; rp.onclick = () => openReplay({ day: m.taken_at.slice(0, 10) }, fmtDate(m.taken_at));
+  acts.append(rp); side.append(h, meta, acts); box.append(img, side);
+  const w = d.week, wb = $("#daily-weekbox"); wb.replaceChildren();
+  const el = (t, c, txt) => { const x = document.createElement(t); if (c) x.className = c; if (txt) x.textContent = txt; return x; };
+  if (!w.days.length && !w.birthdays.length && !w.trips.length && !w.milestones.length) wb.append(el("div", "muted", "Nothing from past years in the coming week."));
+  for (const b of w.birthdays) wb.append(el("div", "", `🎂 ${fmtDate(b.date)}: ${b.name} turns ${b.turns}`));
+  for (const t of w.trips) { const r = el("div", "row"); const a = el("a", "", `✈ ${t.title} started on ${fmtDate(t.start_at)}`); a.onclick = () => goPhotos({ trip: t.id, tripTitle: t.title }); r.append(a); wb.append(r); }
+  for (const m2 of w.milestones) wb.append(el("div", "", `★ ${fmtDate(m2.date)}: ${m2.title}`));
+  for (const day of w.days) { const r = el("div", "row"); r.style.margin = "4px 0";
+    if (day.cover_id) { const t = tileFor({ id: day.cover_id, kind: "photo" }, [{ id: day.cover_id, kind: "photo" }], 0); t.style.width = "48px"; r.append(t); }
+    const a = el("a", "", `${new Date(day.date + "T00:00:00").toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}: ` + day.years.map(y => `${y.year} (${y.n})`).join(", "));
+    a.onclick = () => goPhotos({ day: day.date.slice(5), monthTitle: "" }); a.onclick = () => openReplay({ days_md: day.date.slice(5) }, "On this day"); r.append(a); wb.append(r); }
+}
+$("#daily-week").onclick = () => $("#daily-weekbox").classList.toggle("hidden");
 async function loadReviewQueue() {
   const q = await api("/api/review-queue").catch(() => null);
   const box = $("#review-list"); if (!q) return;
@@ -1796,7 +1828,7 @@ const rp = { items: [], i: -1, timer: null, playing: false, map: null, line: nul
 $("#f-replay").onclick = () => openReplay(grid.filters, $("#f-trip").textContent.replace("✕", ""));
 async function openReplay(filters, title) {
   const q = new URLSearchParams();
-  for (const k of ["trip", "day", "month", "person", "chapter", "year", "country", "city", "best", "event", "n", "home", "flying", "album", "favorite", "contributor"]) if (filters[k]) q.set(k, filters[k]);
+  for (const k of ["trip", "day", "month", "person", "chapter", "year", "country", "city", "best", "event", "n", "home", "flying", "album", "favorite", "contributor", "days_md"]) if (filters[k]) q.set(k, filters[k]);
   let items;
   try { items = await api("/api/replay?" + q); } catch (e) { return toast(e.message); }
   if (!items.length) return toast("Nothing to replay here.");

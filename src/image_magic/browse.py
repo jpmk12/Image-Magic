@@ -45,6 +45,9 @@ def _filters(params: dict, alias: str = "") -> tuple[str, list]:
         where.append("(" + " OR ".join(f"substr({a}taken_at, 1, 10) BETWEEN ? AND ?" for _ in spans) + ")")
         for s_, e_ in spans:
             args += [str(s_)[:10], str(e_)[:10]]
+    if params.get("days_md"):        # this calendar day in every past year (MM-DD)
+        where.append(f"substr({a}taken_at, 6, 5) = ?")
+        args.append(str(params["days_md"])[:5])
     if params.get("birthday_md"):
         where.append(f"substr({a}taken_at, 6, 5) BETWEEN ? AND ?")
         md = str(params["birthday_md"])

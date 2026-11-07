@@ -58,6 +58,7 @@ class Settings:
     ai_model: str = "claude-haiku-5-5"
     backup_path: str = ""              # second copy of the library (external drive, NAS); empty = off
     phone_access: bool = False         # also listen on the Wi-Fi address (HTTPS + pairing code)
+    daily_memory: bool = True          # a Windows notification with the memory of the day while the app is open
 
     def __post_init__(self) -> None:
         if not self.library_path:

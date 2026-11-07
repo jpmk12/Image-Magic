@@ -161,7 +161,31 @@ class App:
             out.update({"code": code, "expires_in": left, "urls": [f"https://{ip}:{port}/pair" for ip in phone.lan_ips()]})
         return out
 
+    def daily_tick(self) -> None:
+        """Once a day while the app is open: the memory of the day as a desktop notification."""
+        s = self.settings_provider()
+        if not s.daily_memory or not s.db.exists():
+            return
+        today = __import__("datetime").date.today().isoformat()
+        try:
+            conn = catalog.connect(s.db)
+            try:
+                if catalog.get_meta(conn, "last_daily_notice") == today:
+                    return
+                from . import daily
+                m = daily.memory_of_day(conn)
+                catalog.set_meta(conn, "last_daily_notice", today)
+                conn.commit()
+            finally:
+                conn.close()
+        except Exception:
+            return
+        if m:
+            from . import daily
+            daily.notify("Image Magic · memory of the day", m["headline"] + ". Open Image Magic to see it.")
+
     def auto_sync_tick(self) -> None:
+        self.daily_tick()
         s = self.settings_provider()
         if not s.auto_sync_hours or not s.apple_id or self.jobs.busy:
             return
@@ -300,7 +324,7 @@ def make_handler(app: App):
                     return self._json(200, app.jobs.log_since(since))
                 if path.startswith(("/api/photos", "/api/photo/", "/api/facets", "/api/trips", "/api/replay",
                                     "/api/map", "/api/people", "/api/timeline", "/api/story", "/api/memories",
-                                    "/api/shuffle", "/api/similar/", "/api/review", "/api/context/", "/api/curate/", "/api/events", "/api/home", "/api/voice/", "/api/compare/", "/api/flying", "/api/book", "/api/review-queue", "/api/family", "/api/cleanup", "/api/albums", "/api/places/", "/media/")):
+                                    "/api/shuffle", "/api/similar/", "/api/review", "/api/context/", "/api/curate/", "/api/events", "/api/home", "/api/voice/", "/api/compare/", "/api/flying", "/api/book", "/api/review-queue", "/api/family", "/api/cleanup", "/api/albums", "/api/places/", "/api/daily", "/media/")):
                     return self._browse(path, self._query())
             except Exception as e:
                 return self._json(500, {"error": str(e)})
@@ -377,6 +401,9 @@ def make_handler(app: App):
                     ys = review.years(conn)
                     y = q.get("year") or (ys[0] if ys else None)
                     return self._json(200, {"years": ys, "stats": review.year_stats(conn, y) if y else None})
+                if path == "/api/daily":
+                    from . import daily
+                    return self._json(200, {"memory": daily.memory_of_day(conn), "week": daily.week_ahead(conn)})
                 if path == "/api/memories":
                     from . import memories
                     return self._json(200, {"on_this_day": memories.on_this_day(conn),
