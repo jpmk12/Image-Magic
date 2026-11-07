@@ -348,6 +348,10 @@ Service features (flying log, squadron yearbook) slot into S2 (log) and S9 (year
   events); albums module (manual with order, smart from saved filters), browse.expand resolves
   `album` everywhere (photos, ids, replay, map, share, best-of, search), album book; favourites
   were already read from the sidecars.
+- **Phase 6.4** (v0.33.0): placestory.world (per-country years/cities/trips/home distance,
+  countries by year, farthest from the latest home, most-returned-to) and placestory.place
+  (country or city: years, cities, visits, lived-here chapters, people, best, centre); Places
+  panel and dialog on the Map tab; map filters.
 
 ---
 
@@ -363,7 +367,7 @@ Ordered by how much they add for the effort. Each one is local and private unles
 3. **Favourites from iCloud** (built with the locations work, v0.30.0). icloudpd already saves favourites, titles and keywords as
    .xmp sidecars; read them into the catalog so a heart in Photos counts in the ranking and
    "Favourites" is a filter.
-4. **Place stories.** A page per country and per city: every visit, years, best photos, the
+4. **Place stories** (built, v0.33.0). A page per country and per city: every visit, years, best photos, the
    map of where you went there, and a "world" summary (countries by year, farthest from home,
    most-returned-to place).
 5. **People over time.** Who was in your life when: a strip per named person across the

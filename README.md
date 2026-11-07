@@ -139,6 +139,10 @@ program only. Your photos and settings are kept.
 - **Compare:** on the Memories tab, put two moments side by side: a person at an age (*Emma at
   3 vs Jack at 3*, needs birthdays), two years, two months, two trips or two events. Each side
   shows its count, dates, places and people, then the best photos paired up.
+- **Places:** under the map, every country you have photographed, with a world summary
+  (countries, places, the farthest photo from home, the place you returned to most). Click a
+  country for its page: years, who was with you, the years you lived there, each visit with
+  its replay, the best photos, its cities (each with its own page), and **Show on map**.
 - **This day, every year:** on the Map tab, **📅 This day, every year** shows one pin per past
   year for today's date (or the nearest day within three days), joined in order.
 - **Your year in review:** at the top of the Timeline: photos, videos, countries (and first

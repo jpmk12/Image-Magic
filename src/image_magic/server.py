@@ -299,7 +299,7 @@ def make_handler(app: App):
                     return self._json(200, app.jobs.log_since(since))
                 if path.startswith(("/api/photos", "/api/photo/", "/api/facets", "/api/trips", "/api/replay",
                                     "/api/map", "/api/people", "/api/timeline", "/api/story", "/api/memories",
-                                    "/api/shuffle", "/api/similar/", "/api/review", "/api/context/", "/api/curate/", "/api/events", "/api/home", "/api/voice/", "/api/compare/", "/api/flying", "/api/book", "/api/review-queue", "/api/family", "/api/cleanup", "/api/albums", "/media/")):
+                                    "/api/shuffle", "/api/similar/", "/api/review", "/api/context/", "/api/curate/", "/api/events", "/api/home", "/api/voice/", "/api/compare/", "/api/flying", "/api/book", "/api/review-queue", "/api/family", "/api/cleanup", "/api/albums", "/api/places/", "/media/")):
                     return self._browse(path, self._query())
             except Exception as e:
                 return self._json(500, {"error": str(e)})
@@ -406,6 +406,12 @@ def make_handler(app: App):
                 if path == "/api/flying":
                     from . import flying
                     return self._json(200, flying.log(conn))
+                if path == "/api/places/world":
+                    from . import placestory
+                    return self._json(200, placestory.world(conn))
+                if path == "/api/places/one":
+                    from . import placestory
+                    return self._json(200, placestory.place(conn, str(q.get("country") or "")[:2].upper(), q.get("city") or None))
                 if path == "/api/map/this-day":
                     from . import memories
                     return self._json(200, memories.this_day_pins(conn))

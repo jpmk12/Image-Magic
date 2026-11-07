@@ -607,8 +607,13 @@
 
   <!-- MAP -->
   <section id="tab-map" class="hidden">
-    <div class="row" style="margin-bottom:8px"><button class="btn" id="map-thisday" title="One pin per year: where you were on today's date">📅 This day, every year</button><span class="small muted" id="map-thisday-note"></span></div>
+    <div class="row" style="margin-bottom:8px"><button class="btn" id="map-thisday" title="One pin per year: where you were on today's date">📅 This day, every year</button>
+      <button class="btn" id="map-all" title="Show every photo again">All photos</button><span class="small muted" id="map-thisday-note"></span></div>
     <div id="map"></div>
+    <div class="panel" style="margin-top:12px">
+      <div class="row" style="justify-content:space-between"><h2 style="margin:0">Places</h2><span class="small muted" id="world-sum"></span></div>
+      <div id="world-list" class="small" style="margin-top:8px"></div>
+    </div>
     <p class="muted small" id="map-note">Map tiles © OpenStreetMap contributors (needs internet). Place names: GeoNames (CC BY 4.0). Map library: Leaflet.</p>
   </section>
 
@@ -811,6 +816,13 @@
   </div>
 </div>
 
+<div class="story share hidden" id="place-dlg">
+  <div class="card" style="width:min(960px,100%)">
+    <div class="row" style="justify-content:space-between"><h2 id="place-title" style="margin:0"></h2><button class="btn" id="place-close">✕</button></div>
+    <p class="small muted" id="place-meta"></p>
+    <div id="place-body"></div>
+  </div>
+</div>
 <div class="story share hidden" id="clean-dlg">
   <div class="card" style="width:min(1000px,100%)">
     <div class="row" style="justify-content:space-between"><h2 style="margin:0">Clean up</h2><button class="btn" id="clean-close">✕</button></div>
@@ -2491,7 +2503,10 @@ $("#voice-stop").onclick = () => { if (voice.rec) voice.rec.stop(); $("#voice-re
 
 // ---- map
 let map = null, cluster = null;
-async function loadMap() {
+let mapFilters = {};
+async function loadMap(filters) {
+  if (filters) mapFilters = filters;
+  loadWorld();
   if (typeof L === "undefined") {
     $("#map").replaceChildren(Object.assign(document.createElement("p"),
       { className: "muted", style: "padding:20px", textContent: "The map could not load." }));
@@ -2508,7 +2523,9 @@ async function loadMap() {
   setTimeout(() => map.invalidateSize(), 50);
   if (!st.map_online) toast("Map background is off (Settings → Privacy). Showing photo pins only.");
   else if (!navigator.onLine) toast("You're offline: map background needs internet, but your photo pins still show.");
-  const pts = await api("/api/map").catch(e => { toast(e.message); return []; });
+  const mq = new URLSearchParams(Object.entries(mapFilters).filter(([, v]) => v));
+  const pts = await api("/api/map" + (mq.toString() ? "?" + mq : "")).catch(e => { toast(e.message); return []; });
+  if (thisDay) { map.removeLayer(thisDay); thisDay = null; $("#map-thisday-note").textContent = ""; }
   if (cluster) map.removeLayer(cluster);
   cluster = L.markerClusterGroup({ chunkedLoading: true, maxClusterRadius: 50 });
   const items = pts.map(([id]) => ({ id, kind: "photo" }));
@@ -2520,6 +2537,46 @@ async function loadMap() {
   map.addLayer(cluster);
   if (pts.length) map.fitBounds(cluster.getBounds(), { padding: [30, 30], maxZoom: 12 });
 }
+function flag(code) { return code && code.length === 2 ? String.fromCodePoint(...[...code.toUpperCase()].map(c => 0x1F1E6 + c.charCodeAt(0) - 65)) : ""; }
+async function loadWorld() {
+  const w = await api("/api/places/world").catch(() => null); if (!w) return;
+  const el = (t, c, txt) => { const d = document.createElement(t); if (c) d.className = c; if (txt) d.textContent = txt; return d; };
+  const parts = [`${w.total_countries} countries`, `${fmt(w.total_cities)} places`];
+  if (w.farthest) parts.push(`farthest from home: ${w.farthest.place}, ${fmt(w.farthest.km)} km (${w.farthest.date.slice(0, 4)})`);
+  if (w.returned_to.length) parts.push(`most returned to: ${w.returned_to[0].city} (${w.returned_to[0].years} years)`);
+  $("#world-sum").textContent = parts.join(" · ");
+  const box = $("#world-list"); box.replaceChildren();
+  const row = el("div", "row");
+  for (const c of w.countries) {
+    const b = el("button", "btn", `${flag(c.code)} ${c.name} · ${fmt(c.photos)} · ${c.year_list.length === 1 ? c.year_list[0] : c.year_list[0] + "–" + c.year_list[c.year_list.length - 1]}`);
+    b.onclick = () => openPlace(c.code); row.append(b);
+  }
+  box.append(row);
+}
+async function openPlace(code, city) {
+  $("#place-dlg").classList.remove("hidden"); $("#place-body").replaceChildren(); $("#place-meta").textContent = "Loading…";
+  $("#place-title").textContent = (city ? city + ", " : "") + flag(code);
+  let p; try { p = await api(`/api/places/one?country=${code}${city ? "&city=" + encodeURIComponent(city) : ""}`); } catch (e) { $("#place-meta").textContent = e.message; return; }
+  $("#place-title").textContent = `${flag(code)} ${city ? city + ", " : ""}${p.country}`;
+  $("#place-meta").textContent = [`${fmt(p.photos)} photos`, `${p.first} – ${p.last}`, `${p.years.length} year${p.years.length > 1 ? "s" : ""}: ${p.years.join(", ")}`,
+    p.people.length ? "with " + p.people.join(", ") : ""].filter(Boolean).join(" · ");
+  const el = (t, c, txt) => { const d = document.createElement(t); if (c) d.className = c; if (txt) d.textContent = txt; return d; };
+  const body = $("#place-body");
+  const acts = el("div", "row");
+  const ph = el("button", "btn primary", "Photos"); ph.onclick = () => { $("#place-dlg").classList.add("hidden"); goPhotos(city ? { country: code, city } : { country: code }); };
+  const rp = el("button", "btn", "▶ Replay the best"); rp.onclick = () => openReplay(city ? { country: code, city, best: 1, n: 40 } : { country: code, best: 1, n: 40 }, (city || p.country));
+  const mp = el("button", "btn", "Show on map"); mp.onclick = () => { $("#place-dlg").classList.add("hidden"); loadMap(city ? { country: code, city } : { country: code }); };
+  acts.append(ph, rp, mp); body.append(acts);
+  const strip = el("div", "yr-best"); strip.style.marginTop = "10px"; p.best.forEach((it, i) => strip.append(tileFor(it, p.best, i))); body.append(strip);
+  if (p.lived.length) { body.append(el("h3", "", "Lived here")); for (const c of p.lived) body.append(el("div", "small", `${c.title}: ${fmtDate(c.start_at)} – ${fmtDate(c.end_at)}`)); }
+  if (p.trips.length) { body.append(el("h3", "", "Visits"));
+    for (const t of p.trips) { const r = el("div", "row"); const a = el("a", "", `${t.title} · ${fmtDate(t.start_at)} – ${fmtDate(t.end_at)} · ${t.here} photos here`); a.onclick = () => { $("#place-dlg").classList.add("hidden"); goPhotos({ trip: t.id, tripTitle: t.title }); };
+      const play = el("button", "btn", "▶"); play.onclick = () => openReplay({ trip: t.id }, t.title); r.append(a, play); body.append(r); } }
+  if (!city && p.cities.length > 1) { body.append(el("h3", "", "Places")); const r = el("div", "row");
+    for (const c of p.cities) { const b = el("button", "btn", `${c.name} · ${fmt(c.n)}`); b.onclick = () => openPlace(code, c.name); r.append(b); } body.append(r); }
+}
+$("#place-close").onclick = () => $("#place-dlg").classList.add("hidden");
+$("#map-all").onclick = () => loadMap({});
 let thisDay = null;
 $("#map-thisday").onclick = async () => {
   if (!map) return;
