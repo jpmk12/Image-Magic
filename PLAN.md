@@ -361,6 +361,9 @@ Service features (flying log, squadron yearbook) slot into S2 (log) and S9 (year
 - **Phase 6.8** (v0.36.0): daily.memory_of_day (best on-this-day, else a day-seeded shuffle),
   week_ahead (days, birthdays, trips, milestones), Windows toast via PowerShell WinRT once a
   day from the app loop (meta last_daily_notice), Home card, days_md filter.
+- **Phase 6.9 + 6.11** (v0.37.0): TV mode (best-of-300 shuffled, looping, full screen, Ken
+  Burns, auto-hidden bar, `&tv` deep link); expression indexes on substr(taken_at) and
+  quality/phash; App.cached keyed by WAL mtime/size for facets, timeline, year review, world.
 
 ---
 
@@ -388,11 +391,12 @@ Ordered by how much they add for the effort. Each one is local and private unles
    "the week we moved" parsed on the laptop, no AI needed; plus person AND person filters.
 8. **Memory of the day** (built, v0.36.0). A Windows notification each morning the app is open ("8 years ago
    today: Petra"), and a weekly digest page.
-9. **TV mode.** A full-screen ambient slideshow of best memories, openable from a TV or
+9. **TV mode** (built, v0.37.0). A full-screen ambient slideshow of best memories, openable from a TV or
    tablet browser through phone access, with the family's voice notes.
 10. **Archive export.** The whole story as a self-contained static site (chapters, trips,
     events, stories, metadata-stripped copies) for a USB stick or a family archive.
-11. **Scale and speed for 16k+.** Pre-render thumbnails in a background job, virtualise the
+11. **Scale and speed for 16k+** (built, v0.37.0; thumbnails were already pre-rendered by the
+    quality step). Pre-render thumbnails in a background job, virtualise the
     grid, and cache the year/timeline queries.
 
 ---

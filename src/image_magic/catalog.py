@@ -122,6 +122,13 @@ def connect(db_file: Path) -> sqlite3.Connection:
         conn.commit()
     run_script(conn, events.SCHEMA)      # indexes a migrated column, so after the migrations
     conn.execute("CREATE INDEX IF NOT EXISTS idx_assets_country ON assets(country_code)")
+    # The gallery filters compare substr(taken_at, ...) all the time; expression indexes make those cheap at 16k+.
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_assets_year ON assets(substr(taken_at, 1, 4))")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_assets_month ON assets(substr(taken_at, 1, 7))")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_assets_day ON assets(substr(taken_at, 1, 10))")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_assets_md ON assets(substr(taken_at, 6, 5))")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_assets_quality ON assets(quality_score)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_assets_phash ON assets(phash)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_assets_trip ON assets(trip_id)")
     conn.commit()
     return conn

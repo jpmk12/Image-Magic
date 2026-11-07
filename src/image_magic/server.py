@@ -89,6 +89,27 @@ class App:
             "job": self.jobs.snapshot(),
         }
 
+    _query_cache: dict = {}
+
+    def cached(self, key: str, conn, fn, ttl: float = 20.0):
+        """Reuse an expensive read for a few seconds unless the catalog changed (a job finished or data was written)."""
+        db = self.settings_provider().db
+        stamp = 0
+        for f in (db, db.with_name(db.name + "-wal")):      # any write touches the WAL file
+            try:
+                stamp ^= f.stat().st_mtime_ns ^ f.stat().st_size
+            except OSError:
+                pass
+        tag = f"{self.jobs.state.finished}|{stamp}|{db}"
+        hit = self._query_cache.get(key)
+        if hit and hit[0] == tag and time.time() - hit[1] < ttl:
+            return hit[2]
+        value = fn()
+        self._query_cache[key] = (tag, time.time(), value)
+        if len(self._query_cache) > 64:
+            self._query_cache.pop(next(iter(self._query_cache)))
+        return value
+
     def ai_client(self):
         from . import describe
         key = describe.get_api_key()
@@ -376,7 +397,7 @@ def make_handler(app: App):
                         return self._json(200, browse.replay_items(conn, quality.best_of(conn, where + " AND a.private = 0", args, n)))
                     return self._json(200, browse.replay(conn, q))
                 if path == "/api/facets":
-                    return self._json(200, browse.facets(conn))
+                    return self._json(200, app.cached("facets", conn, lambda: browse.facets(conn)))
                 if path == "/api/trips":
                     return self._json(200, browse.trips(conn))
                 if path == "/api/home":
@@ -400,7 +421,7 @@ def make_handler(app: App):
                     from . import review
                     ys = review.years(conn)
                     y = q.get("year") or (ys[0] if ys else None)
-                    return self._json(200, {"years": ys, "stats": review.year_stats(conn, y) if y else None})
+                    return self._json(200, app.cached(f"review:{y}", conn, lambda: {"years": ys, "stats": review.year_stats(conn, y) if y else None}))
                 if path == "/api/daily":
                     from . import daily
                     return self._json(200, {"memory": daily.memory_of_day(conn), "week": daily.week_ahead(conn)})
@@ -414,7 +435,7 @@ def make_handler(app: App):
                     return self._json(200, memories.shuffle(conn))
                 if path == "/api/timeline":
                     from . import chapters
-                    return self._json(200, chapters.timeline(conn))
+                    return self._json(200, app.cached("timeline", conn, lambda: chapters.timeline(conn)))
                 if path == "/api/people":
                     from . import faces
                     return self._json(200, faces.people(conn, include_hidden=q.get("hidden") == "1"))
@@ -449,7 +470,7 @@ def make_handler(app: App):
                     return self._json(200, flying.log(conn))
                 if path == "/api/places/world":
                     from . import placestory
-                    return self._json(200, placestory.world(conn))
+                    return self._json(200, app.cached("world", conn, lambda: placestory.world(conn)))
                 if path == "/api/places/one":
                     from . import placestory
                     return self._json(200, placestory.place(conn, str(q.get("country") or "")[:2].upper(), q.get("city") or None))

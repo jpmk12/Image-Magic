@@ -135,6 +135,10 @@ program only. Your photos and settings are kept.
   (or a good random moment), and **This week** lists what the coming seven days held in past
   years: photo-days, birthdays, trips that started, milestones. While the app is open it also
   shows one Windows notification a day with that memory (Settings → Privacy to turn it off).
+- **TV mode:** **📺 TV mode** on the Home tab plays a full-screen, slow, endless slideshow of
+  your best photos in random order, with your voice notes, and hides the controls until you
+  move the mouse. On a TV or tablet browser, pair it like a phone and add `&tv` to the end of
+  the address to start straight into it. Esc ends it.
 - **Memories tab:** **Shuffle a memory** picks a random good moment (best-rated photos first,
   then photos of named people, then trips) with its date, place, trip and chapter. **On this
   day** shows photos from today's date in past years. **Then & now** pairs photos taken at the

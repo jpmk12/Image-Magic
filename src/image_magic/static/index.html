@@ -179,6 +179,12 @@
   .rp #rp-map { background: #1b1e23; }
   .rp .stage { display: grid; place-items: center; background: #000; min-width: 0; position: relative; }
   .rp .stage img, .rp .stage video { max-width: 100%; max-height: 100%; width: 100%; height: 100%; object-fit: contain; }
+  .rp.tv .body { grid-template-columns: 1fr; }
+  .rp.tv #rp-map { display: none; }
+  .rp.tv .bar { position: absolute; left: 0; right: 0; bottom: 0; opacity: 0; transition: opacity .4s; }
+  .rp.tv:hover .bar, .rp.tv.show-bar .bar { opacity: 1; }
+  .rp.tv .stage img { animation: tvzoom 14s ease-in-out infinite alternate; }
+  @keyframes tvzoom { from { transform: scale(1); } to { transform: scale(1.06); } }
   .rp .cap { position: absolute; left: 0; right: 0; bottom: 0; padding: 16px 20px; font-size: 15px;
              background: linear-gradient(transparent, rgba(0,0,0,.8)); }
   .rp .cap b { display: block; font-size: 21px; }
@@ -355,7 +361,8 @@
     </div>
 
     <div class="panel hidden" id="dailypanel">
-      <div class="row" style="justify-content:space-between"><h2 style="margin:0">Memory of the day</h2><button class="btn" id="daily-week">This week</button></div>
+      <div class="row" style="justify-content:space-between"><h2 style="margin:0">Memory of the day</h2>
+        <div class="row"><button class="btn" id="daily-week">This week</button><button class="btn" id="tv-mode" title="Full-screen slideshow of your best memories, for a TV or a quiet evening">📺 TV mode</button></div></div>
       <div class="shuffle" id="daily-box" style="margin-top:12px"></div>
       <div id="daily-weekbox" class="small hidden" style="margin-top:12px"></div>
     </div>
@@ -911,6 +918,7 @@ const TOKEN = (() => {
   let t = m ? decodeURIComponent(m[1]) : "";
   try {
     if (t) sessionStorage.setItem("im-token", t); else t = sessionStorage.getItem("im-token") || "";
+    if (/[#&]tv\b/.test(location.hash)) sessionStorage.setItem("im-tv", "1");
   } catch (e) {}
   if (m) history.replaceState(null, "", location.pathname);
   return t;
@@ -1179,6 +1187,11 @@ async function loadDaily() {
     a.onclick = () => goPhotos({ day: day.date.slice(5), monthTitle: "" }); a.onclick = () => openReplay({ days_md: day.date.slice(5) }, "On this day"); r.append(a); wb.append(r); }
 }
 $("#daily-week").onclick = () => $("#daily-weekbox").classList.toggle("hidden");
+$("#tv-mode").onclick = openTv;
+if (/[#&]tv\b/.test(location.hash) || sessionStorage.getItem("im-tv") === "1") {
+  try { sessionStorage.removeItem("im-tv"); } catch (e) {}
+  document.addEventListener("DOMContentLoaded", () => setTimeout(openTv, 800));
+}
 async function loadReviewQueue() {
   const q = await api("/api/review-queue").catch(() => null);
   const box = $("#review-list"); if (!q) return;
@@ -1853,6 +1866,7 @@ async function openReplay(filters, title) {
   showReplay(0);
 }
 function showReplay(i) {
+  if (i >= rp.items.length && rp.loop && rp.items.length) i = 0;
   if (i < 0 || i >= rp.items.length) { if (i >= rp.items.length) pauseReplay(); return; }
   clearTimeout(rp.timer);
   rp.i = i;
@@ -1892,8 +1906,18 @@ function showReplay(i) {
     rp.timer = setTimeout(() => showReplay(i + 1), secs * 1000);
   }
 }
+async function openTv() {
+  let items;
+  try { items = await api("/api/replay?best=1&n=300"); } catch (e) { return toast(e.message); }
+  if (!items.length) return toast("Nothing to show yet.");
+  for (let i = items.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [items[i], items[j]] = [items[j], items[i]]; }
+  rp.items = items; rp.title = ""; rp.i = -1; rp.loop = true;
+  $("#rp").classList.add("tv"); $("#rp").classList.remove("hidden"); $("#rp-speed").value = "5";
+  try { await document.documentElement.requestFullscreen(); } catch (e) {}
+  rp.playing = true; $("#rp-play").textContent = "❚❚"; showReplay(0);
+}
 function pauseReplay() { rp.playing = false; clearTimeout(rp.timer); $("#rp-play").textContent = "▶"; if (rp.audio) rp.audio.pause(); }
-function closeReplay() { pauseReplay(); rp.audio = null; $("#rp").classList.add("hidden"); $("#rp-stage").querySelectorAll("img,video").forEach(n => n.remove()); }
+function closeReplay() { pauseReplay(); rp.audio = null; rp.loop = false; $("#rp").classList.remove("tv"); if (document.fullscreenElement) document.exitFullscreen().catch(() => {}); $("#rp").classList.add("hidden"); $("#rp-stage").querySelectorAll("img,video").forEach(n => n.remove()); }
 $("#rp-play").onclick = () => { if (rp.playing) pauseReplay(); else { rp.playing = true; $("#rp-play").textContent = "❚❚"; showReplay(rp.i + 1 < rp.items.length ? rp.i + (rp.i < 0 ? 1 : 0) : 0); } };
 $("#rp-prev").onclick = () => showReplay(Math.max(0, rp.i - 1));
 $("#rp-next").onclick = () => showReplay(Math.min(rp.items.length - 1, rp.i + 1));
