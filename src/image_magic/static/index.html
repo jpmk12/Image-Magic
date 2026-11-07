@@ -581,6 +581,13 @@
     </div>
     <div class="people" id="people"></div>
     <p class="muted" id="people-empty" style="display:none">No people yet. Turn on <b>People</b> from the Home tab.</p>
+    <div class="panel" id="ptime-panel" style="margin-top:16px">
+      <h2 style="margin:0 0 6px">People over time</h2>
+      <p class="muted small">Who was in your life when. Each cell is one year; darker means more photos. Click a cell to see them that year.</p>
+      <div id="ptime" style="overflow-x:auto"></div>
+      <h3>Together</h3>
+      <div id="ptogether" class="small"></div>
+    </div>
   </section>
 
   <!-- TRIPS -->
@@ -1203,7 +1210,36 @@ $("#people-update").onclick = () => api("/api/run", { kind: "faces" }).then(j =>
 $("#people-hidden").onchange = loadPeople;
 
 let peopleCache = [];
+async function loadPeopleTime() {
+  const t = await api("/api/people/time").catch(() => null); if (!t) return;
+  const box = $("#ptime"); box.replaceChildren();
+  if (!t.people.length) { box.textContent = "Name some people first."; $("#ptogether").textContent = ""; return; }
+  const table = document.createElement("table"); table.style.borderCollapse = "collapse"; table.style.fontSize = "12px";
+  const head = document.createElement("tr"); head.append(document.createElement("th"));
+  for (const y of t.years) { const th = document.createElement("th"); th.textContent = y.slice(2); th.style.padding = "2px 4px"; th.className = "muted"; head.append(th); }
+  table.append(head);
+  const max = Math.max(1, ...t.people.flatMap(p => Object.values(p.years)));
+  for (const p of t.people) {
+    const tr = document.createElement("tr"); const name = document.createElement("td"); name.textContent = p.name; name.style.padding = "2px 8px 2px 0"; name.style.whiteSpace = "nowrap"; name.title = `${fmt(p.total)} photos, ${p.first}–${p.last}`; tr.append(name);
+    for (const y of t.years) { const n = p.years[y] || 0, td = document.createElement("td"); td.style.padding = "2px"; const cell = document.createElement("div");
+      cell.style.width = "26px"; cell.style.height = "18px"; cell.style.borderRadius = "4px"; cell.style.background = n ? `rgba(20,184,166,${0.15 + 0.85 * Math.sqrt(n / max)})` : "var(--soft)"; cell.title = `${p.name}, ${y}: ${fmt(n)} photos`;
+      if (n) { cell.style.cursor = "pointer"; cell.onclick = () => goPhotos({ person: p.id, personName: p.name, year: y }); }
+      td.append(cell); tr.append(td); }
+    table.append(tr);
+  }
+  box.append(table);
+  const tg = $("#ptogether"); tg.replaceChildren();
+  if (!t.pairs.length) { tg.textContent = "No two named people share a photo yet."; return; }
+  for (const pr of t.pairs.slice(0, 12)) {
+    const row = document.createElement("div"); row.className = "row"; row.style.margin = "4px 0";
+    if (pr.first_id) { const tile = tileFor({ id: pr.first_id, kind: "photo" }, [{ id: pr.first_id, kind: "photo" }], 0); tile.style.width = "56px"; row.append(tile); }
+    const a = document.createElement("a"); a.textContent = `${pr.names[0]} & ${pr.names[1]} · ${fmt(pr.photos)} photos together · first on ${fmtDate(pr.first_at)}`;
+    a.onclick = () => goPhotos({ person: pr.a, person2: pr.b, personName: `${pr.names[0]} & ${pr.names[1]}` });
+    row.append(a); tg.append(row);
+  }
+}
 async function loadPeople() {
+  loadPeopleTime();
   const hidden = $("#people-hidden").checked ? "?hidden=1" : "";
   const list = await api("/api/people" + hidden).catch(e => { toast(e.message); return []; });
   peopleCache = list;
@@ -1462,7 +1498,7 @@ async function loadMorePhotos() {
   grid.loading = true;
   const mine = grid;
   const q = new URLSearchParams({ offset: grid.offset, limit: PAGE });
-  for (const k of ["q", "year", "country", "city", "trip", "kind", "person", "month", "day", "chapter", "event", "best", "burst", "flying", "contributor", "favorite", "album"]) if (grid.filters[k]) q.set(k, grid.filters[k]);
+  for (const k of ["q", "year", "country", "city", "trip", "kind", "person", "month", "day", "chapter", "event", "best", "burst", "flying", "contributor", "favorite", "album", "person2"]) if (grid.filters[k]) q.set(k, grid.filters[k]);
   try {
     const res = await api("/api/photos?" + q);
     if (mine !== grid) return;  // filters changed meanwhile

@@ -352,6 +352,9 @@ Service features (flying log, squadron yearbook) slot into S2 (log) and S9 (year
   countries by year, farthest from the latest home, most-returned-to) and placestory.place
   (country or city: years, cities, visits, lived-here chapters, people, best, centre); Places
   panel and dialog on the Map tab; map filters.
+- **Phase 6.5** (v0.34.0): peopletime.overview (photos per person per year), together pairs
+  via a faces self-join with first shared photo, `together:` milestones (≥ 3 shared photos),
+  person2 filter.
 
 ---
 
@@ -370,7 +373,7 @@ Ordered by how much they add for the effort. Each one is local and private unles
 4. **Place stories** (built, v0.33.0). A page per country and per city: every visit, years, best photos, the
    map of where you went there, and a "world" summary (countries by year, farthest from home,
    most-returned-to place).
-5. **People over time.** Who was in your life when: a strip per named person across the
+5. **People over time** (built, v0.34.0). Who was in your life when: a strip per named person across the
    years, who appears together, and "first photo together" milestones.
 6. **Clutter and duplicates.** Screenshots, receipts and documents (from captions) and
    near-duplicate sets grouped into a "clutter" view that hides them from stories without

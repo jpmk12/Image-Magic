@@ -380,6 +380,9 @@ def make_handler(app: App):
                 if path == "/api/people":
                     from . import faces
                     return self._json(200, faces.people(conn, include_hidden=q.get("hidden") == "1"))
+                if path == "/api/people/time":
+                    from . import peopletime
+                    return self._json(200, peopletime.overview(conn))
                 if path == "/api/people/growing":
                     from . import kids
                     return self._json(200, kids.growing_up(conn, int(q.get("id") or 0)))

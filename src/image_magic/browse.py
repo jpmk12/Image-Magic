@@ -53,6 +53,9 @@ def _filters(params: dict, alias: str = "") -> tuple[str, list]:
     if params.get("person"):
         where.append(f"{a}id IN (SELECT asset_id FROM faces WHERE person_id = ?)")
         args.append(int(params["person"]))
+    if params.get("person2"):          # both people in the same photo
+        where.append(f"{a}id IN (SELECT asset_id FROM faces WHERE person_id = ?)")
+        args.append(int(params["person2"]))
     if params.get("burst"):
         where.append(f"{a}burst_id = ?")
         args.append(int(params["burst"]))

@@ -223,6 +223,10 @@ program only. Your photos and settings are kept.
   Click a person's name tag for **Not this person** or **This is someone else**. **About ✎ edit**
   rewrites a caption and keywords. Chapters can be renamed on the Timeline, milestones
   dismissed, trips renamed on their cards.
+- **People over time:** at the bottom of the People tab, a year-by-year strip per named person
+  (darker means more photos; click a cell to see them that year) and **Together**: pairs who
+  appear in the same photos, how often, and their first photo together, which also becomes a
+  Timeline milestone.
 - **People:** turn it on once from the Home tab (about 290 MB of face models, verified by
   fingerprint). The app finds every face and groups them by person. On the **People** tab,
   click **"Who is this?"** to name a group, click the face to see all of that person's photos,
