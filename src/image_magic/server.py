@@ -176,7 +176,8 @@ def find_photos(conn, settings, q: dict) -> list[tuple[int, float]]:
     text = (q.get("q") or "").strip()[:200]
     q = browse.expand(conn, q)
     text = (q.get("q") or text).strip()[:200]
-    has_filters = any(q.get(k) for k in ("year", "country", "city", "trip", "kind", "person", "month", "day", "chapter", "event", "best", "favorite", "flying", "contributor", "_album_items"))
+    has_filters = any(q.get(k) for k in ("year", "country", "city", "trip", "kind", "person", "person2", "month", "day", "chapter", "event", "best",
+                                         "favorite", "flying", "contributor", "_album_items", "from", "to", "days", "birthday_md"))
     allowed = None
     if has_filters:
         allowed = browse.ids(conn, q)
@@ -327,7 +328,17 @@ def make_handler(app: App):
             try:
                 if path == "/api/photos":
                     if q.get("q", "").strip() or (q.get("album") and browse.expand(conn, q).get("q")):
-                        return self._json(200, self._search(conn, settings, browse.expand(conn, q)))
+                        q = browse.expand(conn, q)
+                        from . import datewords
+                        parsed = datewords.parse(conn, q["q"])
+                        understood = {k: v for k, v in parsed.items() if k in ("from", "to", "days", "birthday_md", "person", "person2") and not q.get(k)}
+                        q = {**q, **understood, "q": parsed["q"]}
+                        if not parsed["q"].strip():       # all words were dates and names: a plain filter, no search model needed
+                            res = browse.photos(conn, q, int(q.get("offset") or 0), min(int(q.get("limit") or 200), 500))
+                            return self._json(200, {**res, "search": "", "understood": parsed["label"]})
+                        r = self._search(conn, settings, q)
+                        r["understood"] = parsed["label"]
+                        return self._json(200, r)
                     return self._json(200, browse.photos(
                         conn, q, int(q.get("offset") or 0), min(int(q.get("limit") or 200), 500)))
                 if path == "/api/replay":

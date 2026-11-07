@@ -474,7 +474,7 @@
   <!-- PHOTOS -->
   <section id="tab-photos" class="hidden">
     <form class="filters" id="search-form" style="margin-bottom:10px">
-      <input type="text" id="f-q" placeholder='Search: "C-17", "kids at the beach", "sunset"...' style="max-width:520px" autocomplete="off">
+      <input type="text" id="f-q" placeholder='Search: "C-17", "kids at the beach", "christmas 2019", "last summer", "Emma&#39;s 3rd birthday"' style="max-width:520px" autocomplete="off">
       <button class="btn primary" type="submit">Search</button>
       <button class="btn hidden" type="button" id="f-q-clear">Clear</button>
     </form>
@@ -1482,7 +1482,6 @@ function ensurePhotos() {
 $("#search-form").onsubmit = ev => {
   ev.preventDefault();
   const q = $("#f-q").value.trim();
-  if (q && !smartReady) { toast("Turn on smart search on the Home tab first."); return; }
   setFilters({ ...grid.filters, q });
 };
 $("#f-q-clear").onclick = () => setFilters({ ...grid.filters, q: "" });
@@ -1506,7 +1505,9 @@ async function loadMorePhotos() {
     const box = $("#grid"), frag = document.createDocumentFragment();
     if (grid.filters.q && !grid.offset) {
       const h = document.createElement("div"); h.className = "month";
-      h.textContent = res.total ? `Best matches for "${grid.filters.q}"` : `No good matches for "${grid.filters.q}". Try describing it differently.`;
+      const understood = res.understood ? ` (understood: ${res.understood})` : "";
+      h.textContent = res.total ? (res.search ? `Best matches for "${grid.filters.q}"` : `"${grid.filters.q}"`) + understood
+        : `No matches for "${grid.filters.q}"${understood}. ${smartReady ? "Try describing it differently." : "Turn on smart search (Home tab) to search by what is in the photos."}`;
       frag.append(h); grid.lastMonth = "search";
     }
     for (const it of res.items) {

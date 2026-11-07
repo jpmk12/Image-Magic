@@ -34,6 +34,21 @@ def _filters(params: dict, alias: str = "") -> tuple[str, list]:
     if params.get("day"):
         where.append(f"substr({a}taken_at, 1, 10) = ?")
         args.append(str(params["day"])[:10])
+    if params.get("from"):
+        where.append(f"substr({a}taken_at, 1, 10) >= ?")
+        args.append(str(params["from"])[:10])
+    if params.get("to"):
+        where.append(f"substr({a}taken_at, 1, 10) <= ?")
+        args.append(str(params["to"])[:10])
+    if params.get("days"):           # several date spans (a holiday in every year)
+        spans = params["days"]
+        where.append("(" + " OR ".join(f"substr({a}taken_at, 1, 10) BETWEEN ? AND ?" for _ in spans) + ")")
+        for s_, e_ in spans:
+            args += [str(s_)[:10], str(e_)[:10]]
+    if params.get("birthday_md"):
+        where.append(f"substr({a}taken_at, 6, 5) BETWEEN ? AND ?")
+        md = str(params["birthday_md"])
+        args += [md, md]
     if params.get("chapter"):
         where.append(f"{a}taken_at >= (SELECT start_at FROM chapters WHERE id = ?) "
                      f"AND {a}taken_at < (SELECT date(end_at, '+1 day') FROM chapters WHERE id = ?)")

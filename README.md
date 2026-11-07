@@ -75,6 +75,11 @@ program only. Your photos and settings are kept.
 - **Map:** every photo with a location, clustered on a world map. Click a pin to open the photo.
   The map background needs internet. Everything else works offline.
 
+- **Dates and names in plain English:** the search box understands *"christmas 2019"*,
+  *"last summer"*, *"winter 2017"*, *"March 2019"*, *"thanksgiving"* (every year), *"Easter
+  2021"*, *"2019"*, *"Emma's 3rd birthday"* (with her birthday set), *"Emma and Jack"* (both in
+  the photo) and *"the week we moved to Dover"*, on your laptop with no AI. Leftover words
+  ("beach") become the visual search. A pure date or name search works without smart search.
 - **Smart search:** type what you're looking for, like *"C-17 on the flight line"*,
   *"kids at the beach"* or *"sunset over the desert"*, and the best matches appear first. It
   combines with the year, place and trip filters, for example "desert" + Jordan. Turn it on

@@ -355,6 +355,9 @@ Service features (flying log, squadron yearbook) slot into S2 (log) and S9 (year
 - **Phase 6.5** (v0.34.0): peopletime.overview (photos per person per year), together pairs
   via a faces self-join with first shared photo, `together:` milestones (≥ 3 shared photos),
   person2 filter.
+- **Phase 6.7** (v0.35.0): datewords.parse (people by library names, Nth birthday from the
+  birthday, year/season/month/holiday incl. Easter and Thanksgiving, "the week we moved",
+  leftover query); from/to/days/birthday_md filters; date-only searches skip the model.
 
 ---
 
@@ -375,10 +378,10 @@ Ordered by how much they add for the effort. Each one is local and private unles
    most-returned-to place).
 5. **People over time** (built, v0.34.0). Who was in your life when: a strip per named person across the
    years, who appears together, and "first photo together" milestones.
-6. **Clutter and duplicates.** Screenshots, receipts and documents (from captions) and
+6. **Clutter and duplicates** (built as Clean up, v0.31.0). Screenshots, receipts and documents (from captions) and
    near-duplicate sets grouped into a "clutter" view that hides them from stories without
    deleting anything. Also a "one of each burst" tidy-up for the Photos grid.
-7. **Plain-English dates in search.** "last summer", "Christmas 2019", "Emma's 3rd birthday",
+7. **Plain-English dates in search** (built, v0.35.0). "last summer", "Christmas 2019", "Emma's 3rd birthday",
    "the week we moved" parsed on the laptop, no AI needed; plus person AND person filters.
 8. **Memory of the day.** A Windows notification each morning the app is open ("8 years ago
    today: Petra"), and a weekly digest page.
