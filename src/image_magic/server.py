@@ -174,7 +174,9 @@ def find_photos(conn, settings, q: dict) -> list[tuple[int, float]]:
     """Text query + filters -> [(asset_id, score)]: AI-description word matches first, then smart search."""
     from . import describe, search
     text = (q.get("q") or "").strip()[:200]
-    has_filters = any(q.get(k) for k in ("year", "country", "city", "trip", "kind", "person", "month", "day", "chapter", "event", "best", "favorite", "flying", "contributor"))
+    q = browse.expand(conn, q)
+    text = (q.get("q") or text).strip()[:200]
+    has_filters = any(q.get(k) for k in ("year", "country", "city", "trip", "kind", "person", "month", "day", "chapter", "event", "best", "favorite", "flying", "contributor", "_album_items"))
     allowed = None
     if has_filters:
         allowed = browse.ids(conn, q)
@@ -297,7 +299,7 @@ def make_handler(app: App):
                     return self._json(200, app.jobs.log_since(since))
                 if path.startswith(("/api/photos", "/api/photo/", "/api/facets", "/api/trips", "/api/replay",
                                     "/api/map", "/api/people", "/api/timeline", "/api/story", "/api/memories",
-                                    "/api/shuffle", "/api/similar/", "/api/review", "/api/context/", "/api/curate/", "/api/events", "/api/home", "/api/voice/", "/api/compare/", "/api/flying", "/api/book", "/api/review-queue", "/api/family", "/api/cleanup", "/media/")):
+                                    "/api/shuffle", "/api/similar/", "/api/review", "/api/context/", "/api/curate/", "/api/events", "/api/home", "/api/voice/", "/api/compare/", "/api/flying", "/api/book", "/api/review-queue", "/api/family", "/api/cleanup", "/api/albums", "/media/")):
                     return self._browse(path, self._query())
             except Exception as e:
                 return self._json(500, {"error": str(e)})
@@ -324,8 +326,8 @@ def make_handler(app: App):
             settings, conn = app.db()
             try:
                 if path == "/api/photos":
-                    if q.get("q", "").strip():
-                        return self._json(200, self._search(conn, settings, q))
+                    if q.get("q", "").strip() or (q.get("album") and browse.expand(conn, q).get("q")):
+                        return self._json(200, self._search(conn, settings, browse.expand(conn, q)))
                     return self._json(200, browse.photos(
                         conn, q, int(q.get("offset") or 0), min(int(q.get("limit") or 200), 500)))
                 if path == "/api/replay":
@@ -334,7 +336,7 @@ def make_handler(app: App):
                         return self._json(200, browse.replay_items(conn, home.replay_ids(conn, int(q["chapter"]), q.get("year"))))
                     if q.get("best"):
                         from . import quality
-                        where, args = browse._filters({k: v for k, v in q.items() if k != "best"}, alias="a.")
+                        where, args = browse._filters(browse.expand(conn, {k: v for k, v in q.items() if k != "best"}), alias="a.")
                         n = max(5, min(int(q.get("n") or 30), 300))
                         return self._json(200, browse.replay_items(conn, quality.best_of(conn, where + " AND a.private = 0", args, n)))
                     return self._json(200, browse.replay(conn, q))
@@ -345,6 +347,9 @@ def make_handler(app: App):
                 if path == "/api/home":
                     from . import home
                     return self._json(200, home.story(conn, int(q.get("chapter") or 0)))
+                if path == "/api/albums":
+                    from . import albums
+                    return self._json(200, albums.listing(conn))
                 if path == "/api/events":
                     from . import events
                     return self._json(200, events.events(conn, q.get("year"), int(q["trip"]) if q.get("trip") else None))
@@ -441,6 +446,8 @@ def make_handler(app: App):
                         d["voice"] = notes.list_for(conn, "photo", asset_id)
                         from . import confidence
                         d["confidence"] = confidence.photo_confidence(conn, asset_id)
+                        from . import albums
+                        d["albums"] = albums.albums_of(conn, asset_id)
                     return self._json(200, d) if d else self._json(404, {"error": "not found"})
                 if kind == "/media/voice":
                     from . import notes
@@ -754,7 +761,7 @@ def make_handler(app: App):
                     settings, conn = app.db()
                     try:
                         filters = {k: v for k, v in dict(data.get("filters") or {}).items() if k in
-                                   ("trip", "chapter", "person", "year", "month", "day", "country", "city", "q", "event", "best", "flying")}
+                                   ("trip", "chapter", "person", "year", "month", "day", "country", "city", "q", "event", "best", "flying", "album", "favorite")}
                         if path.endswith("check"):
                             return self._json(200, share.check(conn, filters))
                         folder = share.export(conn, settings.originals, settings.library, filters,
@@ -771,6 +778,31 @@ def make_handler(app: App):
                         conn.close()
                 if path in ("/api/story/write", "/api/story/save", "/api/ask"):
                     return self._ai_action(path, data)
+                if path.startswith("/api/albums/"):
+                    from . import albums
+                    settings, conn = app.db()
+                    try:
+                        action = path.rsplit("/", 1)[1]
+                        ids = [int(i) for i in data.get("ids") or []]
+                        if action == "create":
+                            aid = albums.create(conn, str(data.get("title", "")), str(data.get("kind") or "manual"),
+                                                dict(data.get("filters") or {}), ids)
+                            return self._json(200, {"id": aid})
+                        if action == "add":
+                            albums.add(conn, int(data["id"]), ids)
+                        elif action == "remove":
+                            albums.remove(conn, int(data["id"]), ids)
+                        elif action == "rename":
+                            albums.rename(conn, int(data["id"]), str(data.get("title", "")))
+                        elif action == "cover":
+                            albums.set_cover(conn, int(data["id"]), int(data["asset"]) if data.get("asset") else None)
+                        elif action == "delete":
+                            albums.delete(conn, int(data["id"]))
+                        else:
+                            return self._json(404, {"error": "not found"})
+                        return self._json(200, {"ok": True})
+                    finally:
+                        conn.close()
                 if path.startswith("/api/cleanup/"):
                     from . import cleanup
                     settings, conn = app.db()

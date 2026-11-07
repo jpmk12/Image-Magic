@@ -343,6 +343,11 @@ Service features (flying log, squadron yearbook) slot into S2 (log) and S9 (year
   extras); trash moves file + live clip + sidecar under <library>/trash keeping the path,
   trashed_at marks rows (missing, not counted as missing), restore and empty; scan re-trashes
   re-downloads; assigning a photo to a trip opens suggestions seeded by it.
+- **Phase 6.1–6.3** (v0.32.0): books.render sections with text pages; life_book (chapter
+  parts with story/notes/trips/milestones/voice-note counts, trip sections with stories, top
+  events); albums module (manual with order, smart from saved filters), browse.expand resolves
+  `album` everywhere (photos, ids, replay, map, share, best-of, search), album book; favourites
+  were already read from the sidecars.
 
 ---
 
@@ -350,12 +355,12 @@ Service features (flying log, squadron yearbook) slot into S2 (log) and S9 (year
 
 Ordered by how much they add for the effort. Each one is local and private unless marked.
 
-1. **The life book.** One printable (and one on-screen) book of everything: chapters as
+1. **The life book** (built, v0.32.0). One printable (and one on-screen) book of everything: chapters as
    parts, trips and events as sections, your stories and voice-note transcripts as text, the
    best photos per section. The trip/year/person books become its pages.
-2. **Albums and saved searches.** Hand-picked albums ("Emma's best", "The C-17 years") and
+2. **Albums and saved searches** (built, v0.32.0). Hand-picked albums ("Emma's best", "The C-17 years") and
    saved filters that update themselves. Any album can be replayed, filmed, booked, shared.
-3. **Favourites from iCloud.** icloudpd already saves favourites, titles and keywords as
+3. **Favourites from iCloud** (built with the locations work, v0.30.0). icloudpd already saves favourites, titles and keywords as
    .xmp sidecars; read them into the catalog so a heart in Photos counts in the ranking and
    "Favourites" is a filter.
 4. **Place stories.** A page per country and per city: every visit, years, best photos, the

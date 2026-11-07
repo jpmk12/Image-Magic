@@ -113,6 +113,15 @@ program only. Your photos and settings are kept.
   through the years; **Save as GIF** exports it, and **Make the book** builds a printable PDF
   (cover, growing-up page, then the best photos of each year with captions). Exports land in
   the `exports` folder inside your library.
+- **Life book:** **📖 Life book** at the top of the Timeline makes one printable PDF of
+  everything: a part per chapter with its story, dates, trips, milestones and best photos, then
+  a section per trip (with its story) and per biggest event. Voice notes are counted per
+  chapter so you know where to listen in the app.
+- **Albums:** at the top of **Trips & events**. **+ New album** makes a hand-picked album;
+  **＋ add** in the viewer puts a photo into one (or starts a new one). On the Photos tab,
+  any combination of filters or a search can be kept with **＋ Save as album** as a *smart
+  album* that always shows what matches now. Any album can be opened, replayed (hand-picked
+  ones in your order), shared or made into a book.
 - **Books:** **📖 Book** on a trip card makes a printable PDF (cover, your story, a page per
   day with the best photos, dated and captioned); **📖 Year book** at the top of the Timeline
   makes one for a year (a page per month and per trip, with the year's numbers); **📖** on an

@@ -39,6 +39,9 @@ STRICT_TERMS = {"tail number", "id card", "badge", "passport", "document", "addr
 def _visible_ids(conn: sqlite3.Connection, params: dict) -> list[int]:
     params = {k: v for k, v in params.items() if v not in (None, "", 0)}
     params.pop("kind", None)
+    params = browse.expand(conn, params)
+    if params.get("q"):
+        params.pop("q")                  # a text search can't be re-run here; share the filtered base
     res = browse.photos(conn, {**params, "kind": "photo"}, 0, 5000)
     ids = [i["id"] for i in res["items"]]
     private: set[int] = set()

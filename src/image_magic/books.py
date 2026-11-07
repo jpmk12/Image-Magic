@@ -88,8 +88,28 @@ def render(library: Path, originals: Path, out_name: str, title: str, subtitle: 
                 c.drawString(50, y, line.strip()); y -= 18
             y -= 8
         c.showPage()
-    # Sections
-    for heading, photos in sections:
+    # Sections: (heading, photos) or (heading, photos, text). Text gets its own page before the photos.
+    for sec in sections:
+        heading, photos = sec[0], sec[1]
+        text = sec[2] if len(sec) > 2 else ""
+        if text and text.strip():
+            c.setFont("Helvetica-Bold", 26)
+            c.drawString(40, H - 60, heading[:80])
+            c.setFont("Helvetica", 12.5)
+            y = H - 100
+            for para in text.split("\n"):
+                words, line = para.split(), ""
+                for w in words:
+                    if c.stringWidth(line + " " + w, "Helvetica", 12.5) > W - 100:
+                        c.drawString(50, y, line.strip()); y -= 18; line = w
+                    else:
+                        line += " " + w
+                    if y < 50:
+                        c.showPage(); c.setFont("Helvetica", 12.5); y = H - 60
+                if line.strip():
+                    c.drawString(50, y, line.strip()); y -= 18
+                y -= 8
+            c.showPage()
         if not photos:
             continue
         c.setFont("Helvetica-Bold", 26)
@@ -180,11 +200,73 @@ def year_book(conn: sqlite3.Connection, originals: Path, library: Path, year: st
                   "\n".join(lines), sections)
 
 
+def life_book(conn: sqlite3.Connection, originals: Path, library: Path) -> Path:
+    """The whole story: a part per chapter, with its trips, biggest events and milestones."""
+    from . import notes
+    chapters = conn.execute("SELECT * FROM chapters ORDER BY start_at").fetchall()
+    first = conn.execute(f"SELECT MIN(taken_at), MAX(taken_at), COUNT(*) FROM assets a WHERE {VISIBLE}").fetchone()
+    if not first[2]:
+        raise ValueError("No photos yet.")
+    years = f"{first[0][:4]} – {first[1][:4]}" if first[0][:4] != first[1][:4] else first[0][:4]
+    sections: list = []
+    if not chapters:
+        chapters = [{"id": 0, "title": "The story so far", "start_at": first[0][:10], "end_at": first[1][:10], "note": None, "photo_count": first[2]}]
+    for ch in chapters:
+        where = f"{VISIBLE} AND a.taken_at >= ? AND a.taken_at < date(?, '+1 day')"
+        args = [ch["start_at"], ch["end_at"]]
+        story = ask.get_story(conn, f"chapter:{ch['id']}") if ch["id"] else None
+        intro = [f"{_fmt(ch['start_at'])} – {_fmt(ch['end_at'])}. {ch['photo_count']:,} photos."]
+        if ch["note"]:
+            intro.append(ch["note"])
+        trips = conn.execute("SELECT * FROM trips WHERE start_at >= ? AND start_at < date(?, '+1 day') ORDER BY start_at", args).fetchall()
+        if trips:
+            intro.append("Trips: " + ", ".join(f"{t['title']} ({t['start_at'][:7]})" for t in trips) + ".")
+        ms = conn.execute("SELECT date, title FROM milestones WHERE state != 'dismissed' AND date >= ? AND date <= ? ORDER BY date", args).fetchall()
+        if ms:
+            intro.append("Milestones: " + "; ".join(f"{m['title']} ({m['date']})" for m in ms[:12]) + ".")
+        vn = conn.execute("SELECT COUNT(*) FROM voice_notes n JOIN assets a ON a.id = n.ref_id WHERE n.kind = 'photo' AND a.taken_at >= ? AND a.taken_at <= ?", args).fetchone()[0]
+        if vn:
+            intro.append(f"{vn} voice note{'s' if vn != 1 else ''} recorded in this chapter (listen in the app).")
+        text = (story["text"] + "\n\n" if story else "") + "\n".join(intro)
+        sections.append((f"{ch['title']}", _best(conn, where, args, 6), text))
+        for t in trips:
+            tstory = ask.get_story(conn, f"trip:{t['id']}")
+            sections.append((f"Trip: {t['title']} · {_fmt(t['start_at'])} – {_fmt(t['end_at'])}", _best(conn, f"{VISIBLE} AND a.trip_id = ?", [t["id"]]),
+                             tstory["text"] if tstory else ""))
+        evs = conn.execute("SELECT id, title, start_at FROM events WHERE start_at >= ? AND start_at < date(?, '+1 day') AND trip_id IS NULL "
+                           "ORDER BY photo_count DESC LIMIT 6", args).fetchall()
+        for e in sorted(evs, key=lambda e: e["start_at"]):
+            sections.append((f"{e['title']} · {_fmt(e['start_at'])}", _best(conn, f"{VISIBLE} AND a.event_id = ?", [e["id"]])))
+    cover_ids = quality.best_of(conn, VISIBLE, [], 1)
+    cover = _rows(conn, cover_ids)[0] if cover_ids else None
+    return render(library, originals, f"life-book-{first[1][:4]}", "The story so far", f"{years} · {first[2]:,} photos", cover, "", sections)
+
+
+def album_book(conn: sqlite3.Connection, originals: Path, library: Path, album_id: int) -> Path:
+    from . import albums, browse
+    a = albums.get(conn, album_id)
+    if not a:
+        raise ValueError("Unknown album")
+    params = {k: v for k, v in albums.params_for(conn, album_id).items() if k != "q"}
+    where, args = browse._filters(params, alias="a.")
+    ids = quality.best_of(conn, f"{where} AND a.private = 0", args, 60)
+    photos = _rows(conn, ids)
+    if not photos:
+        raise ValueError("The album has no photos.")
+    sections = [(a["title"], photos[i:i + PER_PAGE]) for i in range(0, len(photos), PER_PAGE)]
+    cover = _rows(conn, [a["cover_id"]])[0] if a["cover_id"] else photos[0]
+    return render(library, originals, f"{a['title'][:40]}-album-book", a["title"], f"{len(ids)} photos", cover, "", sections)
+
+
 def make(conn: sqlite3.Connection, originals: Path, library: Path, kind: str, ident: str) -> Path:
+    if kind == "album":
+        return album_book(conn, originals, library, int(ident))
+    if kind == "life":
+        return life_book(conn, originals, library)
     if kind == "trip":
         return trip_book(conn, originals, library, int(ident))
     if kind == "event":
         return event_book(conn, originals, library, int(ident))
     if kind == "year":
         return year_book(conn, originals, library, ident)
-    raise ValueError("kind must be trip, event or year")
+    raise ValueError("kind must be life, trip, event or year")

@@ -488,6 +488,7 @@
       <span id="f-trip" class="chip hidden"></span>
       <button class="btn hidden" id="f-replay" title="Watch these photos in order, on the map">▶ Replay</button>
       <button class="btn hidden" id="f-share" title="Export a page with these photos, metadata removed">↗ Share</button>
+      <button class="btn hidden" id="f-save-album" title="Keep this search as a smart album that updates itself">＋ Save as album</button>
       <span class="muted small" id="f-count"></span>
     </div>
     <div class="grid" id="grid"></div>
@@ -499,7 +500,8 @@
   <section id="tab-timeline" class="hidden">
     <div class="row" style="justify-content:space-between;margin-bottom:12px">
       <p class="muted small" style="margin:0">Your life in chapters, found from where you lived. Click a chapter title to rename it, a bar to see that month, a pin to open it.</p>
-      <button class="btn" id="tl-rebuild" title="Recompute chapters and milestones from your photos">Rebuild</button>
+      <div class="row"><button class="btn primary" id="tl-lifebook" title="One printable book of everything: chapters, trips, events, stories">📖 Life book</button>
+      <button class="btn" id="tl-rebuild" title="Recompute chapters and milestones from your photos">Rebuild</button></div>
     </div>
     <div class="panel" id="yr-panel">
       <div class="row" style="justify-content:space-between">
@@ -583,6 +585,14 @@
 
   <!-- TRIPS -->
   <section id="tab-trips" class="hidden">
+    <div class="row" style="justify-content:space-between;margin-bottom:8px">
+      <h2 style="margin:0">Albums</h2>
+      <div class="row"><button class="btn" id="album-new">+ New album</button>
+        <span class="muted small">Hand-picked albums, and smart albums saved from a search on the Photos tab. Click a title to rename.</span></div>
+    </div>
+    <div class="trips" id="albums"></div>
+    <p class="muted small" id="albums-empty" style="display:none">No albums yet. Add photos from the viewer, or filter the Photos tab and click <b>Save as album</b>.</p>
+    <h2 style="margin:28px 0 0">Trips</h2>
     <p class="muted small">Trips are found automatically: photos taken more than 100 km from home, grouped by date.</p>
     <div class="trips" id="trips"></div>
     <p class="muted" id="trips-empty" style="display:none">No trips found yet. Trips appear once photos with locations are downloaded.</p>
@@ -916,7 +926,7 @@ function showTab(name) {
   document.querySelector("main").classList.toggle("wide", ["photos", "trips", "map"].includes(name));
   if (name === "settings") loadSettings();
   if (name === "photos") ensurePhotos();
-  if (name === "trips") { loadTrips(); loadEvents(); }
+  if (name === "trips") { loadTrips(); loadEvents(); loadAlbums(); }
   if (name === "people") loadPeople();
   if (name === "timeline") loadTimeline();
   if (name === "memories") { loadMemories(); cmpOptions(); loadFlying(); }
@@ -1403,16 +1413,17 @@ function setFilters(f) {
   fillCities();
   const chip = $("#f-trip");
   const label = f.trip ? "Trip: " + (f.tripTitle || "") : f.person ? "Person: " + (f.personName || "")
-    : f.chapter ? "Chapter: " + (f.chapterTitle || "") : f.event ? "Event: " + (f.eventTitle || "") : f.burst ? (f.burstTitle || "Burst") : f.flying ? (f.eventTitle || f.monthTitle || "Aircraft") : f.contributor ? (f.eventTitle || "Added by " + f.contributor)
+    : f.chapter ? "Chapter: " + (f.chapterTitle || "") : f.event ? "Event: " + (f.eventTitle || "") : f.burst ? (f.burstTitle || "Burst") : f.flying ? (f.eventTitle || f.monthTitle || "Aircraft") : f.contributor ? (f.eventTitle || "Added by " + f.contributor) : f.album ? "Album: " + (f.albumTitle || "")
     : (f.month || f.day) ? (f.monthTitle || f.month || f.day) : "";
   chip.classList.toggle("hidden", !label);
-  $("#f-replay").classList.toggle("hidden", !(f.trip || f.day || f.month || f.event || f.flying));
-  $("#f-share").classList.toggle("hidden", !(f.trip || f.day || f.month || f.person || f.chapter || f.year || f.event || f.flying));
-  $("#f-replay").textContent = f.trip ? "▶ Replay trip" : f.event ? "▶ Replay event" : f.day ? "▶ Replay this day" : "▶ Replay this month";
+  $("#f-replay").classList.toggle("hidden", !(f.trip || f.day || f.month || f.event || f.flying || f.album));
+  $("#f-share").classList.toggle("hidden", !(f.trip || f.day || f.month || f.person || f.chapter || f.year || f.event || f.flying || f.album));
+  $("#f-replay").textContent = f.trip ? "▶ Replay trip" : f.event ? "▶ Replay event" : f.album ? "▶ Replay album" : f.day ? "▶ Replay this day" : "▶ Replay this month";
+  $("#f-save-album").classList.toggle("hidden", !!f.album || !["q", "year", "month", "day", "country", "city", "trip", "event", "person", "chapter", "best", "favorite", "flying", "contributor", "kind"].some(k => f[k]));
   if (label) {
     chip.replaceChildren(document.createTextNode(label));
     const x = document.createElement("button"); x.textContent = "✕"; x.title = "Show all photos";
-    x.onclick = () => setFilters({ ...f, trip: "", person: "", chapter: "", month: "", day: "", event: "", burst: "", flying: "", contributor: "" }); chip.append(x);
+    x.onclick = () => setFilters({ ...f, trip: "", person: "", chapter: "", month: "", day: "", event: "", burst: "", flying: "", contributor: "", album: "" }); chip.append(x);
   }
   loadMorePhotos();
 }
@@ -1439,7 +1450,7 @@ async function loadMorePhotos() {
   grid.loading = true;
   const mine = grid;
   const q = new URLSearchParams({ offset: grid.offset, limit: PAGE });
-  for (const k of ["q", "year", "country", "city", "trip", "kind", "person", "month", "day", "chapter", "event", "best", "burst", "flying", "contributor", "favorite"]) if (grid.filters[k]) q.set(k, grid.filters[k]);
+  for (const k of ["q", "year", "country", "city", "trip", "kind", "person", "month", "day", "chapter", "event", "best", "burst", "flying", "contributor", "favorite", "album"]) if (grid.filters[k]) q.set(k, grid.filters[k]);
   try {
     const res = await api("/api/photos?" + q);
     if (mine !== grid) return;  // filters changed meanwhile
@@ -1544,6 +1555,13 @@ async function openLightbox(i, items) {
       v.onclick = () => openVoice("photo", d.id, "Voice note for this photo");
       div.append(v); info.append(div);
     }
+    {
+      const div = document.createElement("div"), b = document.createElement("b"); b.textContent = "Albums"; div.append(b);
+      const v = document.createElement("a"); v.textContent = d.albums && d.albums.length ? d.albums.map(a => a.title).join(", ") : "Not in an album";
+      v.onclick = () => albumMenu(v, d);
+      const e = document.createElement("a"); e.className = "edit"; e.textContent = "＋ add"; e.onclick = ev => { ev.stopPropagation(); albumMenu(e, d); };
+      div.append(v, e); info.append(div);
+    }
     if (d.event) add("Event", `${d.event.title} (${d.event.photo_count} photos)`, () => { closeLightbox(); showTab("photos"); setFilters({ event: d.event.id, eventTitle: d.event.title }); });
     if (d.taken_at) add("Replay", d.event ? "▶ This event" : "▶ This day", () => { closeLightbox(); d.event ? openReplay({ event: d.event.id }, d.event.title) : openReplay({ day: d.taken_at.slice(0, 10) }, fmtDate(d.taken_at)); });
     const known = (d.faces || []).filter(f => f.person_id && !f.hidden);
@@ -1636,6 +1654,7 @@ async function loadReview(year) {
   $("#yr-book").onclick = () => downloadBook("year", s.year);
 }
 $("#yr-year").onchange = e => loadReview(e.target.value);
+$("#tl-lifebook").onclick = () => downloadBook("life", "all");
 async function loadTimeline() {
   loadReview();
   const t = await api("/api/timeline").catch(e => { toast(e.message); return null; });
@@ -1728,7 +1747,7 @@ const rp = { items: [], i: -1, timer: null, playing: false, map: null, line: nul
 $("#f-replay").onclick = () => openReplay(grid.filters, $("#f-trip").textContent.replace("✕", ""));
 async function openReplay(filters, title) {
   const q = new URLSearchParams();
-  for (const k of ["trip", "day", "month", "person", "chapter", "year", "country", "city", "best", "event", "n", "home", "flying"]) if (filters[k]) q.set(k, filters[k]);
+  for (const k of ["trip", "day", "month", "person", "chapter", "year", "country", "city", "best", "event", "n", "home", "flying", "album", "favorite", "contributor"]) if (filters[k]) q.set(k, filters[k]);
   let items;
   try { items = await api("/api/replay?" + q); } catch (e) { return toast(e.message); }
   if (!items.length) return toast("Nothing to replay here.");
@@ -2356,6 +2375,42 @@ async function loadTrips() {
   }));
 }
 
+async function loadAlbums() {
+  const list = await api("/api/albums").catch(() => []);
+  $("#albums-empty").style.display = list.length ? "none" : "";
+  $("#albums").replaceChildren(...list.map(a => {
+    const b = document.createElement("button"); b.className = "trip";
+    const img = document.createElement("img"); img.loading = "lazy"; img.alt = ""; if (a.cover_id) img.src = media("thumb", a.cover_id);
+    const body = document.createElement("div"); body.className = "body";
+    const title = document.createElement("div"); title.className = "t"; title.textContent = a.title; title.title = "Click to rename";
+    const sub = document.createElement("div"); sub.className = "muted small";
+    sub.textContent = (a.kind === "smart" ? "Smart album · " + Object.entries(a.filters).map(([k, v]) => `${k}: ${v}`).join(", ") + " · " : "") + `${fmt(a.photo_count)} photos`;
+    body.append(title, sub); b.append(img, body);
+    b.onclick = () => goPhotos({ album: a.id, albumTitle: a.title });
+    title.onclick = async ev => { ev.stopPropagation(); const n = prompt("Album name:", a.title); if (n && n.trim()) { await api("/api/albums/rename", { id: a.id, title: n }).catch(e => toast(e.message)); loadAlbums(); } };
+    const mk = (label, fn, cls) => { const x = document.createElement("button"); x.className = "btn" + (cls ? " " + cls : ""); x.textContent = label; x.style.margin = "0 14px 12px"; x.onclick = ev => { ev.stopPropagation(); fn(); }; return x; };
+    const row = document.createElement("div"); row.className = "row";
+    row.append(mk("▶ Replay", () => openReplay({ album: a.id }, a.title), "primary"), mk("↗ Share", () => openShare({ album: a.id }, a.title)),
+      mk("📖 Book", () => downloadBook("album", a.id)),
+      mk("Delete", async () => { if (confirm(`Delete the album "${a.title}"? The photos stay in your library.`)) { await api("/api/albums/delete", { id: a.id }).catch(e => toast(e.message)); loadAlbums(); } }));
+    b.append(row); return b;
+  }));
+}
+$("#album-new").onclick = async () => { const n = prompt("Album name:"); if (n && n.trim()) { await api("/api/albums/create", { title: n, kind: "manual" }).catch(e => toast(e.message)); loadAlbums(); } };
+$("#f-save-album").onclick = async () => {
+  const f = grid.filters, label = $("#f-trip").textContent.replace("✕", "") || [f.q, f.year, f.country, f.city].filter(Boolean).join(" ");
+  const n = prompt("Name for this smart album:", label); if (!n || !n.trim()) return;
+  try { await api("/api/albums/create", { title: n, kind: "smart", filters: f }); toast("Saved. Find it under Trips & events → Albums."); } catch (e) { toast(e.message); }
+};
+async function albumMenu(anchor, d) {
+  const list = (await api("/api/albums").catch(() => [])).filter(a => a.kind === "manual");
+  const refreshView = () => openLightbox(lbIndex, lbItems === grid.items ? undefined : lbItems);
+  const items = [{ head: "Add to album" }];
+  for (const a of list.slice(0, 12)) items.push({ label: a.title, run: async () => { await api("/api/albums/add", { id: a.id, ids: [d.id] }).catch(e => toast(e.message)); toast("Added to " + a.title); refreshView(); } });
+  items.push("-", { label: "New album…", run: async () => { const n = prompt("Album name:"); if (n && n.trim()) { await api("/api/albums/create", { title: n, kind: "manual", ids: [d.id] }).catch(e => toast(e.message)); refreshView(); } } });
+  for (const a of d.albums || []) items.push({ label: `Remove from ${a.title}`, run: async () => { await api("/api/albums/remove", { id: a.id, ids: [d.id] }).catch(e => toast(e.message)); refreshView(); } });
+  showMenu(anchor, items);
+}
 async function loadEvents() {
   const year = $("#events-year").value;
   const list = await api("/api/events" + (year ? "?year=" + year : "")).catch(e => { toast(e.message); return []; });

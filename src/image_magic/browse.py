@@ -9,9 +9,21 @@ import sqlite3
 VISIBLE = "missing = 0 AND duplicate_of IS NULL AND kind != 'live_video'"
 
 
+def expand(conn: sqlite3.Connection, params: dict) -> dict:
+    """Resolve an `album` filter into concrete filters (smart album) or a membership filter (manual)."""
+    if not params.get("album"):
+        return params
+    from . import albums
+    base = albums.params_for(conn, int(params["album"]))
+    rest = {k: v for k, v in params.items() if k != "album"}
+    return {**base, **rest}
+
+
 def _filters(params: dict, alias: str = "") -> tuple[str, list]:
     """WHERE clause + args for the gallery filters. `alias` ("a.") qualifies the asset columns."""
     a = alias
+    if params.get("album"):
+        raise ValueError("album filters must be expanded first")
     where, args = [f"{a}missing = 0 AND {a}duplicate_of IS NULL AND {a}kind != 'live_video'"], []
     if params.get("year"):
         where.append(f"substr({a}taken_at, 1, 4) = ?")
@@ -46,6 +58,9 @@ def _filters(params: dict, alias: str = "") -> tuple[str, list]:
         args.append(int(params["burst"]))
     if params.get("favorite"):
         where.append(f"{a}favorite = 1")
+    if params.get("_album_items"):
+        where.append(f"{a}id IN (SELECT asset_id FROM album_items WHERE album_id = ?)")
+        args.append(int(params["_album_items"]))
     if params.get("contributor"):
         where.append(f"{a}contributor = ?")
         args.append(str(params["contributor"]))
@@ -60,6 +75,7 @@ def _filters(params: dict, alias: str = "") -> tuple[str, list]:
 
 
 def photos(conn: sqlite3.Connection, params: dict, offset: int = 0, limit: int = 200) -> dict:
+    params = expand(conn, params)
     where, args = _filters(params)
     total = conn.execute(f"SELECT COUNT(*) FROM assets WHERE {where}", args).fetchone()[0]
     rows = conn.execute(
@@ -83,12 +99,16 @@ def photos(conn: sqlite3.Connection, params: dict, offset: int = 0, limit: int =
 
 def ids(conn: sqlite3.Connection, params: dict) -> set[int]:
     """Just the ids that match the filters (for intersecting with search results)."""
-    where, args = _filters(params)
+    where, args = _filters(expand(conn, params))
     return {r[0] for r in conn.execute(f"SELECT id FROM assets WHERE {where}", args)}
 
 
 def replay(conn: sqlite3.Connection, params: dict, limit: int = 2000) -> list[dict]:
     """Items for the replay player: the filtered set in time order, with Live Photo clips."""
+    params = expand(conn, params)
+    if params.get("_album_items"):          # a hand-picked album plays in the order you arranged
+        ids_ = [r[0] for r in conn.execute("SELECT asset_id FROM album_items WHERE album_id = ? ORDER BY position", (int(params["_album_items"]),))]
+        return replay_items(conn, ids_[:limit])
     where, args = _filters(params)
     rows = conn.execute(
         f"""SELECT id, kind, taken_at, lat, lon, city, country, width, height,
@@ -174,7 +194,7 @@ def trips(conn: sqlite3.Connection) -> list[dict]:
 
 
 def map_points(conn: sqlite3.Connection, params: dict) -> list[list]:
-    where, args = _filters(params)
+    where, args = _filters(expand(conn, params))
     rows = conn.execute(
         f"SELECT id, lat, lon FROM assets WHERE {where} AND lat IS NOT NULL ORDER BY taken_at",
         args,
