@@ -206,6 +206,8 @@ class JobRunner:
         self.state.message = "Rating photos..."
         n = quality.score_pending(conn, settings.library, settings.originals,
                                   progress=self._progress("Rated"), cancelled=self._cancel.is_set)
+        from . import learning
+        learning.learn(conn)                      # tuned numbers from your decisions, before trips and events use them
         self.state.message = "Finding events..."
         events.rebuild(conn)
         if settings.inbox_auto:

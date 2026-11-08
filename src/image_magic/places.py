@@ -173,6 +173,9 @@ def rebuild_trips(conn: sqlite3.Connection) -> int:
             continue
     photos.sort(key=lambda p: p["t"])
 
+    from . import learning
+    trip_gap = timedelta(days=learning.get(conn, "trip.gap_days", TRIP_GAP.days))
+    min_photos = int(learning.get(conn, "trip.min_photos", MIN_TRIP_PHOTOS))
     groups: list[list[dict]] = []
     if photos:
         homes = _homes_by_year(photos)
@@ -185,7 +188,7 @@ def rebuild_trips(conn: sqlite3.Connection) -> int:
             if away:
                 broke = (
                     last_away is None
-                    or p["t"] - last_away > TRIP_GAP
+                    or p["t"] - last_away > trip_gap
                     or (home_since is not None and p["t"] - home_since > HOME_BREAK)
                 )
                 if broke and current:
@@ -197,7 +200,7 @@ def rebuild_trips(conn: sqlite3.Connection) -> int:
                 home_since = p["t"]
         if current:
             groups.append(current)
-    groups = [g for g in groups if len(g) >= MIN_TRIP_PHOTOS]
+    groups = [g for g in groups if len(g) >= min_photos]
 
     # Keep what you decided: manual assignments, trips you created, titles you set.
     existing = {r["id"]: dict(r) for r in conn.execute("SELECT * FROM trips")}
@@ -207,7 +210,7 @@ def rebuild_trips(conn: sqlite3.Connection) -> int:
     matched: set[int] = set()
     for g in groups:
         g = [p for p in g if not p["trip_manual"]]
-        if len(g) < MIN_TRIP_PHOTOS:
+        if len(g) < min_photos:
             continue
         country_counts = Counter(p["country"] for p in g if p["country"])
         names = [c for c, _ in country_counts.most_common(3)]

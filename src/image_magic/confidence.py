@@ -210,6 +210,13 @@ def decide(conn: sqlite3.Connection, key: str, decision: str) -> None:
         raise ValueError("decision must be confirmed or dismissed")
     kind, _, ident = key.partition(":")
     ident = int(ident)
+    from . import learning
+    value = None
+    if kind == "face":
+        value = learning.face_similarity(conn, ident)
+    elif kind == "trip":
+        value = trip_confidence(conn, ident)
+    learning.record(conn, f"review:{kind}", decision, value, {"key": key})
     if kind == "trip":
         if decision == "confirmed":
             conn.execute("UPDATE assets SET trip_manual = 1 WHERE id = ?", (ident,))

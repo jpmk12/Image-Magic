@@ -503,8 +503,11 @@ dropped from the list before approval.
    mtime and entry count; a quick scan (what runs after every sync, and "Catalog new files")
    skips unchanged folders and marks their files present without touching them. "Catalog
    everything" is the full pass and also catches files replaced in place.
-4. **Learning from your decisions.** Use the inbox and review-queue history to tune the trip
-   radius, gap and face thresholds per library, and to calibrate the confidence numbers.
+4. **Learning from your decisions** (built, v0.46.0). `learning.py`: a decision log fed by the
+   inbox, the review queue, trip merges/dissolves and people merges; `learn()` tunes
+   trip.gap_days, trip.min_photos, face.join, per-kind auto-apply thresholds and a per-kind
+   calibration of the shown confidence, each within a safe range and only with evidence.
+   Settings shows what changed and can forget it.
 5. **Stories for events and years**, carried into the life book.
 6. **Tell-the-story mode.** A keyboard-driven pass through the best photos of an event or
    trip: one line of caption or a voice note each, then on to the next.

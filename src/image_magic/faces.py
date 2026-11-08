@@ -429,6 +429,8 @@ def group_faces(conn: sqlite3.Connection) -> dict:
     Returns counts.
     """
     ensure_schema(conn)
+    from . import learning
+    join_threshold = learning.get(conn, "face.join", JOIN_THRESHOLD)
     ids, mat, rows = _load_vectors(conn)
     if not len(ids):
         return {"people": 0, "assigned": 0}
@@ -462,7 +464,7 @@ def group_faces(conn: sqlite3.Connection) -> dict:
         C = np.stack([centres[p] for p in pids])
         sims = C @ mat[index[fid]]
         k = int(np.argmax(sims))
-        if sims[k] >= JOIN_THRESHOLD:
+        if sims[k] >= join_threshold:
             pid = pids[k]
             person_of[fid] = pid
             members[pid].append(fid)
@@ -481,7 +483,7 @@ def group_faces(conn: sqlite3.Connection) -> dict:
         if n_groups:
             sims = cents[:n_groups] @ v
             k = int(np.argmax(sims))
-            if sims[k] >= JOIN_THRESHOLD:
+            if sims[k] >= join_threshold:
                 new_groups[k].append(fid)
                 sums[k] += v
                 cents[k] = sums[k] / max(np.linalg.norm(sums[k]), 1e-8)
@@ -598,6 +600,10 @@ def merge_people(conn: sqlite3.Connection, src: int, dst: int) -> None:
     d = conn.execute("SELECT name FROM persons WHERE id = ?", (dst,)).fetchone()
     if not s or not d:
         raise ValueError("Unknown person")
+    from . import learning
+    sim = learning.people_similarity(conn, src, dst)
+    if sim is not None:
+        learning.record(conn, "people_merge", "done", sim, {"from": src, "into": dst})
     conn.execute("UPDATE faces SET person_id = ?, locked = 1 WHERE person_id = ?", (dst, src))
     if not d["name"] and s["name"]:
         conn.execute("UPDATE persons SET name = ? WHERE id = ?", (s["name"], dst))

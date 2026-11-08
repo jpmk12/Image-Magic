@@ -194,6 +194,14 @@ program only. Your photos and settings are kept.
   exact copies are skipped, look-alikes (the same picture resized or re-saved) are listed with
   the library photo they match, and the rest are new. Click **Import** to copy the new ones into
   `originals/imported/<year>/<month>/`. Your files are copied, never moved.
+- **Learning from your decisions:** every inbox accept or skip, every review-queue confirm or
+  dismiss, every trip you merge or dissolve and every two people you merge is remembered (on
+  the laptop only). After a handful of each, the automatic rules tune themselves to your
+  library: how many quiet days still count as one trip, how few photos make a trip, how
+  similar a face must be to join a person, how confident a location or clutter suggestion
+  must be before it is applied on its own, and how much to trust each kind of suggestion
+  when showing its confidence. Each number moves only within a safe range. **Settings → What
+  the app has learned** lists the changes in plain words, with a **Forget** button.
 - **Curator inbox:** the top of the Home tab. After each sync the app sorts what it found and
   files suggestions as cards with a confidence: photos that look like part of a trip, a face
   group that is probably someone you named, photos with no location whose neighbours agree on a

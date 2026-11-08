@@ -169,12 +169,15 @@ def suggestions(conn, db_key: str, library, originals) -> list[dict]:
     ensure_schema(conn)
     decided = {r[0] for r in conn.execute("SELECT key FROM inbox_decisions")}
     cards = _trip_additions(conn, db_key) + _face_names(conn) + _locations(conn) + _trip_merges(conn) + _clutter(conn, library, originals)
+    from . import learning
     out = []
     for c in cards:
         if c["key"] in decided:
             continue
         c["covers"] = c["ids"][:3]
         c["count"] = len(c["ids"])
+        c["raw_conf"] = c["conf"]
+        c["conf"] = learning.shown_confidence(conn, c["kind"], c["conf"])   # tempered by how often you agreed before
         out.append(c)
     out.sort(key=lambda c: -c["conf"])
     return out
@@ -222,7 +225,8 @@ def summary_of(card: dict) -> str:
 
 def rebuild_after(conn) -> None:
     """Trips, events and milestones catch up with what just changed (once per user action)."""
-    from . import chapters, events, places
+    from . import chapters, events, learning, places
+    learning.learn(conn)
     places.refresh(conn); events.rebuild(conn); chapters.rebuild_milestones(conn)
 
 
@@ -264,6 +268,9 @@ def apply(conn, library, originals, card: dict, decision: str = "accepted", name
         raise ValueError("unknown action")
     conn.execute("INSERT OR REPLACE INTO inbox_decisions (key, decision, undo, title, created) VALUES (?, ?, ?, ?, ?)",
                  (card["key"], decision, json.dumps(undo) if undo else None, card.get("title", ""), _now()))
+    if decision != "auto":
+        from . import learning
+        learning.record(conn, f"inbox:{card.get('kind', '?')}", decision, card.get("raw_conf", card.get("conf")), {"key": card["key"]})
     conn.commit()
     if rebuild:
         rebuild_after(conn)
@@ -274,7 +281,10 @@ def skip(conn, card: dict) -> None:
     ensure_schema(conn)
     conn.execute("INSERT OR REPLACE INTO inbox_decisions (key, decision, undo, title, created) VALUES (?, 'skipped', NULL, ?, ?)",
                  (card["key"], card.get("title", ""), _now()))
+    from . import learning
+    learning.record(conn, f"inbox:{card.get('kind', '?')}", "skipped", card.get("raw_conf", card.get("conf")), {"key": card["key"]})
     conn.commit()
+    learning.learn(conn)
 
 
 def undo_last(conn, library, originals) -> str:
@@ -313,9 +323,10 @@ def undo_last(conn, library, originals) -> str:
 
 def auto_apply(conn, db_key, library, originals, log=print) -> int:
     """Apply safe, confident suggestions on their own (locations and clutter). Returns how many."""
+    from . import learning
     n = 0
     for c in suggestions(conn, db_key, library, originals):
-        if c["kind"] in AUTO_KINDS and c["conf"] >= AUTO_MIN:
+        if c["kind"] in AUTO_KINDS and c["raw_conf"] >= learning.get(conn, f"auto.{c['kind']}.min", AUTO_MIN):
             if c["kind"] == "clutter":
                 # On its own the app only trashes byte-identical copies; blurry and blank frames wait for you.
                 dupes = c["action"].get("auto_ids") or []

@@ -865,6 +865,15 @@
           <span>Describe new photos after each sync</span></label>
       </div>
 
+      <div class="panel" id="learn-panel">
+        <div class="row" style="justify-content:space-between">
+          <h2 style="margin:0">What the app has learned</h2>
+          <button class="btn" id="learn-forget" title="Go back to the built-in rules">Forget</button>
+        </div>
+        <p class="small muted" style="margin-top:6px">Every decision you make in the inbox, the review queue, trips and people tunes the automatic rules for your library. Nothing is sent anywhere.</p>
+        <div id="learn-body"><p class="muted">No decisions yet.</p></div>
+      </div>
+
       <div class="panel">
         <h2>Privacy</h2>
         <label class="check"><input type="checkbox" name="weather_online">
@@ -1740,7 +1749,22 @@ $("#signin-form").onsubmit = async ev => {
 };
 
 // ---- settings
+async function loadLearning() {
+  const st = await api("/api/learning").catch(() => null); if (!st) return;
+  const body = $("#learn-body");
+  if (!st.decisions) { body.replaceChildren(Object.assign(document.createElement("p"), { className: "muted", textContent: "No decisions yet. Use the inbox and the review queue; the rules tune themselves after a handful." })); return; }
+  const lead = document.createElement("p"); lead.className = "small";
+  lead.textContent = `${fmt(st.decisions)} decision${st.decisions === 1 ? "" : "s"} remembered.` + (st.learned.length ? "" : " The built-in rules still fit; nothing has changed yet.");
+  const ul = document.createElement("ul"); ul.className = "small"; ul.style.margin = "6px 0 0 18px";
+  for (const l of st.learned) { const li = document.createElement("li"); li.textContent = l.note; ul.append(li); }
+  body.replaceChildren(lead, ul);
+}
+$("#learn-forget").onclick = async () => {
+  if (!confirm("Forget everything learned from your decisions and go back to the built-in rules? Your trips, names and locations stay as they are.")) return;
+  await api("/api/learning/forget", {}).catch(e => toast(e.message)); toast("Forgotten"); loadLearning();
+};
 async function loadSettings() {
+  loadLearning();
   const s = await api("/api/settings");
   const f = $("#settings-form");
   const ms = f.elements.ai_model; ms.length = 0;

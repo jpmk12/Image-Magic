@@ -385,7 +385,7 @@ def make_handler(app: App):
                     return self._json(200, app.jobs.log_since(since))
                 if path.startswith(("/api/photos", "/api/photo/", "/api/facets", "/api/trips", "/api/replay",
                                     "/api/map", "/api/people", "/api/timeline", "/api/story", "/api/memories",
-                                    "/api/shuffle", "/api/similar/", "/api/review", "/api/context/", "/api/curate/", "/api/events", "/api/home", "/api/voice/", "/api/compare/", "/api/flying", "/api/book", "/api/review-queue", "/api/family", "/api/cleanup", "/api/albums", "/api/places/", "/api/daily", "/api/ids", "/api/inbox", "/api/bursts", "/api/trash", "/api/holidays", "/media/")):
+                                    "/api/shuffle", "/api/similar/", "/api/review", "/api/context/", "/api/curate/", "/api/events", "/api/home", "/api/voice/", "/api/compare/", "/api/flying", "/api/book", "/api/review-queue", "/api/family", "/api/cleanup", "/api/albums", "/api/places/", "/api/daily", "/api/ids", "/api/inbox", "/api/bursts", "/api/trash", "/api/holidays", "/api/learning", "/media/")):
                     return self._browse(path, self._query())
             except Exception as e:
                 return self._json(500, {"error": str(e)})
@@ -448,6 +448,9 @@ def make_handler(app: App):
                 if path == "/api/trash":
                     from . import cleanup
                     return self._json(200, cleanup.trash_summary(conn))
+                if path == "/api/learning":
+                    from . import learning
+                    return self._json(200, learning.status(conn))
                 if path == "/api/ids":
                     ids_ = sorted(browse.ids(conn, q))[:5000]
                     return self._json(200, {"ids": ids_, "total": len(ids_)})
@@ -996,6 +999,14 @@ def make_handler(app: App):
                             from . import inbox
                             inbox.rebuild_after(conn)
                         return self._json(200, {**r, "trash": cleanup.trash_summary(conn)})
+                    finally:
+                        conn.close()
+                if path == "/api/learning/forget":
+                    from . import learning
+                    settings, conn = app.db()
+                    try:
+                        learning.forget(conn)
+                        return self._json(200, learning.status(conn))
                     finally:
                         conn.close()
                 if path.startswith("/api/inbox/"):
