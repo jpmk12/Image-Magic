@@ -1425,9 +1425,10 @@ function showDone(c, summary) {
   toast("✓ " + summary);
 }
 // ---- the review view: exactly the photos a decision is about
-const rev = { card: null, ticked: new Set() };
-async function openReview(c) {
-  rev.card = c; rev.ticked = new Set(c.ids);
+const rev = { card: null, ticked: new Set(), onAccept: null, onSkip: null };
+async function openReview(c, handlers) {
+  rev.card = c; rev.ticked = new Set(c.ids); rev.onAccept = handlers ? handlers.accept : null; rev.onSkip = handlers ? handlers.skip : null;
+  $("#rev-skip").textContent = handlers ? (handlers.skipLabel || "No") : "Skip this suggestion";
   $("#rev-kind").textContent = KIND_LABELS[c.kind] || c.kind; $("#rev-kind").style.color = KIND_COLORS[c.kind] || "var(--muted)";
   $("#rev-title").textContent = c.title; $("#rev-why").textContent = `${c.why} ${Math.round(c.conf * 100)}% sure.`;
   $("#rev-accept").textContent = c.yes; $("#rev-dlg").classList.remove("hidden");
@@ -1451,12 +1452,26 @@ async function openReview(c) {
   if (c.groups) { for (const gr of c.groups) { const h = document.createElement("h3"); h.textContent = `${gr.title} · ${gr.ids.length} photos`; body.append(h, mkGrid(gr.ids)); } }
   else if (c.faces) body.append(mkGrid(c.faces.map((_, i) => c.ids[i] ?? c.ids[0]).slice(0, c.faces.length), c.faces));
   else body.append(mkGrid(c.ids));
+  if (c.big) {        // a single-photo question: show it large, with the context it needs
+    body.replaceChildren();
+    const wrap = document.createElement("div"); wrap.className = "row"; wrap.style.alignItems = "flex-start";
+    const im = document.createElement("img"); im.src = media(c.faces ? "face" : "view", c.faces ? c.faces[0] : c.ids[0]); im.alt = ""; im.style.maxWidth = "min(560px, 60%)"; im.style.maxHeight = "50vh"; im.style.borderRadius = "12px"; im.style.cursor = "zoom-in";
+    im.onclick = () => openLightbox(0, [{ id: c.ids[0], kind: "photo" }]);
+    const side = document.createElement("div"); side.className = "small"; side.style.flex = "1";
+    for (const line of c.context || []) { const d = document.createElement("div"); d.style.margin = "4px 0"; d.textContent = line; side.append(d); }
+    if (c.compare && c.compare.length) { const h = document.createElement("div"); h.className = "muted"; h.style.marginTop = "8px"; h.textContent = c.compareLabel || "For comparison:"; side.append(h);
+      const strip = document.createElement("div"); strip.className = "yr-best"; const items = c.compare.map(id => ({ id, kind: "photo" }));
+      c.compare.forEach((id, i) => { const t = tileFor(items[i], items, i); t.style.width = "88px"; if (c.compareFaces) { t.replaceChildren(); const f = document.createElement("img"); f.src = media("face", c.compareFaces[i]); f.alt = ""; t.append(f); } strip.append(t); });
+      side.append(strip); }
+    wrap.append(im, side); body.append(wrap);
+    $("#rev-hint").textContent = "";
+  }
   revCount();
 }
 function revCount() { const c = rev.card; const perPhoto = ["trip_add", "location", "trash"].includes(c.action.do); $("#rev-count").textContent = perPhoto ? `${rev.ticked.size} of ${c.ids.length} ticked` : `${c.ids.length} photos`; $("#rev-accept").disabled = perPhoto && !rev.ticked.size; }
 $("#rev-close").onclick = () => $("#rev-dlg").classList.add("hidden");
-$("#rev-skip").onclick = async () => { const c = rev.card; $("#rev-dlg").classList.add("hidden"); await api("/api/inbox/skip", { key: c.key }).catch(e => toast(e.message)); showDone(c, "Skipped; it won't come back unless the facts change"); };
-$("#rev-accept").onclick = async () => { const c = rev.card; const perPhoto = ["trip_add", "location", "trash"].includes(c.action.do); $("#rev-dlg").classList.add("hidden"); showTab("home"); await acceptCard(c, perPhoto && rev.ticked.size < c.ids.length ? [...rev.ticked] : null); };
+$("#rev-skip").onclick = async () => { const c = rev.card; $("#rev-dlg").classList.add("hidden"); if (rev.onSkip) return rev.onSkip(); await api("/api/inbox/skip", { key: c.key }).catch(e => toast(e.message)); showDone(c, "Skipped; it won't come back unless the facts change"); };
+$("#rev-accept").onclick = async () => { const c = rev.card; $("#rev-dlg").classList.add("hidden"); showTab("home"); if (rev.onAccept) return rev.onAccept(); const perPhoto = ["trip_add", "location", "trash"].includes(c.action.do); await acceptCard(c, perPhoto && rev.ticked.size < c.ids.length ? [...rev.ticked] : null); };
 $("#inbox-high").onclick = async () => { try { const r = await api("/api/inbox/accept-high", {}); toast(`Applied ${r.applied} suggestions`); } catch (e) { toast(e.message); } loadInbox(); refresh(); };
 $("#inbox-undo").onclick = async () => { try { const r = await api("/api/inbox/undo", {}); toast("Undone: " + r.undone); } catch (e) { toast(e.message); } loadInbox(); refresh(); };
 async function loadDaily() {
@@ -1503,8 +1518,13 @@ async function loadReviewQueue() {
     const yes = document.createElement("button"); yes.className = "btn primary"; yes.textContent = it.kind === "milestone" ? "Keep" : "Yes";
     const no = document.createElement("button"); no.className = "btn"; no.textContent = it.kind === "chapter" ? "Not sure" : it.kind === "milestone" ? "Dismiss" : "No";
     no.title = it.kind === "chapter" ? "Leaves the chapter as it is; edit it on the Timeline" : "";
-    const decide = async dec => { await api("/api/review-queue/decide", { key: it.key, decision: dec }).catch(e => toast(e.message)); loadReviewQueue(); };
+    const decide = async dec => { try { await api("/api/review-queue/decide", { key: it.key, decision: dec }); toast(dec === "confirmed" ? "✓ Kept" : "✓ Undone"); } catch (e) { toast(e.message); } loadReviewQueue(); refresh(); };
     yes.onclick = () => decide("confirmed"); no.onclick = () => decide(it.kind === "chapter" ? "confirmed" : "dismissed");
+    const open = () => openReview({ key: it.key, kind: it.kind === "face" ? "people" : it.kind, title: it.title, why: it.detail, conf: it.confidence, yes: yes.textContent,
+      ids: [it.asset_id], faces: it.face_id ? [it.face_id] : null, big: true, action: { do: "review" },
+      context: it.context || [], compare: it.compare || [], compareFaces: it.compare_faces || null, compareLabel: it.compare_label || "" },
+      { accept: () => decide("confirmed"), skip: () => decide(it.kind === "chapter" ? "confirmed" : "dismissed"), skipLabel: no.textContent });
+    t.onclick = open; title.style.cursor = "pointer"; title.onclick = open;
     row.append(t, txt, yes, no); box.append(row);
   }
 }

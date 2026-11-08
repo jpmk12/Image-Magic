@@ -146,17 +146,26 @@ def queue(conn: sqlite3.Connection, n: int = QUEUE_SIZE) -> dict:
     for t in conn.execute("SELECT id, title FROM trips").fetchall():
         for aid, c in trip_confidences(conn, t["id"]).items():
             if c < 0.9 and f"trip:{aid}" not in done:
+                a = conn.execute("SELECT taken_at, city, country FROM assets WHERE id = ?", (aid,)).fetchone()
+                others = [r[0] for r in conn.execute("SELECT id FROM assets WHERE trip_id = ? AND id != ? AND lat IS NOT NULL ORDER BY ABS(julianday(taken_at) - julianday(?)) LIMIT 6",
+                                                     (t["id"], aid, a["taken_at"] if a else ""))]
                 items.append({"key": f"trip:{aid}", "kind": "trip", "confidence": round(c, 2), "asset_id": aid, "trip_id": t["id"],
                               "title": f"Is this photo from the {t['title']} trip?",
-                              "detail": "It has no location, so it joined by date." if c == 0.5 else "It was taken far from the rest of the trip."})
+                              "detail": "It has no location, so it joined by date." if c == 0.5 else "It was taken far from the rest of the trip.",
+                              "context": [f"Taken {(a['taken_at'] or '')[:16].replace('T', ' ')}" + (f" in {', '.join(x for x in [a['city'], a['country']] if x)}" if a and a["city"] else " (no location)")] if a else [],
+                              "compare": others, "compare_label": f"Photos from {t['title']} taken around the same time:"})
     face_rows = {r["id"]: r for r in conn.execute(
         "SELECT f.id, f.asset_id, f.person_id, p.name FROM faces f JOIN persons p ON p.id = f.person_id WHERE p.hidden = 0")}
     for fid, c in face_confidences(conn).items():
         if c < 0.7 and f"face:{fid}" not in done and fid in face_rows:
             r = face_rows[fid]
+            sure = [x[0] for x in conn.execute("SELECT id FROM faces WHERE person_id = ? AND id != ? AND vec IS NOT NULL ORDER BY locked DESC, score * MIN(size_px, 160) DESC LIMIT 6",
+                                               (r["person_id"], fid))]
+            sure_assets = [conn.execute("SELECT asset_id FROM faces WHERE id = ?", (x,)).fetchone()[0] for x in sure]
             items.append({"key": f"face:{fid}", "kind": "face", "confidence": round(c, 2), "asset_id": r["asset_id"], "face_id": fid,
                           "person_id": r["person_id"], "title": f"Is this {r['name'] or 'the same unnamed person'}?",
-                          "detail": "The face only loosely matches the group."})
+                          "detail": "The face only loosely matches the group.",
+                          "compare": sure_assets, "compare_faces": sure, "compare_label": f"Faces the app is sure are {r['name'] or 'this person'}:"})
     for ch in conn.execute("SELECT id, title, start_at, cover_id FROM chapters WHERE auto = 1").fetchall():
         c = chapter_confidence(conn, ch["id"])
         if c is not None and c < 0.8 and f"chapter:{ch['id']}" not in done:
