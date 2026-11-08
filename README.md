@@ -131,6 +131,9 @@ program only. Your photos and settings are kept.
   day with the best photos, dated and captioned); **📖 Year book** at the top of the Timeline
   makes one for a year (a page per month and per trip, with the year's numbers); **📖** on an
   event card makes a short one. Books land in the `exports` folder and download.
+- **Video posters:** videos show a real frame instead of a grey ▶. The first time a video
+  appears in a grid, the page decodes its first half-second and hands the frame to the app,
+  which keeps it as that video's thumbnail; books and the archive use it too.
 - **Memory of the day:** the Home tab opens with the best photo from this date in a past year
   (or a good random moment), and **This week** lists what the coming seven days held in past
   years: photo-days, birthdays, trips that started, milestones. While the app is open it also

@@ -13,12 +13,17 @@ THUMB_PX = 400
 VIEW_PX = 2048
 BROWSER_NATIVE = {".jpg", ".jpeg", ".png", ".gif", ".webp"}
 VIDEO_TYPES = {".mp4": "video/mp4", ".m4v": "video/mp4", ".mov": "video/quicktime",
-               ".3gp": "video/3gpp", ".avi": "video/x-msvideo", ".mkv": "video/x-matroska"}
+               ".3gp": "video/3gpp", ".avi": "video/x-msvideo", ".mkv": "video/x-matroska", ".webm": "video/webm"}
 IMAGE_TYPES = {".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png",
                ".gif": "image/gif", ".webp": "image/webp"}
 
 _locks: dict[str, threading.Lock] = {}
 _locks_guard = threading.Lock()
+
+
+def media_kind_of(rel_path: str) -> str:
+    from .metadata import media_kind
+    return media_kind(Path(rel_path)) or "photo"
 
 
 def _lock_for(key: str) -> threading.Lock:
@@ -41,6 +46,27 @@ def _render(src: Path, dest: Path, px: int, quality: int) -> Path:
             tmp = dest.with_suffix(".tmp")
             im.save(tmp, "JPEG", quality=quality, optimize=True)
             tmp.replace(dest)
+    return dest
+
+
+def poster_path(library: Path, sha256: str) -> Path:
+    """Where a video's poster frame lives (same place as a photo's thumbnail)."""
+    return library / "derived" / "thumbs" / sha256[:2] / f"{sha256}.jpg"
+
+
+def save_poster(library: Path, sha256: str, data: bytes) -> Path:
+    """Store a poster frame the page decoded from a video. Re-encoded through Pillow, so only a real image gets in."""
+    import io
+    if len(data) > 2_000_000:
+        raise ValueError("Poster too large")
+    with Image.open(io.BytesIO(data)) as im:
+        im = im.convert("RGB")
+        im.thumbnail((THUMB_PX, THUMB_PX))
+        dest = poster_path(library, sha256)
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        tmp = dest.with_suffix(".tmp")
+        im.save(tmp, "JPEG", quality=80, optimize=True)
+        tmp.replace(dest)
     return dest
 
 

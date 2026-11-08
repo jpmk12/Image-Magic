@@ -493,7 +493,7 @@ stories, Ask, memories, year review, books and share cover the "relive" side.
 
 From a tab-by-tab review of v0.42, ordered by value for effort.
 
-1. **Video posters.** Videos show as a grey ▶ tile everywhere. Decode the first frame in the
+1. **Video posters** (built, v0.44.0). Videos show as a grey ▶ tile everywhere. Decode the first frame in the
    browser on first sight and cache it as the thumbnail (no ffmpeg needed), so grids, replays,
    books and the archive show real frames. Biggest visible gap today.
 2. **Holidays through the years.** The search already knows Christmas, Thanksgiving, Easter,

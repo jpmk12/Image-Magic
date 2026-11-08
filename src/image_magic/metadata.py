@@ -17,7 +17,7 @@ except ImportError:  # pragma: no cover - dependency is required, but stay usabl
 
 PHOTO_EXTS = {".heic", ".heif", ".jpg", ".jpeg", ".png", ".gif", ".tif", ".tiff",
               ".webp", ".dng", ".bmp"}
-VIDEO_EXTS = {".mov", ".mp4", ".m4v", ".avi", ".3gp", ".mkv"}
+VIDEO_EXTS = {".mov", ".mp4", ".m4v", ".avi", ".3gp", ".mkv", ".webm"}
 
 # EXIF tag ids
 _EXIF_IFD = 0x8769

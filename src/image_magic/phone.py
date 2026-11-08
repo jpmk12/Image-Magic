@@ -33,7 +33,7 @@ PHONE_GET = ("/api/status", "/api/photos", "/api/photo/", "/api/facets", "/api/t
              "/api/similar/", "/api/review", "/api/context/", "/api/home", "/api/places/", "/api/daily", "/api/voice/",
              "/api/compare/options", "/api/ids", "/api/family", "/api/flying",
              "/media/thumb/", "/media/view/", "/media/face/", "/media/voice/", "/media/export/")
-PHONE_POST = ("/api/ask", "/api/voice", "/api/voice/delete", "/api/contribute", "/api/compare")
+PHONE_POST = ("/api/ask", "/api/voice", "/api/voice/delete", "/api/contribute", "/api/compare", "/api/poster")
 PHONE_GET_EXACT_DENY = ("/api/people/book", "/api/people/gif", "/api/review-queue", "/api/phone", "/api/log", "/api/settings", "/api/book")
 
 

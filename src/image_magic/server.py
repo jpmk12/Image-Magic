@@ -597,13 +597,32 @@ def make_handler(app: App):
                 return self._json(404, {"error": "not found"})
             if kind == "/media/thumb":
                 if row["kind"] != "photo":
-                    return self._json(404, {"error": "no thumbnail for videos"})
+                    poster = media.poster_path(settings.library, row["sha256"])
+                    if poster.is_file():
+                        return self._file(poster, "image/jpeg", cache=True)
+                    return self._json(404, {"error": "no poster yet"})
                 f = media.thumbnail(settings.library, settings.originals, row["path"], row["sha256"])
                 return self._file(f, "image/jpeg", cache=True)
             if kind == "/media/view":
                 f, ctype = media.viewable(settings.library, settings.originals, row["path"], row["sha256"])
                 return self._file(f, ctype, cache=True)
             return self._json(404, {"error": "not found"})
+
+        def _poster_upload(self, q: dict):
+            """POST /api/poster?id=N with a JPEG the page decoded from the video's first frame."""
+            n = int(self.headers.get("Content-Length") or 0)
+            if n <= 0 or n > 2_000_000:
+                raise ValueError("Poster too large")
+            data = self.rfile.read(n)
+            settings, conn = app.db()
+            try:
+                row = conn.execute("SELECT sha256, kind FROM assets WHERE id = ? AND missing = 0", (int(q.get("id") or 0),)).fetchone()
+            finally:
+                conn.close()
+            if not row or row["kind"] == "photo":
+                return self._json(404, {"error": "not found"})
+            media.save_poster(settings.library, row["sha256"], data)
+            return self._json(200, {"ok": True})
 
         def _voice_upload(self, q: dict):
             """POST /api/voice?kind=photo&id=N&seconds=S with the audio as the raw body."""
@@ -805,6 +824,8 @@ def make_handler(app: App):
             try:
                 if path == "/api/voice":
                     return self._voice_upload(self._query())
+                if path == "/api/poster":
+                    return self._poster_upload(self._query())
                 if path == "/api/contribute":
                     return self._contribute(self._query())
                 data = self._body()

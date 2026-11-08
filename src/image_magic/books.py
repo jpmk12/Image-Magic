@@ -51,7 +51,12 @@ def render(library: Path, originals: Path, out_name: str, title: str, subtitle: 
 
     def draw(ph, x0, y0, cw, chh) -> bool:
         try:
-            f, _ = media.viewable(library, originals, ph["path"], ph["sha256"])
+            if media.media_kind_of(ph["path"]) != "photo":
+                f = media.poster_path(library, ph["sha256"])
+                if not f.is_file():
+                    return False
+            else:
+                f, _ = media.viewable(library, originals, ph["path"], ph["sha256"])
             img = ImageReader(str(f))
             iw, ih = img.getSize()
             scale = min((cw - 16) / iw, (chh - 40) / ih)

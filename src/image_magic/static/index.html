@@ -1789,6 +1789,46 @@ async function pollLog() {
 
 // ---- photos
 const media = (kind, id) => `/media/${kind}/${id}?t=${encodeURIComponent(TOKEN)}`;
+// Video posters: the first frame, decoded here once and kept by the app as the video's thumbnail.
+const posterQ = { waiting: [], busy: 0, done: new Set(), failed: new Set() };
+function videoTile(b, it) {
+  const img = document.createElement("img"); img.loading = "lazy"; img.decoding = "async"; img.alt = ""; img.src = media("thumb", it.id);
+  img.onerror = () => { img.remove(); b.classList.add("video"); if (!b.textContent) b.textContent = "▶"; requestPoster(it.id, b); };
+  const badge = document.createElement("span"); badge.className = "badge"; badge.textContent = "▶";
+  b.append(img, badge);
+}
+function requestPoster(id, tile) {
+  if (posterQ.done.has(id) || posterQ.failed.has(id)) return;
+  posterQ.done.add(id); posterQ.waiting.push({ id, tile }); pumpPosters();
+}
+function pumpPosters() {
+  while (posterQ.busy < 2 && posterQ.waiting.length) {
+    const { id, tile } = posterQ.waiting.shift(); posterQ.busy++;
+    makePoster(id).then(ok => { if (ok && tile && tile.isConnected) { tile.classList.remove("video"); tile.textContent = ""; const img = document.createElement("img"); img.src = media("thumb", id) + "&v=" + Date.now(); img.alt = ""; const badge = document.createElement("span"); badge.className = "badge"; badge.textContent = "▶"; tile.append(img, badge); } else posterQ.failed.add(id); })
+      .catch(() => posterQ.failed.add(id)).finally(() => { posterQ.busy--; pumpPosters(); });
+  }
+}
+function makePoster(id) {
+  return new Promise(resolve => {
+    const v = document.createElement("video"); v.muted = true; v.playsInline = true; v.preload = "auto"; v.crossOrigin = "anonymous";
+    const stop = ok => { v.removeAttribute("src"); try { v.load(); } catch (e) {} resolve(ok); };
+    const timer = setTimeout(() => stop(false), 15000);
+    v.onerror = () => { clearTimeout(timer); stop(false); };
+    v.onloadedmetadata = () => { try { v.currentTime = Math.min(0.5, (v.duration || 1) / 2); } catch (e) { clearTimeout(timer); stop(false); } };
+    v.onseeked = async () => {
+      clearTimeout(timer);
+      try {
+        const c = document.createElement("canvas"); const s = Math.min(1, 400 / Math.max(v.videoWidth, v.videoHeight));
+        c.width = Math.max(1, Math.round(v.videoWidth * s)); c.height = Math.max(1, Math.round(v.videoHeight * s));
+        c.getContext("2d").drawImage(v, 0, 0, c.width, c.height);
+        const blob = await new Promise(r => c.toBlob(r, "image/jpeg", 0.8));
+        const res = await fetch("/api/poster?id=" + id, { method: "POST", headers: { "X-Token": TOKEN, "Content-Type": "image/jpeg" }, body: blob });
+        stop(res.ok);
+      } catch (e) { stop(false); }
+    };
+    v.src = media("view", id);
+  });
+}
 const PAGE = 200;
 let grid = { filters: {}, offset: 0, total: 0, items: [], loading: false, lastMonth: "", loaded: false };
 let facetsData = null;
@@ -1919,7 +1959,7 @@ async function loadMorePhotos() {
       }
       const idx = grid.items.length; grid.items.push(it);
       const b = document.createElement("button"); b.className = "tile"; b.title = placeLabel(it);
-      if (it.kind === "video") { b.classList.add("video"); b.textContent = "▶"; }
+      if (it.kind === "video") videoTile(b, it);
       else {
         const img = document.createElement("img"); img.loading = "lazy"; img.decoding = "async";
         img.src = media("thumb", it.id); img.alt = ""; b.append(img);
@@ -2168,7 +2208,7 @@ async function loadOrganize(reset) {
     for (const it of res.items) {
       const idx = og.items.length; og.items.push(it);
       const b = document.createElement("button"); b.className = "tile"; b.dataset.id = it.id; b.dataset.idx = idx; b.title = [fmtDate(it.taken_at), placeLabel(it)].filter(Boolean).join(" · ");
-      if (it.kind === "video") { b.classList.add("video"); b.textContent = "▶"; } else { const img = document.createElement("img"); img.loading = "lazy"; img.decoding = "async"; img.src = media("thumb", it.id); img.alt = ""; b.append(img); }
+      if (it.kind === "video") videoTile(b, it); else { const img = document.createElement("img"); img.loading = "lazy"; img.decoding = "async"; img.src = media("thumb", it.id); img.alt = ""; b.append(img); }
       if (!placeLabel(it)) { const t = document.createElement("span"); t.className = "tag"; t.textContent = "no place"; b.append(t); }
       b.onclick = ev => ogPick(idx, ev); b.ondblclick = () => openLightbox(idx, og.items);
       b.draggable = true; b.ondragstart = ev => { if (!og.sel.has(it.id)) ogPick(idx, {}); ev.dataTransfer.setData("text/plain", "selection"); ev.dataTransfer.effectAllowed = "copyMove"; };
@@ -2558,7 +2598,7 @@ document.addEventListener("keydown", e => {
 // ---- memories
 function tileFor(it, list, i) {
   const b = document.createElement("button"); b.className = "tile"; b.title = it.caption || placeLabel(it);
-  if (it.kind === "video") { b.classList.add("video"); b.textContent = "▶"; }
+  if (it.kind === "video") videoTile(b, it);
   else { const img = document.createElement("img"); img.loading = "lazy"; img.src = media("thumb", it.id); img.alt = ""; b.append(img); }
   b.onclick = () => openLightbox(i, list);
   return b;

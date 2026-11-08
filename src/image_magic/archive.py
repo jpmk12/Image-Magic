@@ -66,6 +66,12 @@ class Site:
             cached = self.originals.parent / "derived" / "view" / a["sha256"][:2] / f"{a['sha256']}.jpg" if a["sha256"] else None
             if cached is not None and cached.is_file():
                 src = cached                 # already decoded and downscaled; the export strips its metadata again
+            from . import media
+            if media.media_kind_of(a["path"]) != "photo":
+                poster = media.poster_path(self.originals.parent, a["sha256"])
+                if not poster.is_file():
+                    return None
+                src = poster
             w, h = share._export_image(src, self.folder / name)
         except Exception:
             return None
