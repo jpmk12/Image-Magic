@@ -98,7 +98,8 @@ def test_second_account_settings_and_command():
     assert [a[0] for a in s.accounts] == ["me@icloud.com", "them@icloud.com"]
     assert s.accounts[1][1].parts[-2:] == ("accounts", "Sam x") and s.accounts[1][2] == "Sam x" and s.accounts[0][2] is None
     cmd = sync.build_command("icloudpd", s, mode="quick", account=2)
-    assert cmd[cmd.index("--username") + 1] == "them@icloud.com" and cmd[cmd.index("--directory") + 1].endswith("accounts/Sam x")
+    from pathlib import Path
+    assert cmd[cmd.index("--username") + 1] == "them@icloud.com" and Path(cmd[cmd.index("--directory") + 1]).parts[-2:] == ("accounts", "Sam x")
     sync.assert_never_deletes(cmd)
     # a name is derived when only the id is given; one account when the second is blank or the same
     assert Settings.from_dict({"apple_id_2": "them@icloud.com"}).contributor_2 == "them"
