@@ -508,7 +508,7 @@
     <div class="panel" id="cleanpanel">
       <div class="row" style="justify-content:space-between">
         <h2 style="margin:0">Clean up</h2>
-        <div class="row"><button class="btn" id="burst-open">Review bursts</button><button class="btn primary" id="clean-find">Find clutter</button></div>
+        <div class="row"><button class="btn" id="burst-open" title="A burst is several near-identical shots taken within seconds. Keep the best one; the spares go to the app's trash, not to iCloud.">Review bursts</button><button class="btn primary" id="clean-find">Find clutter</button></div>
       </div>
       <p class="small">Blurry shots, pocket shots, screenshots, exact copies and spare burst frames, for you to review and move to the
         app's trash. The trash keeps the files until you empty it, and <b>nothing is ever deleted from iCloud</b>: a trashed photo that
@@ -1028,7 +1028,7 @@
 <div class="story share hidden" id="sugg">
   <div class="card">
     <div class="row" style="justify-content:space-between"><h2 id="sugg-title" style="margin:0">More photos from this trip?</h2><button class="btn" id="sugg-close">✕</button></div>
-    <p class="small muted" id="sugg-intro">These photos look like they belong to the trip, based on when they were taken, how they look, and their captions. Tick the ones that do.</p>
+    <p class="small muted" id="sugg-intro">These photos look like they belong to the trip, based on when they were taken, how they look, and their captions. Tick the ones that do (Shift-click for a range). Photos you leave unticked are remembered and not suggested for this trip again.</p>
     <div class="row"><button class="btn" id="sugg-all">Select all</button><button class="btn" id="sugg-none">Select none</button><span class="small muted" id="sugg-count"></span></div>
     <div class="sugg" id="sugg-grid"></div>
     <div class="row" style="margin-top:14px"><button class="btn primary" id="sugg-add">Add selected to trip</button><span class="small muted" id="sugg-note"></span></div>
@@ -1070,7 +1070,7 @@
 <div class="story share hidden" id="burst-dlg">
   <div class="card" style="width:min(1100px,100%)">
     <div class="row" style="justify-content:space-between"><h2 style="margin:0">Bursts: keep one, let the rest go</h2><button class="btn" id="burst-close">✕</button></div>
-    <p class="small muted">The app pre-picks the sharpest, best-exposed frame (★). Click another frame to make it the keeper. Spare frames go to the app's trash, restorable; iCloud is untouched.</p>
+    <p class="small muted"><b>Nothing is deleted here.</b> A burst is a run of near-identical shots taken within a few seconds (holding the shutter, or several tries at the same moment). For each burst the app pre-picks the sharpest, best-exposed frame (★); click another frame to make it the keeper instead. Only when you press a trash button do the spare frames move to the app's own trash folder on this computer, where they stay until you empty it and can be restored any time. Your iCloud library is never touched.</p>
     <div class="row" style="justify-content:space-between;margin-bottom:8px"><span class="small muted" id="burst-sum"></span><button class="btn primary" id="burst-all">Trash all spare frames, keep the ★</button></div>
     <div id="burst-list" style="display:flex;flex-direction:column;gap:10px;max-height:60vh;overflow:auto"></div>
     <div class="small" id="burst-note" style="margin-top:8px;color:var(--accent);min-height:18px"></div>
@@ -1093,9 +1093,10 @@
           <div id="loc-nearby-list" class="small" style="margin-top:8px;max-height:240px;overflow:auto"></div>
         </div>
         <div id="loc-search" class="loc-pane hidden">
-          <input type="text" id="loc-q" placeholder="Type a place: Petra, Dover, Tokyo…" style="width:100%">
+          <input type="text" id="loc-q" placeholder="A town (St Robert, MO), an address, or coordinates (37.83, -92.18)" style="width:100%">
           <div id="loc-results" style="display:flex;flex-direction:column;gap:6px;margin-top:8px"></div>
-          <p class="small muted">Looked up on this computer from the bundled list of 145,000 places. Nothing is sent anywhere.</p>
+          <div class="row" style="margin-top:8px"><button class="btn" id="loc-online" title="Street addresses are not in the offline list; this sends only the text you typed to OpenStreetMap">🌐 Look it up online</button><span class="small muted" id="loc-online-note"></span></div>
+          <p class="small muted">Towns, "Town, ST", postal addresses (the town part is used) and coordinates are looked up on this computer from the bundled list of 145,000 places; nothing is sent anywhere. For an exact street address, <b>Look it up online</b> asks OpenStreetMap with just the text you typed.</p>
         </div>
         <div id="loc-map" class="loc-pane hidden"><div id="loc-mapbox" style="height:300px;border-radius:12px;overflow:hidden;background:var(--soft)"></div><p class="small muted" id="loc-mapnote">Click the map to place the pin.</p></div>
         <div id="loc-copy" class="loc-pane hidden"><p class="small muted">Pick one photo that has the right location; the selection takes its place.</p><div id="loc-donors" class="mem-row"></div></div>
@@ -1395,8 +1396,18 @@ $("#smart-on").onclick = async () => {
 };
 $("#smart-update").onclick = () => api("/api/run", { kind: "index" }).then(renderJob).catch(e => toast(e.message));
 
-const CLEAN_GROUPS = [["blurry", "Blurry", true], ["dark", "Too dark or accidental", true], ["duplicates", "Exact copies", true],
-  ["screenshots", "Screenshots and documents", false], ["bursts", "Spare burst frames", false]];
+// key, label, ticked by default, one-line meaning
+const CLEAN_GROUPS = [
+  ["duplicates", "Exact copies", true, "Byte-for-byte copies of a photo you already have. The original stays."],
+  ["screenshots", "Screenshots", true, "Marked as screenshots by iCloud, or recognised as one by the AI."],
+  ["saved", "Saved images: memes, GIFs, stickers", true, "GIF, PNG and WebP files with no camera data: things saved from messages and the web."],
+  ["documents", "Documents and receipts", false, "Pages, receipts and forms the AI recognised. Often worth keeping; have a look."],
+  ["black", "Black or white frames", true, "Almost entirely black or white: a pocket shot, a lens cap, a misfire."],
+  ["blank", "Blank frames", true, "Flat and featureless: a wall, a table, the sky by accident."],
+  ["blurry", "Blurry", true, "Nothing in focus."],
+  ["dim", "Very dark (look before you tick)", false, "Dark but with something in them. Concerts, candles, night skies live here; many are keepers."],
+  ["bursts", "Spare burst frames", false, "Extra frames of a burst; the best one stays either way (see Review bursts)."]];
+const clean = { data: null, open: null };
 function renderTrash(t) {
   const box = $("#clean-trash"); box.replaceChildren();
   if (!t || !t.photos) { box.textContent = "Trash is empty."; return; }
@@ -1413,33 +1424,56 @@ async function loadCleanTrash() { const t = await api("/api/trash").catch(() => 
 $("#clean-find").onclick = async () => {
   $("#clean-dlg").classList.remove("hidden"); $("#clean-groups").replaceChildren(); $("#clean-sum").textContent = "Looking through your photos…"; $("#clean-note").textContent = "";
   let c; try { c = await api("/api/cleanup"); } catch (e) { $("#clean-sum").textContent = e.message; return; }
-  renderTrash(c.trash);
+  renderTrash(c.trash); clean.data = c; clean.ticked = {};
+  for (const [key, , on] of CLEAN_GROUPS) clean.ticked[key] = new Set(on ? (c.groups[key] || []).map(i => i.id) : []);
   const total = Object.values(c.counts).reduce((a, b) => a + b, 0);
-  $("#clean-sum").textContent = total ? `${fmt(total)} candidates (${bytes(c.bytes)}). Tick what should go; click a photo to look at it first.` : "Nothing looks like clutter. Nice library.";
-  for (const [key, label, on] of CLEAN_GROUPS) {
-    const items = c.groups[key]; if (!items.length) continue;
-    const h = document.createElement("div"); h.className = "row"; h.style.justifyContent = "space-between"; h.style.marginTop = "12px";
-    const cb = document.createElement("input"); cb.type = "checkbox"; cb.checked = on; const lab = document.createElement("label"); lab.append(cb, document.createTextNode(` ${label} · ${items.length}`)); lab.style.fontWeight = "600";
-    h.append(lab, Object.assign(document.createElement("span"), { className: "small muted", textContent: items[0].reason }));
-    const grid = document.createElement("div"); grid.className = "mem-row"; grid.dataset.group = key;
-    for (const it of items) {
-      const w = document.createElement("label"); w.style.position = "relative"; w.style.width = "110px";
-      const c2 = document.createElement("input"); c2.type = "checkbox"; c2.value = it.id; c2.checked = on; c2.style.position = "absolute"; c2.style.top = "4px"; c2.style.left = "4px"; c2.style.zIndex = "2";
-      const t = tileFor({ id: it.id, kind: "photo" }, items.map(x => ({ id: x.id, kind: "photo" })), items.indexOf(it)); t.style.width = "110px";
-      const cap = document.createElement("div"); cap.className = "small muted"; cap.textContent = (it.taken_at || "").slice(0, 10) + (it.score != null ? ` · ${Math.round(it.score)}/100` : "");
-      w.append(c2, t, cap); grid.append(w);
-    }
-    cb.onchange = () => grid.querySelectorAll("input").forEach(i => i.checked = cb.checked);
-    $("#clean-groups").append(h, grid);
-  }
+  $("#clean-sum").textContent = total ? `${fmt(total)} candidates in ${Object.values(c.counts).filter(n => n).length} categories (${bytes(c.bytes)}). Open a category, click a photo to see it full size, tick what should go.` : "Nothing looks like clutter. Nice library.";
+  renderCleanGroups();
 };
+function cleanTickedTotal() { return Object.values(clean.ticked).reduce((n, s) => n + s.size, 0); }
+function renderCleanGroups() {
+  const c = clean.data, box = $("#clean-groups"); box.replaceChildren();
+  const tabs = document.createElement("div"); tabs.className = "row"; tabs.style.marginBottom = "8px";
+  for (const [key, label] of CLEAN_GROUPS) {
+    const items = c.groups[key] || []; if (!items.length) continue;
+    const b = document.createElement("button"); b.className = "btn" + (clean.open === key ? " primary" : ""); b.textContent = `${label} · ${items.length}` + (clean.ticked[key].size ? ` (${clean.ticked[key].size} ticked)` : "");
+    b.onclick = () => { clean.open = clean.open === key ? null : key; renderCleanGroups(); };
+    tabs.append(b);
+  }
+  box.append(tabs);
+  $("#clean-go").textContent = `🗑 Move ${fmt(cleanTickedTotal())} ticked to trash`;
+  if (!clean.open) { const p = document.createElement("p"); p.className = "small muted"; p.textContent = "Categories ticked by default are the safe ones (exact copies, screenshots, saved images, black and blank frames, blurry). Dark photos and documents are not ticked until you look at them. Open a category to review it."; box.append(p); return; }
+  const key = clean.open, meta = CLEAN_GROUPS.find(g => g[0] === key), items = c.groups[key], set = clean.ticked[key];
+  const h = document.createElement("div"); h.className = "row"; h.style.justifyContent = "space-between";
+  const why = document.createElement("span"); why.className = "small muted"; why.textContent = meta[3];
+  const acts = document.createElement("div"); acts.className = "row";
+  const all = document.createElement("button"); all.className = "btn"; all.textContent = "Tick all"; all.onclick = () => { items.forEach(i => set.add(i.id)); renderCleanGroups(); };
+  const none = document.createElement("button"); none.className = "btn"; none.textContent = "Untick all"; none.onclick = () => { set.clear(); renderCleanGroups(); };
+  acts.append(all, none); h.append(why, acts); box.append(h);
+  const hint = document.createElement("p"); hint.className = "small muted"; hint.style.margin = "6px 0"; hint.textContent = "Click a photo to see it full size (← → to move through the category); the box in its corner decides whether it goes. Shift-click a box for a range.";
+  box.append(hint);
+  const grid = document.createElement("div"); grid.className = "mem-row"; grid.dataset.group = key;
+  const list = items.map(x => ({ id: x.id, kind: "photo" })); let last = null;
+  items.forEach((it, i) => {
+    const w = document.createElement("div"); w.style.position = "relative"; w.style.width = "110px";
+    const c2 = document.createElement("input"); c2.type = "checkbox"; c2.checked = set.has(it.id); c2.title = "Tick to move to the trash";
+    c2.style.cssText = "position:absolute;top:4px;left:4px;z-index:2;width:20px;height:20px;cursor:pointer";
+    c2.onclick = ev => { const on = c2.checked; if (ev.shiftKey && last !== null) { const [a, b] = [Math.min(last, i), Math.max(last, i)]; for (let k = a; k <= b; k++) { if (on) set.add(items[k].id); else set.delete(items[k].id); } renderCleanGroups(); } else { if (on) set.add(it.id); else set.delete(it.id); $("#clean-go").textContent = `🗑 Move ${fmt(cleanTickedTotal())} ticked to trash`; } last = i; };
+    const t = tileFor(list[i], list, i); t.style.width = "110px"; t.title = "Click to see it full size";
+    const cap = document.createElement("div"); cap.className = "small muted"; cap.textContent = (it.taken_at || "").slice(0, 10) + (it.score != null ? ` · ${Math.round(it.score)}/100` : "");
+    w.append(c2, t, cap); grid.append(w);
+  });
+  box.append(grid);
+}
 $("#clean-close").onclick = () => $("#clean-dlg").classList.add("hidden");
 $("#clean-go").onclick = async () => {
-  const ids = [...$$("#clean-groups .mem-row input:checked")].map(i => +i.value);
+  const ids = Object.values(clean.ticked || {}).flatMap(s => [...s]);
   if (!ids.length) return toast("Nothing ticked.");
-  if (!confirm(`Move ${ids.length} photos to the app's trash? They stay in iCloud and can be restored until you empty the trash.`)) return;
+  const per = CLEAN_GROUPS.filter(g => clean.ticked[g[0]] && clean.ticked[g[0]].size).map(g => `${clean.ticked[g[0]].size} ${g[1].toLowerCase()}`).join(", ");
+  if (!confirm(`Move ${ids.length} photos to the app's trash (${per})? They stay in iCloud and can be restored until you empty the trash.`)) return;
   $("#clean-note").textContent = "Moving…"; $("#clean-go").disabled = true;
-  try { const r = await api("/api/cleanup/trash", { ids }); $("#clean-note").textContent = `${r.trashed} moved to the trash${r.failed.length ? `, ${r.failed.length} failed` : ""}.`; renderTrash(r.trash); refresh(); if (grid.loaded) setFilters(grid.filters); }
+  try { const r = await api("/api/cleanup/trash", { ids }); $("#clean-note").textContent = `${r.trashed} moved to the trash${r.failed.length ? `, ${r.failed.length} failed` : ""}.`; renderTrash(r.trash); refresh(); if (grid.loaded) setFilters(grid.filters);
+    const gone = new Set(ids); for (const k in clean.data.groups) clean.data.groups[k] = clean.data.groups[k].filter(i => !gone.has(i.id)); for (const k in clean.ticked) clean.ticked[k].clear(); renderCleanGroups(); }
   catch (e) { $("#clean-note").textContent = e.message; }
   $("#clean-go").disabled = false;
 };
@@ -1513,10 +1547,10 @@ async function loadInbox() {
   if (ib.last) foot.push(`last: ${ib.last.decision} · ${ib.last.title}`);
   $("#inbox-foot").textContent = foot.join(" · ");
 }
-async function acceptCard(c, only) {
+async function acceptCard(c, only, faces) {
   let name; if (c.action.do === "face_name") { name = prompt("Who is this?"); if (!name) return; }
   try {
-    const r = await api("/api/inbox/accept", { key: c.key, name, ids: only || null });
+    const r = await api("/api/inbox/accept", { key: c.key, name, ids: only || null, faces: faces || null });
     showDone(c, r.summary || "Done");
   } catch (e) { toast(e.message); }
   refresh();
@@ -1543,18 +1577,32 @@ async function openReview(c, handlers) {
   $("#rev-accept").textContent = c.yes; $("#rev-dlg").classList.remove("hidden");
   const body = $("#rev-body"); body.replaceChildren();
   const perPhoto = ["trip_add", "location", "trash"].includes(c.action.do);
-  $("#rev-hint").textContent = perPhoto ? "These are exactly the photos this decision is about. Untick any that don't belong; double-click to look closer."
+  const perFace = !!(c.faces && ["face_merge", "face_name"].includes(c.action.do));
+  if (perFace) rev.ticked = new Set(c.faces);                     // face cards tick by face, not by photo
+  $("#rev-hint").textContent = perPhoto ? "These are exactly the photos this decision is about. Untick any that don't belong (Shift-click for a range); double-click to look closer."
+    : perFace ? "Every face in this group. Untick any that are not this person (Shift-click for a range); they leave the group. Double-click a face to see its photo."
     : c.faces ? "Every face in this group. Double-click a face to see its photo." : "The photos on both sides. Double-click to look closer.";
+  rev.last = null;
   const mkGrid = (ids, faceIds) => {
     const g = document.createElement("div"); g.className = "rev-grid";
     const items = ids.map(id => ({ id, kind: "photo" }));
+    const keys = faceIds && perFace ? faceIds : ids;
+    const tiles = [];
     ids.forEach((id, i) => {
-      const t = document.createElement("button"); t.className = "tile" + (rev.ticked.has(id) ? " sel" : "");
+      const key = keys[i];
+      const t = document.createElement("button"); t.className = "tile" + (rev.ticked.has(key) ? " sel" : "");
       const im = document.createElement("img"); im.loading = "lazy"; im.alt = ""; im.src = faceIds ? media("face", faceIds[i]) : media("thumb", id); t.append(im);
-      if (perPhoto) t.onclick = () => { if (rev.ticked.has(id)) rev.ticked.delete(id); else rev.ticked.add(id); t.classList.toggle("sel", rev.ticked.has(id)); revCount(); };
+      if (perPhoto || perFace) t.onclick = ev => {
+        const on = !rev.ticked.has(key);
+        if (ev.shiftKey && rev.last !== null && tiles[rev.last]) {           // a range takes the state of the tile you clicked
+          const [a, b] = [Math.min(rev.last, i), Math.max(rev.last, i)];
+          for (let k = a; k <= b; k++) { if (on) rev.ticked.add(keys[k]); else rev.ticked.delete(keys[k]); tiles[k].classList.toggle("sel", on); }
+        } else { if (on) rev.ticked.add(key); else rev.ticked.delete(key); t.classList.toggle("sel", on); }
+        rev.last = i; revCount();
+      };
       else { t.classList.add("sel"); t.onclick = () => openLightbox(i, items); }
       t.ondblclick = () => openLightbox(i, items);
-      g.append(t);
+      tiles.push(t); g.append(t);
     });
     return g;
   };
@@ -1577,10 +1625,18 @@ async function openReview(c, handlers) {
   }
   revCount();
 }
-function revCount() { const c = rev.card; const perPhoto = ["trip_add", "location", "trash"].includes(c.action.do); $("#rev-count").textContent = perPhoto ? `${rev.ticked.size} of ${c.ids.length} ticked` : `${c.ids.length} photos`; $("#rev-accept").disabled = perPhoto && !rev.ticked.size; }
+function revCount() {
+  const c = rev.card; const perPhoto = ["trip_add", "location", "trash"].includes(c.action.do); const perFace = !!(c.faces && ["face_merge", "face_name"].includes(c.action.do));
+  $("#rev-count").textContent = perPhoto ? `${rev.ticked.size} of ${c.ids.length} ticked` : perFace ? `${rev.ticked.size} of ${c.faces.length} faces ticked` : `${c.ids.length} photos`;
+  $("#rev-accept").disabled = (perPhoto || perFace) && !rev.ticked.size;
+}
 $("#rev-close").onclick = () => $("#rev-dlg").classList.add("hidden");
 $("#rev-skip").onclick = async () => { const c = rev.card; $("#rev-dlg").classList.add("hidden"); if (rev.onSkip) return rev.onSkip(); await api("/api/inbox/skip", { key: c.key }).catch(e => toast(e.message)); showDone(c, "Skipped; it won't come back unless the facts change"); };
-$("#rev-accept").onclick = async () => { const c = rev.card; $("#rev-dlg").classList.add("hidden"); showTab("home"); if (rev.onAccept) return rev.onAccept(); const perPhoto = ["trip_add", "location", "trash"].includes(c.action.do); await acceptCard(c, perPhoto && rev.ticked.size < c.ids.length ? [...rev.ticked] : null); };
+$("#rev-accept").onclick = async () => {
+  const c = rev.card; $("#rev-dlg").classList.add("hidden"); showTab("home"); if (rev.onAccept) return rev.onAccept();
+  const perPhoto = ["trip_add", "location", "trash"].includes(c.action.do); const perFace = !!(c.faces && ["face_merge", "face_name"].includes(c.action.do));
+  await acceptCard(c, perPhoto && rev.ticked.size < c.ids.length ? [...rev.ticked] : null, perFace && rev.ticked.size < c.faces.length ? [...rev.ticked] : null);
+};
 $("#inbox-high").onclick = async () => { try { const r = await api("/api/inbox/accept-high", {}); toast(`Applied ${r.applied} suggestions`); } catch (e) { toast(e.message); } loadInbox(); refresh(); };
 $("#inbox-undo").onclick = async () => { try { const r = await api("/api/inbox/undo", {}); toast("Undone: " + r.undone); } catch (e) { toast(e.message); } loadInbox(); refresh(); };
 async function loadDaily() {
@@ -2471,12 +2527,23 @@ async function locNearby() {
   locSummary();
 }
 let locTimer = null;
-$("#loc-q").oninput = () => { clearTimeout(locTimer); locTimer = setTimeout(async () => {
-  const res = await api("/api/places/search?q=" + encodeURIComponent($("#loc-q").value)).catch(() => []);
+function locShowResults(res, note) {
   const box = $("#loc-results"); box.replaceChildren();
-  for (const p of res) { const b = document.createElement("button"); b.className = "target"; b.textContent = `${p.name}, ${p.region ? p.region + ", " : ""}${p.country}`;
-    b.onclick = () => { loc.target = { lat: p.lat, lon: p.lon }; loc.label = `${p.name}, ${p.country}`; $$("#loc-results .target").forEach(x => x.classList.remove("over")); b.classList.add("over"); locSummary(); }; box.append(b); }
+  if (!res.length) { const p = document.createElement("div"); p.className = "small muted"; p.textContent = note || "No match in the offline list. Try just the town and state, or Look it up online."; box.append(p); return; }
+  for (const p of res) { const b = document.createElement("button"); b.className = "target"; b.textContent = `${p.name}${p.region ? ", " + p.region : ""}${p.country ? ", " + p.country : ""}` + (p.online ? "  (OpenStreetMap)" : "");
+    b.onclick = () => { loc.target = { lat: p.lat, lon: p.lon }; loc.label = `${p.name}${p.country ? ", " + p.country : ""}`; $$("#loc-results .target").forEach(x => x.classList.remove("over")); b.classList.add("over"); locSummary(); }; box.append(b); }
+}
+$("#loc-q").oninput = () => { clearTimeout(locTimer); $("#loc-online-note").textContent = ""; locTimer = setTimeout(async () => {
+  if ($("#loc-q").value.trim().length < 2) { $("#loc-results").replaceChildren(); return; }
+  const res = await api("/api/places/search?q=" + encodeURIComponent($("#loc-q").value)).catch(() => []);
+  locShowResults(res);
 }, 250); };
+$("#loc-online").onclick = async () => {
+  const q = $("#loc-q").value.trim(); if (q.length < 3) return toast("Type the address first.");
+  $("#loc-online-note").textContent = "Asking OpenStreetMap…";
+  try { const res = await api("/api/places/geocode?q=" + encodeURIComponent(q)); $("#loc-online-note").textContent = res.length ? `${res.length} result${res.length > 1 ? "s" : ""} from OpenStreetMap` : "OpenStreetMap found nothing for that."; locShowResults(res, "OpenStreetMap found nothing for that; try fewer details."); }
+  catch (e) { $("#loc-online-note").textContent = e.message; }
+};
 function locMap() {
   if (typeof L === "undefined") { $("#loc-mapnote").textContent = "The map could not load."; return; }
   if (!loc.map) {
@@ -2944,9 +3011,11 @@ async function openSuggestions(tripId, title, seed) {
   try {
     const r = await api(`/api/curate/suggest?trip=${tripId}${seed ? "&seed=" + seed : ""}`);
     $("#sugg-count").textContent = r.items.length ? `${r.items.length} candidates` : "Nothing else looks like this trip.";
-    $("#sugg-grid").replaceChildren(...r.items.map(it => {
+    sugg.last = null;
+    $("#sugg-grid").replaceChildren(...r.items.map((it, i) => {
       const l = document.createElement("label"); l.style.position = "relative";
       const cb = document.createElement("input"); cb.type = "checkbox"; cb.value = it.id; cb.checked = it.strong;
+      l.onclick = ev => { if (ev.shiftKey && sugg.last !== null) { ev.preventDefault(); const boxes = $$("#sugg-grid input"); const on = !cb.checked || sugg.lastOn === undefined ? !cb.checked : sugg.lastOn; const [a, b] = [Math.min(sugg.last, i), Math.max(sugg.last, i)]; for (let k = a; k <= b; k++) boxes[k].checked = on; } sugg.last = i; sugg.lastOn = cb.checked; };
       const im = document.createElement("img"); im.src = media("thumb", it.id); im.alt = ""; im.loading = "lazy";
       const why = document.createElement("div"); why.className = "why";
       why.textContent = `${new Date(it.taken_at).toLocaleDateString()} · ${it.reasons.join("; ")}`;
@@ -2959,8 +3028,9 @@ $("#sugg-all").onclick = () => $$("#sugg-grid input").forEach(i => i.checked = t
 $("#sugg-none").onclick = () => $$("#sugg-grid input").forEach(i => i.checked = false);
 $("#sugg-add").onclick = async () => {
   const ids = $$("#sugg-grid input:checked").map(i => +i.value);
+  const rejected = $$("#sugg-grid input:not(:checked)").map(i => +i.value);
   if (!ids.length) return toast("Nothing selected.");
-  try { await api("/api/curate/trip", { ids, trip: sugg.trip }); $("#sugg-note").textContent = `Added ${ids.length} photo${ids.length > 1 ? "s" : ""}.`; $$("#sugg-grid input:checked").forEach(i => i.closest("label").remove()); loadTrips(); }
+  try { await api("/api/curate/trip", { ids, trip: sugg.trip, rejected }); $("#sugg-note").textContent = `Added ${ids.length} photo${ids.length > 1 ? "s" : ""}.` + (rejected.length ? ` The ${rejected.length} unticked won't be suggested for this trip again.` : ""); $$("#sugg-grid label").forEach(l => l.remove()); loadTrips(); }
   catch (e) { $("#sugg-note").textContent = e.message; }
 };
 

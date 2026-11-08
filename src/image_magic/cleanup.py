@@ -23,8 +23,11 @@ from . import media, quality
 
 BLUR_SHARPNESS = 0.08    # sharpness component (Laplacian): below this nothing is in focus
 DARK_EXPOSURE = 0.25     # exposure component: nearly black or blown out
+BLACK_EXPOSURE = 0.08    # with no contrast either: a pocket shot, a lens cap
 FLAT_CONTRAST = 0.15     # contrast component: a blank frame (the inside of a pocket, a wall)
 LIMIT_PER_GROUP = 400
+# Every clutter category, in the order the page shows them. Each is a separate decision.
+GROUP_ORDER = ("duplicates", "screenshots", "saved", "documents", "black", "blank", "blurry", "dim", "bursts")
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS trash_files (
@@ -54,23 +57,44 @@ def _item(r, reason: str, score=None) -> dict:
 def candidates(conn: sqlite3.Connection, library: Path, originals: Path) -> dict:
     """Groups of photos worth a look. Low scorers are re-read from the thumbnail to tell blur from darkness."""
     ensure_schema(conn)
-    groups: dict[str, list] = {"blurry": [], "dark": [], "screenshots": [], "duplicates": [], "bursts": []}
+    groups: dict[str, list] = {k: [] for k in GROUP_ORDER}
+    av = VISIBLE.replace(' AND ', ' AND a.').replace('missing', 'a.missing')
+    # Not photographs: screenshots (iCloud says so, or the AI saw one), saved images (GIFs, PNG/WebP without a
+    # camera: memes, downloads, stickers), and documents the AI recognised.
     shots = conn.execute(
-        f"""SELECT a.id, a.taken_at, a.size, a.quality_score FROM assets a WHERE {VISIBLE.replace(' AND ', ' AND a.').replace('missing', 'a.missing')}
-            AND a.duplicate_of IS NULL AND (a.screenshot = 1 OR EXISTS (SELECT 1 FROM descriptions d WHERE d.asset_id = a.id
-            AND d.status = 'ok' AND d.setting IN ('screenshot', 'document'))) ORDER BY a.taken_at DESC LIMIT ?""", (LIMIT_PER_GROUP,)).fetchall()
-    groups["screenshots"] = [_item(r, "a screenshot or document, not a photo") for r in shots]
-    shot_ids = {i["id"] for i in groups["screenshots"]}
+        f"""SELECT a.id, a.taken_at, a.size, a.quality_score, a.path, a.camera_make, a.screenshot,
+                   (SELECT d.setting FROM descriptions d WHERE d.asset_id = a.id AND d.status = 'ok') AS setting
+            FROM assets a WHERE {av} AND a.duplicate_of IS NULL AND (a.screenshot = 1 OR a.camera_make IS NULL
+              OR EXISTS (SELECT 1 FROM descriptions d WHERE d.asset_id = a.id AND d.status = 'ok' AND d.setting IN ('screenshot', 'document')))
+            ORDER BY a.taken_at DESC LIMIT ?""", (LIMIT_PER_GROUP * 4,)).fetchall()
+    taken: set[int] = set()
+    for r in shots:
+        ext = Path(r["path"]).suffix.lower()
+        if r["screenshot"] or r["setting"] == "screenshot":
+            groups["screenshots"].append(_item(r, "a screenshot, not a photo"))
+        elif r["setting"] == "document":
+            groups["documents"].append(_item(r, "a document, receipt or page the AI recognised"))
+        elif ext in (".gif", ".webp") or (ext == ".png" and not r["camera_make"]):
+            groups["saved"].append(_item(r, "a GIF, PNG or WebP without camera data: a meme, sticker or download"))
+        else:
+            continue
+        taken.add(r["id"])
+    for k in ("screenshots", "documents", "saved"):
+        groups[k] = groups[k][:LIMIT_PER_GROUP]
     # Components were stored when the photo was rated, so this is a plain query (no thumbnails are opened here).
     low = conn.execute(
         f"""SELECT id, taken_at, size, quality_score, q_sharp, q_expo, q_contrast FROM assets WHERE {VISIBLE} AND duplicate_of IS NULL
             AND q_sharp IS NOT NULL AND (q_expo < ? OR q_contrast < ? OR q_sharp < ?) ORDER BY quality_score LIMIT ?""",
-        (DARK_EXPOSURE, FLAT_CONTRAST, BLUR_SHARPNESS, 3000)).fetchall()
+        (DARK_EXPOSURE, FLAT_CONTRAST, BLUR_SHARPNESS, 4000)).fetchall()
     for r in low:
-        if r["id"] in shot_ids:
+        if r["id"] in taken:
             continue
-        if r["q_expo"] < DARK_EXPOSURE or r["q_contrast"] < FLAT_CONTRAST:
-            groups["dark"].append(_item(r, "almost black, blown out or blank: a pocket or accidental shot"))
+        if r["q_contrast"] < FLAT_CONTRAST and r["q_expo"] < BLACK_EXPOSURE:
+            groups["black"].append(_item(r, "almost entirely black or white: the inside of a pocket, a lens cap, a misfire"))
+        elif r["q_contrast"] < FLAT_CONTRAST:
+            groups["blank"].append(_item(r, "a flat, featureless frame: a wall, a table, the sky by accident"))
+        elif r["q_expo"] < DARK_EXPOSURE:
+            groups["dim"].append(_item(r, "very dark but with something in it; many of these are keepers"))
         elif r["q_sharp"] < BLUR_SHARPNESS:
             groups["blurry"].append(_item(r, "nothing in focus"))
     dups = conn.execute(

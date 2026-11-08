@@ -295,9 +295,13 @@ program only. Your photos and settings are kept.
   felt. Notes are stored only in your library folder and play back during replays, holding the
   photo until you finish speaking. A share export leaves them out unless you tick **Include my
   voice notes**.
-- **Clean up:** **Find clutter** on the Home tab gathers blurry shots, pocket and blank shots,
-  exact copies, screenshots and documents, and spare burst frames for you to review (the first
-  three are ticked for you, the last two are not). Ticked photos go to the app's **trash**
+- **Clean up:** **Find clutter** on the Home tab sorts likely clutter into categories you
+  review one at a time: exact copies, screenshots, saved images (GIFs, PNGs and WebPs with no
+  camera data: memes, stickers, downloads), documents and receipts, black or white frames,
+  blank frames, blurry shots, very dark photos, and spare burst frames. The safe categories
+  are ticked for you; **very dark** and **documents** are not, because many of those are
+  keepers. Click any photo to see it full size (arrow keys move through the category), tick
+  the box in its corner to send it, Shift-click for a range. Ticked photos go to the app's **trash**
   inside your library folder, together with their Live Photo clip and sidecar, and can be
   restored exactly until you **Empty trash**. Nothing is ever deleted from iCloud; if iCloud
   sends a trashed photo again at the next sync, it goes straight back to the trash. The viewer
@@ -315,8 +319,11 @@ program only. Your photos and settings are kept.
   albums are drop targets: drag the selection onto one, click it, or press its number key.
 - **Set location:** for one photo (viewer → Place) or a selection (Organize → Set location):
   take the place of photos taken nearby in time (choose how far to look, 20 minutes to 12
-  hours), search a place by name from the offline list, pin it on the map, or copy it from a
-  photo that has it right. Only photos without a place change unless you tick overwrite. A
+  hours), search a place (a town, "Town, ST", a full postal address, whose town part is used,
+  or coordinates like "37.83, -92.18") from the offline list, pin it on the map, or copy it
+  from a photo that has it right. For an exact street address, **Look it up online** asks
+  OpenStreetMap with just the text you typed; that button is the only part that goes online
+  and it does nothing until you click it. Only photos without a place change unless you tick overwrite. A
   location you set is marked "set by you", survives every rebuild, and anchors its neighbours.
 - **Pick a span on the Timeline:** **⇔ Pick a span**, then click a first and a last month; the
   bars light up and a bar shows how many photos that is, with **Make a trip**, **Add to album**,
@@ -331,7 +338,10 @@ program only. Your photos and settings are kept.
   stick through rebuilds. In the viewer: **Trip ✎ change** moves a photo to another trip, a
   new trip, or no trip, and as soon as you do, the app suggests other photos that belong with
   it (by date, by how they look, and by their captions) for you to tick and add. **Find more**
-  on a trip card does the same at any time.
+  on a trip card does the same at any time. Photos you leave unticked, in that dialog or in an
+  inbox trip card, are remembered as "not this trip" and never suggested for it again;
+  Shift-click selects a range. On a face card you can untick the faces that are not that
+  person: they leave the group before the rest is named or merged.
   Click a person's name tag for **Not this person** or **This is someone else**. **About ✎ edit**
   rewrites a caption and keywords. Chapters can be renamed on the Timeline, milestones
   dismissed, trips renamed on their cards.

@@ -32,9 +32,9 @@ def test_candidates_are_grouped(tmp_path):
     conn, lib, orig = _lib(tmp_path)
     c = cleanup.candidates(conn, lib, orig)
     paths = lambda key: {conn.execute("SELECT path FROM assets WHERE id = ?", (i["id"],)).fetchone()[0] for i in c["groups"][key]}  # noqa: E731
-    assert "2019/blur.jpg" in paths("blurry") and "2019/pocket.jpg" in paths("dark")
+    assert "2019/blur.jpg" in paths("blurry") and "2019/pocket.jpg" in paths("black")
     assert paths("duplicates") in ({"2019/copy.jpg"}, {"2019/good1.jpg"}) and paths("screenshots") == {"2019/shot.png"}   # the first-seen copy is the original
-    assert not any("good" in p for k in ("blurry", "dark", "screenshots", "bursts") for p in paths(k))
+    assert not any("good" in p for k in cleanup.GROUP_ORDER if k != "duplicates" for p in paths(k))
     assert c["counts"]["blurry"] >= 1 and c["bytes"] > 0 and c["trash"]["photos"] == 0
 
 

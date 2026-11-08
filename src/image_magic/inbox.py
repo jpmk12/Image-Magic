@@ -29,7 +29,32 @@ CREATE TABLE IF NOT EXISTS inbox_decisions (
     title    TEXT,
     created  TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS trip_rejections (     -- "not part of this trip": photos you unticked are not suggested for it again
+    asset_id INTEGER NOT NULL,
+    trip_id  INTEGER NOT NULL,
+    created  TEXT NOT NULL,
+    PRIMARY KEY (asset_id, trip_id)
+);
 """
+
+
+def reject_for_trip(conn, trip_id: int, ids: list[int]) -> int:
+    """Remember that these photos do not belong to this trip, so no suggestion offers them for it again."""
+    ensure_schema(conn)
+    ids = [int(i) for i in ids]
+    if not ids:
+        return 0
+    conn.executemany("INSERT OR IGNORE INTO trip_rejections (asset_id, trip_id, created) VALUES (?, ?, ?)",
+                     [(i, int(trip_id), _now()) for i in ids])
+    conn.commit()
+    return len(ids)
+
+
+def rejected_for_trip(conn, trip_id: int) -> set[int]:
+    try:
+        return {r[0] for r in conn.execute("SELECT asset_id FROM trip_rejections WHERE trip_id = ?", (int(trip_id),))}
+    except sqlite3.OperationalError:
+        return set()
 
 
 def ensure_schema(conn: sqlite3.Connection) -> None:
@@ -155,11 +180,13 @@ def _trip_merges(conn) -> list[dict]:
 def _clutter(conn, library, originals) -> list[dict]:
     from . import cleanup
     c = cleanup.candidates(conn, library, originals)
-    ids = [i["id"] for k in ("blurry", "dark", "duplicates") for i in c["groups"][k]]
+    safe = (("duplicates", "exact copies"), ("screenshots", "screenshots"), ("saved", "saved images"), ("black", "black frames"),
+            ("blank", "blank frames"), ("blurry", "blurry"))     # dark-but-full photos and documents are never on the card
+    ids = [i["id"] for k, _ in safe for i in c["groups"][k]]
     if len(ids) < 5:
         return []
     dupes = [i["id"] for i in c["groups"]["duplicates"]]
-    parts = [f"{c['counts'][k]} {lbl}" for k, lbl in (("blurry", "blurry"), ("dark", "blank or dark"), ("duplicates", "exact copies")) if c["counts"][k]]
+    parts = [f"{c['counts'][k]} {lbl}" for k, lbl in safe if c["counts"][k]]
     return [{"key": _key("clutter", ids), "kind": "clutter", "conf": 0.95, "ids": ids,
              "title": f"{len(ids)} photos look like clutter", "why": ", ".join(parts) + ". They go to the app's trash, restorable; iCloud is untouched.",
              "yes": "Move to trash", "alt": "Show me", "action": {"do": "trash", "ids": ids, "auto_ids": dupes}}]
@@ -212,7 +239,21 @@ def restrict(card: dict, only: list[int] | None) -> dict:
         a["auto_ids"] = [i for i in a["auto_ids"] if int(i) in keep]
     if ("ids" in a and not a["ids"]) or ("points" in a and not a["points"]):
         raise ValueError("No photos left ticked")
-    return {**card, "action": a, "ids": [i for i in card["ids"] if int(i) in keep] or card["ids"]}
+    return {**card, "action": a, "all_ids": list(card["ids"]), "ids": [i for i in card["ids"] if int(i) in keep] or card["ids"]}
+
+
+def restrict_faces(card: dict, faces_kept: list[int] | None) -> dict:
+    """A face card limited to the faces you left ticked: the others are detached from the group first,
+    so they are neither merged into the person nor named."""
+    if not faces_kept or not card.get("faces"):
+        return card
+    keep = {int(f) for f in faces_kept}
+    detach = [int(f) for f in card["faces"] if int(f) not in keep]
+    if len(detach) == len(card["faces"]):
+        raise ValueError("No faces left ticked")
+    a = dict(card.get("action") or {})
+    a["detach"] = detach
+    return {**card, "action": a}
 
 
 def summary_of(card: dict) -> str:
@@ -238,17 +279,24 @@ def apply(conn, library, originals, card: dict, decision: str = "accepted", name
     undo = None
     if a.get("do") == "trip_add":
         ids = [int(i) for i in a["ids"]]
+        left_out = [int(i) for i in (card.get("all_ids") or []) if int(i) not in set(ids)]
+        if left_out:
+            reject_for_trip(conn, int(a["trip"]), left_out)
         ph = ",".join("?" * len(ids))
         before = {r[0]: (r[1], r[2]) for r in conn.execute(f"SELECT id, trip_id, trip_manual FROM assets WHERE id IN ({ph}) OR live_pair_id IN ({ph})", ids + ids)}
         curate.set_trip(conn, ids, int(a["trip"]))
         undo = {"do": "trip_restore", "before": [[i, t, m] for i, (t, m) in before.items()]}
     elif a.get("do") == "face_merge":
+        for fid in a.get("detach") or []:
+            faces.move_face(conn, int(fid), None)       # "not this person": those faces leave the group first
         fids = [r[0] for r in conn.execute("SELECT id FROM faces WHERE person_id = ?", (int(a["from"]),))]
         faces.merge_people(conn, int(a["from"]), int(a["into"]))
         undo = {"do": "face_unmerge", "faces": fids}
     elif a.get("do") == "face_name":
         if not (name or "").strip():
             raise ValueError("Give them a name")
+        for fid in a.get("detach") or []:
+            faces.move_face(conn, int(fid), None)
         faces.rename_person(conn, int(a["person"]), name.strip()[:80])
         undo = {"do": "face_unname", "person": int(a["person"])}
     elif a.get("do") == "location":
@@ -279,6 +327,9 @@ def apply(conn, library, originals, card: dict, decision: str = "accepted", name
 
 def skip(conn, card: dict) -> None:
     ensure_schema(conn)
+    a = card.get("action") or {}
+    if a.get("do") == "trip_add":
+        reject_for_trip(conn, int(a["trip"]), a.get("ids") or [])
     conn.execute("INSERT OR REPLACE INTO inbox_decisions (key, decision, undo, title, created) VALUES (?, 'skipped', NULL, ?, ?)",
                  (card["key"], card.get("title", ""), _now()))
     from . import learning

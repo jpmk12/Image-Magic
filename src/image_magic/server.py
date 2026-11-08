@@ -539,6 +539,11 @@ def make_handler(app: App):
                 if path == "/api/places/world":
                     from . import placestory
                     return self._json(200, app.cached("world", conn, lambda: placestory.world(conn)))
+                if path == "/api/places/geocode":
+                    from . import places
+                    if not settings.map_online:
+                        raise ValueError("Online lookups are off (Settings → Privacy → map background).")
+                    return self._json(200, places.geocode_online(str(q.get("q") or "")))
                 if path == "/api/places/one":
                     from . import placestory
                     return self._json(200, placestory.place(conn, str(q.get("country") or "")[:2].upper(), q.get("city") or None))
@@ -911,6 +916,9 @@ def make_handler(app: App):
                         if action == "trip":
                             ids = [int(i) for i in data.get("ids") or []]
                             t = data.get("trip")
+                            if data.get("rejected") and t not in (None, "", "none") and not isinstance(t, dict):
+                                from . import inbox
+                                inbox.reject_for_trip(conn, int(t), [int(i) for i in data["rejected"]])
                             if isinstance(t, dict) and t.get("new"):
                                 tid = curate.set_trip(conn, ids, None, new_title=str(t["new"]))
                             else:
@@ -1051,7 +1059,9 @@ def make_handler(app: App):
                             raise ValueError("That suggestion is no longer current; the list has been refreshed.")
                         if action == "accept":
                             only = [int(i) for i in data.get("ids") or []] or None
-                            return self._json(200, inbox.apply(conn, settings.library, settings.originals, inbox.restrict(card, only), name=data.get("name")))
+                            faces_kept = [int(i) for i in data.get("faces") or []] or None
+                            return self._json(200, inbox.apply(conn, settings.library, settings.originals,
+                                                               inbox.restrict_faces(inbox.restrict(card, only), faces_kept), name=data.get("name")))
                         if action == "skip":
                             inbox.skip(conn, card)
                             return self._json(200, {"ok": True})

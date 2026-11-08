@@ -9,6 +9,7 @@ from __future__ import annotations
 import gzip
 import json
 import math
+import re
 import sqlite3
 from collections import Counter, defaultdict
 from dataclasses import dataclass
@@ -66,25 +67,128 @@ def _all_places() -> list[tuple[float, float, str, str, str]]:
     return [p for cell in _index().values() for p in cell]
 
 
+US_STATES = {
+    "al": "Alabama", "ak": "Alaska", "az": "Arizona", "ar": "Arkansas", "ca": "California", "co": "Colorado", "ct": "Connecticut",
+    "de": "Delaware", "fl": "Florida", "ga": "Georgia", "hi": "Hawaii", "id": "Idaho", "il": "Illinois", "in": "Indiana", "ia": "Iowa",
+    "ks": "Kansas", "ky": "Kentucky", "la": "Louisiana", "me": "Maine", "md": "Maryland", "ma": "Massachusetts", "mi": "Michigan",
+    "mn": "Minnesota", "ms": "Mississippi", "mo": "Missouri", "mt": "Montana", "ne": "Nebraska", "nv": "Nevada", "nh": "New Hampshire",
+    "nj": "New Jersey", "nm": "New Mexico", "ny": "New York", "nc": "North Carolina", "nd": "North Dakota", "oh": "Ohio", "ok": "Oklahoma",
+    "or": "Oregon", "pa": "Pennsylvania", "ri": "Rhode Island", "sc": "South Carolina", "sd": "South Dakota", "tn": "Tennessee", "tx": "Texas",
+    "ut": "Utah", "vt": "Vermont", "va": "Virginia", "wa": "Washington", "wv": "West Virginia", "wi": "Wisconsin", "wy": "Wyoming", "dc": "Washington, D.C.",
+}
+_ABBREV = {"st": "saint", "st.": "saint", "ste": "sainte", "ste.": "sainte", "ft": "fort", "ft.": "fort", "mt": "mount", "mt.": "mount", "pt": "point", "pt.": "point"}
+_STREET = re.compile(r"\b(\d+[a-z]?|hwy|highway|state|route|rt|rd|road|st(?:reet)?|ave(?:nue)?|blvd|boulevard|dr(?:ive)?|ln|lane|ct|court|pl|way|suite|ste|apt|unit|n|s|e|w|north|south|east|west)\b\.?", re.I)
+_ZIP = re.compile(r"\b\d{5}(?:-\d{4})?\b|\b[a-z]\d[a-z] ?\d[a-z]\d\b|\b[a-z]{1,2}\d{1,2}[a-z]? ?\d[a-z]{2}\b", re.I)
+_COORD = re.compile(r"^\s*([+-]?\d{1,2}(?:\.\d+)?)\s*[, ]\s*([+-]?\d{1,3}(?:\.\d+)?)\s*$")
+
+
+def _expand(words: str) -> str:
+    return " ".join(_ABBREV.get(w, w) for w in words.split())
+
+
+def parse_query(query: str) -> dict:
+    """Pull the useful parts out of what someone typed: a place name, a region/state, a country, or coordinates.
+
+    "14400 State Hwy Z, St Robert, MO 65584, United States" -> name "saint robert", region "missouri", country "united states".
+    """
+    q = (query or "").strip()
+    m = _COORD.match(q)
+    if m:
+        lat, lon = float(m.group(1)), float(m.group(2))
+        if abs(lat) <= 90 and abs(lon) <= 180:
+            return {"lat": lat, "lon": lon}
+    parts = [p.strip() for p in q.replace(";", ",").split(",") if p.strip()]
+    cc = {v.lower(): k for k, v in countries().items()}
+    cc["usa"] = cc["us"] = "US"; cc["uk"] = "GB"; cc["united states of america"] = "US"
+    out: dict = {"names": [], "region": None, "country": None}
+    for n_, part in enumerate(parts):
+        low = part.lower()
+        tokens = low.split()
+        if tokens and tokens[0] in US_STATES and (len(tokens) == 1 or _ZIP.fullmatch(" ".join(tokens[1:]))):
+            out["region"] = US_STATES[tokens[0]].lower(); out["country"] = out["country"] or "US"    # "DE" is Delaware here, not Germany
+            continue
+        if low in cc or (low.upper() in countries() and len(low) == 2):
+            out["country"] = cc.get(low) or low.upper()
+            continue
+        if re.match(r"^\d+[a-z]?\s", low) and len(parts) > 1:
+            continue                                     # a street line ("14400 State Hwy Z"): the town is in another part
+        if low in {v.lower() for v in US_STATES.values()}:
+            out["region"] = low; out["country"] = out["country"] or "US"
+            continue
+        cleaned = _ZIP.sub(" ", low)
+        if re.search(r"\d", cleaned) or _STREET.search(cleaned) and len(_STREET.sub(" ", cleaned).split()) == 0:
+            cleaned = _STREET.sub(" ", cleaned)          # a street address: nothing here names a town
+        cleaned = re.sub(r"\s+", " ", cleaned).strip(" .")
+        if cleaned:
+            out["names"].append(_expand(cleaned))
+    if not out["names"] and parts:
+        out["names"].append(_expand(re.sub(r"\s+", " ", _ZIP.sub(" ", parts[0].lower())).strip()))
+    return out
+
+
 def search(query: str, limit: int = 8) -> list[dict]:
-    """Places whose name starts with (then contains) the query, bigger-list order kept. Offline."""
-    q = (query or "").strip().lower()
-    if len(q) < 2:
-        return []
+    """Places matching what was typed: a name, "Town, ST", a full postal address, or "lat, lon". Offline."""
+    parsed = parse_query(query)
     cc = countries()
-    starts, contains = [], []
-    for la, lo, name, region, code in _all_places():
+    if "lat" in parsed:
+        p = lookup(parsed["lat"], parsed["lon"])
+        near = f"near {p.city}, {p.country}" if p.city else (p.country or "")
+        return [{"lat": parsed["lat"], "lon": parsed["lon"], "name": f"{parsed['lat']:.4f}, {parsed['lon']:.4f}", "region": near,
+                 "country_code": p.country_code or "", "country": ""}]
+    names = [n for n in parsed["names"] if len(n) >= 2]
+    if not names:
+        return []
+    region, country = parsed["region"], parsed["country"]
+    scored: list[tuple[int, int, tuple]] = []
+    for la, lo, name, reg, code in _all_places():
         n = name.lower()
-        if n.startswith(q):
-            starts.append((la, lo, name, region, code))
-        elif q in n and len(contains) < limit * 4:
-            contains.append((la, lo, name, region, code))
-        if len(starts) >= limit * 4:
+        best = None
+        for rank, q in enumerate(names):
+            if n == q:
+                best = 0
+            elif n.startswith(q):
+                best = 1 if best is None else min(best, 1)
+            elif q in n:
+                best = 2 if best is None else min(best, 2)
+        if best is None:
+            continue
+        if country and code != country:
+            best += 3                                   # a hit in another country still shows, further down
+        if region and (reg or "").lower() != region:
+            best += 3
+        scored.append((best, len(name), (la, lo, name, reg, code)))
+        if len(scored) >= limit * 40:
             break
-    starts.sort(key=lambda p: (p[2].lower() != q, len(p[2])))      # exact name first, then the shortest names
+    scored.sort(key=lambda t: t[0])                      # stable: within a rank the bigger places (file order) come first
     out = []
-    for la, lo, name, region, code in (starts + contains)[:limit]:
-        out.append({"lat": la, "lon": lo, "name": name, "region": region or "", "country_code": code, "country": cc.get(code, code)})
+    for _, _, (la, lo, name, reg, code) in scored[:limit]:
+        out.append({"lat": la, "lon": lo, "name": name, "region": reg or "", "country_code": code, "country": cc.get(code, code)})
+    return out
+
+
+def geocode_online(query: str, timeout: float = 10) -> list[dict]:
+    """Street addresses are not in the bundled list. This asks OpenStreetMap's Nominatim, sending only the text typed.
+    Called only when you click 'Look it up online'."""
+    import urllib.parse
+    import urllib.request
+    from . import net
+    q = (query or "").strip()
+    if len(q) < 3:
+        return []
+    url = "https://nominatim.openstreetmap.org/search?format=jsonv2&limit=6&q=" + urllib.parse.quote(q)
+    req = urllib.request.Request(url, headers={"User-Agent": "ImageMagic/1.0 (personal photo library; local app)"})
+    with net.urlopen(req, timeout=timeout) as resp:
+        data = json.loads(resp.read(200_000).decode("utf-8", "replace"))
+    out = []
+    for r in data if isinstance(data, list) else []:
+        try:
+            la, lo = float(r["lat"]), float(r["lon"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        label = str(r.get("display_name") or "")
+        bits = [b.strip() for b in label.split(",")]
+        out.append({"lat": la, "lon": lo, "name": ", ".join(bits[:2]) or f"{la:.4f}, {lo:.4f}", "region": ", ".join(bits[2:4]),
+                    "country_code": "", "country": bits[-1] if bits else "", "online": True})
     return out
 
 

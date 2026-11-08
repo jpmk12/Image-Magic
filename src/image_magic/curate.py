@@ -176,7 +176,8 @@ def suggest_for_trip(conn: sqlite3.Connection, db_key: str, trip_id: int, seed_i
     if not trip:
         raise ValueError("Unknown trip")
     members = [r[0] for r in conn.execute("SELECT id FROM assets WHERE trip_id = ?", (trip_id,))]
-    member_set = set(members)
+    from . import inbox
+    member_set = set(members) | inbox.rejected_for_trip(conn, trip_id)      # rejected photos are never offered again
     # The time window comes from the trip's automatic core when it has one, so a single
     # photo you added by hand (maybe from another month) doesn't stretch it.
     core = conn.execute("SELECT MIN(taken_at), MAX(taken_at), COUNT(*) FROM assets WHERE trip_id = ? AND trip_manual = 0 "

@@ -368,6 +368,13 @@ Service features (flying log, squadron yearbook) slot into S2 (log) and S9 (year
   pages for index/chapters/trips/events/albums (+ years with everything), stories and
   milestones inline, optional voice notes; `archive` job with progress; Home panel.
 - Phase 6 complete.
+- **Feedback round** (v0.51.0): place search parses addresses (street line dropped, "St"→"Saint",
+  US state abbreviations, "Town, ST", coordinates) and an explicit online OpenStreetMap lookup
+  button; trip suggestions remember unticked photos (`trip_rejections`) from inbox cards, skips
+  and the Find-more dialog; Shift-click ranges in the review and suggestion dialogs; face cards
+  tick by face and unticked faces are detached before the merge/name; clutter split into nine
+  categories with safe defaults, a category-at-a-time view, full-size viewing from each tile and
+  Shift ranges; the burst dialog says plainly that nothing is deleted.
 - **Third review round** (v0.50.0): two independent reviewers over v0.44–v0.49 (13
   security/correctness, 9 performance findings; all measured hot spots were fine). Fixed:
   Takeout sidecars with odd shapes no longer abort cataloguing; the per-folder Takeout index
