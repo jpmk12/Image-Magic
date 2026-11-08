@@ -489,7 +489,7 @@ stories, Ask, memories, year review, books and share cover the "relive" side.
 
 ---
 
-## Phase 7: enhancements (approved: items 1–10; 11 deferred)
+## Phase 7: enhancements (all 11 built)
 
 From a tab-by-tab review of v0.42, in the order presented and agreed. School-year albums were
 dropped from the list before approval.
@@ -522,4 +522,6 @@ dropped from the list before approval.
 10. **Two iCloud accounts into one library** (built, v0.48.0). `Settings.apple_id_2` and
     `contributor_2`; the sync job runs icloudpd per account into `originals/<name>/` and the
     scan attributes that folder to the person.
-11. **Phone layout polish** (deferred). A bottom tab bar, swipe in the viewer, bigger touch targets.
+11. **Phone layout polish** (built, v0.49.0). `html.phone` (paired phone or narrow touch screen):
+    bottom tab bar with a More sheet, 3-across grid, 44 px controls, swipe in the viewer;
+    `html.remote` hides the laptop-only panels on a paired phone.

@@ -79,6 +79,43 @@
     .topbar, main { grid-column: 1; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
   }
 
+  /* ---- phone layout (a paired phone over Wi-Fi, or any narrow touch screen) */
+  html.phone body { grid-template-columns: 1fr; }
+  html.phone header.side { position: fixed; left: 0; right: 0; bottom: 0; top: auto; height: auto; z-index: 60;
+                           flex-direction: row; align-items: stretch; gap: 0; padding: 4px 4px calc(4px + env(safe-area-inset-bottom, 0px));
+                           border-right: 0; border-top: 1px solid var(--line); border-bottom: 0; overflow: visible;
+                           box-shadow: 0 -6px 20px rgba(0,0,0,.08); }
+  html.phone header.side h1, html.phone header.side .spacer, html.phone header.side #quit { display: none; }
+  html.phone nav { flex-direction: row; width: 100%; justify-content: space-around; gap: 0; }
+  html.phone nav button { flex: 1 1 0; flex-direction: column; justify-content: center; gap: 3px; min-height: 56px; padding: 6px 2px;
+                          font-size: 11px; font-weight: 550; white-space: nowrap; text-align: center; border-radius: 12px; }
+  html.phone nav button svg { display: block; width: 24px; height: 24px; }
+  html.phone nav button[data-phone="more"], html.phone nav button[data-tab="organize"], html.phone nav button[data-tab="settings"],
+  html.phone nav button[data-tab="log"] { display: none; }
+  nav button#nav-more { display: none; }
+  html.phone nav button#nav-more { display: flex; }
+  html.phone .topbar, html.phone main { grid-column: 1; }
+  html.phone main { padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px)); }
+  #more-sheet { position: fixed; left: 8px; right: 8px; bottom: calc(76px + env(safe-area-inset-bottom, 0px)); z-index: 59;
+                background: var(--panel); border: 1px solid var(--line); border-radius: 16px; box-shadow: var(--shadow); padding: 8px;
+                display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+  #more-sheet button { display: flex; flex-direction: column; align-items: center; gap: 4px; background: var(--soft); border: 0; border-radius: 12px;
+                       padding: 12px 6px; font: inherit; font-size: 12px; font-weight: 550; color: var(--text); min-height: 64px; }
+  #more-sheet button svg { width: 24px; height: 24px; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+  #more-sheet button.active { background: var(--accent-soft); color: var(--accent); }
+  html.phone button.btn { min-height: 44px; padding: 10px 16px; }
+  html.phone select, html.phone input[type=text], html.phone input[type=email], html.phone input[type=number] { min-height: 44px; }
+  html.phone label.chip, html.phone .chip { min-height: 40px; display: inline-flex; align-items: center; }
+  html.phone .grid { grid-template-columns: repeat(3, 1fr); gap: 4px; }
+  html.phone .mem-row .tile, html.phone .hol-year { width: calc(33.33vw - 16px); }
+  html.phone .lb .nav { display: none; }
+  html.phone .lb .close { width: 48px; height: 48px; font-size: 24px; top: max(10px, env(safe-area-inset-top, 0px)); }
+  html.phone .lb aside { font-size: 15px; padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px)); }
+  html.phone .lb aside .tag { padding: 7px 14px; font-size: 14px; }
+  html.remote .panel:has(button[data-run="sync"]), html.remote #importpanel, html.remote #cleanpanel { display: none; }
+  html.phone .lb .stage::after { content: ""; position: absolute; left: 50%; bottom: 8px; width: 36px; height: 4px; border-radius: 2px;
+                                 background: rgba(255,255,255,.35); transform: translateX(-50%); }
+
   /* ---- surfaces */
   .panel { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 20px 22px;
            margin-bottom: 16px; box-shadow: var(--shadow); }
@@ -343,15 +380,17 @@
     <button data-tab="home" class="active"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11.5 12 4l9 7.5"/><path d="M5 10v10h14V10"/></svg>Home</button>
     <button data-tab="photos"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>Photos</button>
     <button data-tab="organize"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h10M4 17h7"/><path d="M17 15l2 2 4-4"/></svg>Organize</button>
-    <button data-tab="timeline"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Timeline</button>
+    <button data-tab="timeline" data-phone="more"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Timeline</button>
     <button data-tab="memories"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l1.8 4.6L18.5 9l-4.7 1.4L12 15l-1.8-4.6L5.5 9l4.7-1.4z"/><path d="M19 15l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8z"/></svg>Memories</button>
     <button data-tab="people"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><circle cx="17" cy="9" r="2.5"/><path d="M15.5 14.5a5 5 0 0 1 6 4.5"/></svg>People</button>
-    <button data-tab="trips"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10.5 13.5 3 11l1.5-1.5 7 1 5-5a1.6 1.6 0 0 1 2.3 2.3l-5 5 1 7L13 21l-2.5-7.5z"/></svg>Trips &amp; events</button>
+    <button data-tab="trips" data-phone="more"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10.5 13.5 3 11l1.5-1.5 7 1 5-5a1.6 1.6 0 0 1 2.3 2.3l-5 5 1 7L13 21l-2.5-7.5z"/></svg>Trips &amp; events</button>
     <button data-tab="map"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s6-6.2 6-11a6 6 0 0 0-12 0c0 4.8 6 11 6 11z"/><circle cx="12" cy="10" r="2.2"/></svg>Map</button>
-    <button data-tab="ask"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v11H9l-5 4z"/><path d="M9.5 9.2a2.5 2.5 0 1 1 3.5 2.3c-.7.3-1 .8-1 1.5"/><circle cx="12" cy="15" r=".4"/></svg>Ask</button>
+    <button data-tab="ask" data-phone="more"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v11H9l-5 4z"/><path d="M9.5 9.2a2.5 2.5 0 1 1 3.5 2.3c-.7.3-1 .8-1 1.5"/><circle cx="12" cy="15" r=".4"/></svg>Ask</button>
     <button data-tab="settings"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>Settings</button>
     <button data-tab="log"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h10"/></svg>Activity log</button>
+    <button id="nav-more" type="button" aria-haspopup="true"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg>More</button>
   </nav>
+  <div id="more-sheet" class="hidden" role="menu"></div>
   <div class="spacer"></div>
   <button class="btn" id="quit" title="Stop Image Magic">Quit</button>
 </header>
@@ -1166,6 +1205,9 @@
 <script src="/static/vendor/leaflet.markercluster.js"></script>
 
 <script>
+// A paired phone (HTTPS over Wi-Fi) or any narrow touch screen gets the phone layout: bottom tabs, bigger targets, swipe.
+if (location.protocol === "https:" || (matchMedia("(max-width: 700px)").matches && matchMedia("(pointer: coarse)").matches)) document.documentElement.classList.add("phone");
+if (location.protocol === "https:") document.documentElement.classList.add("remote");   // a paired phone: laptop-only panels stay out of the way
 // The launcher opens this page as /#t=<token>. Keep the token for this tab only,
 // and remove it from the address bar.
 const TOKEN = (() => {
@@ -1211,6 +1253,8 @@ function toast(msg) {
 // ---- tabs
 function showTab(name) {
   $$("nav button").forEach(b => b.classList.toggle("active", b.dataset.tab === name));
+  $("#nav-more").classList.toggle("active", $$('nav button[data-phone="more"]').some(b => b.dataset.tab === name));
+  $("#more-sheet").classList.add("hidden");
   const active = $$("nav button").find(b => b.dataset.tab === name);
   if (active) $("#page-title").textContent = active.textContent.trim();
   $$("main > section").forEach(s => s.classList.toggle("hidden", s.id !== "tab-" + name));
@@ -3431,6 +3475,29 @@ $("#tell-rec").onclick = async () => {
   $("#tell-note").textContent = "Recording… press R or Stop when you're done.";
 };
 $("#tell-stop").onclick = () => { if (tell.rec) tell.rec.stop(); $("#tell-rec").classList.remove("hidden"); $("#tell-stop").classList.add("hidden"); };
+
+// ---- phone: the More sheet and swipe in the viewer
+$("#nav-more").onclick = () => {
+  const sheet = $("#more-sheet");
+  if (!sheet.classList.contains("hidden")) return sheet.classList.add("hidden");
+  sheet.replaceChildren(...$$('nav button[data-phone="more"]').map(src => {
+    const b = document.createElement("button"); b.type = "button"; b.innerHTML = src.innerHTML; b.classList.toggle("active", src.classList.contains("active"));
+    b.onclick = () => { sheet.classList.add("hidden"); src.click(); };
+    return b;
+  }));
+  sheet.classList.remove("hidden");
+};
+document.addEventListener("click", ev => { if (!ev.target.closest("#more-sheet, #nav-more")) $("#more-sheet").classList.add("hidden"); });
+(() => {   // swipe left/right for the next/previous photo, down to close
+  const stage = $("#lb-stage"); let x0 = 0, y0 = 0, t0 = 0;
+  stage.addEventListener("touchstart", e => { if (e.touches.length !== 1) return; x0 = e.touches[0].clientX; y0 = e.touches[0].clientY; t0 = Date.now(); }, { passive: true });
+  stage.addEventListener("touchend", e => {
+    if (lbIndex < 0 || !e.changedTouches.length || Date.now() - t0 > 800) return;
+    const dx = e.changedTouches[0].clientX - x0, dy = e.changedTouches[0].clientY - y0;
+    if (Math.abs(dx) > 50 && Math.abs(dy) < Math.abs(dx) / 2) (dx < 0 ? $("#lb-next") : $("#lb-prev")).click();
+    else if (dy > 100 && Math.abs(dx) < 60) closeLightbox();
+  }, { passive: true });
+})();
 
 // ---- voice notes
 const voice = { kind: "photo", id: 0, rec: null, chunks: [], t0: 0, stream: null };

@@ -196,6 +196,11 @@ program only. Your photos and settings are kept.
   `originals/imported/<year>/<month>/`. Your files are copied, never moved. The optional
   **From** box names whose photos they are (a spouse, an old Android phone); that name becomes a
   filter on the Home tab's Family panel.
+- **On a phone:** the paired-phone view (and any narrow touch screen) gets a bottom tab bar
+  with Home, Photos, Memories, People, Map and a More sheet for Timeline, Trips & events and
+  Ask; three photos across; 44 px buttons; and in the viewer a swipe left or right moves
+  between photos and a swipe down closes it. Laptop-only panels (sync, import) stay off the
+  phone's Home tab.
 - **Google Photos Takeout:** point the import at a `Takeout/Google Photos` folder. Google's json
   sidecars (dates, places, favourites, descriptions, even the truncated and renamed ones) travel
   with their photos, so a picture whose file carries no date or location still lands on the right
