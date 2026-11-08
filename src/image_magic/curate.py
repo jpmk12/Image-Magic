@@ -21,6 +21,22 @@ VISUAL_DAYS = 60          # how far from the trip to look for visually similar p
 VISUAL_MIN = 0.62         # similarity to the trip's average look
 SEED_MIN = 0.72           # similarity to the photo you clicked
 MAX_SUGGESTIONS = 80
+SHOT_GAP = 60             # a filename number this close to the trip's numbers on both sides counts as "shot between"
+SHOT_DAYS = 400           # how far a wrongly-dated photo may sit from the trip and still be matched by its number
+TRAVEL_DAYS = 2           # travel-day photos this far before/after the trip belong to it
+TRAVEL_TERMS = ("airport", "airplane", "aeroplane", "plane", "boarding", "boarding pass", "runway", "terminal", "departure", "arrival",
+                "baggage", "luggage", "suitcase", "passport", "window seat", "in flight", "inflight", "train station", "railway",
+                "platform", "ferry", "cruise ship", "road trip", "highway", "rest stop", "car window", "rental car", "hotel lobby", "check-in")
+_SHOT_RE = __import__("re").compile(r"^(.*?)(\d{3,6})(?:\D.*)?$")
+
+
+def shot_number(path: str) -> tuple[str, int] | None:
+    """IMG_4411.HEIC -> ("img_", 4411): the camera's running number, with its prefix so IMG_ and DSC_ never mix."""
+    stem = path.rsplit("/", 1)[-1].rsplit(".", 1)[0]
+    m = _SHOT_RE.match(stem)
+    if not m:
+        return None
+    return (m.group(1).lower(), int(m.group(2)))
 
 
 def _recount(conn: sqlite3.Connection, trip_id: int) -> None:
@@ -211,6 +227,71 @@ def suggest_for_trip(conn: sqlite3.Connection, db_key: str, trip_id: int, seed_i
                 score *= 0.3
                 why += f", but {int(km):,} km away"
         note(r["id"], score, why)
+
+    # 1b. Travel days: the airport, the train, the road, just before or after the trip, are part of it.
+    describe.ensure_schema(conn)
+    tlo, thi = (start - timedelta(days=TRAVEL_DAYS)).isoformat(), (end + timedelta(days=TRAVEL_DAYS)).isoformat()
+    for r in conn.execute(
+            f"""SELECT d.asset_id, d.caption, d.keywords FROM descriptions d JOIN assets a ON a.id = d.asset_id
+                WHERE a.{VISIBLE.replace(' AND ', ' AND a.')} AND a.taken_at BETWEEN ? AND ? AND d.status = 'ok'
+                  AND (a.trip_manual = 0 OR a.trip_id = ?)""", (tlo, thi, trip_id)):
+        text = ((r["caption"] or "") + " " + " ".join(json.loads(r["keywords"] or "[]"))).lower()
+        hit = next((t for t in TRAVEL_TERMS if t in text), None)
+        if hit:
+            note(r["asset_id"], 1.0, f"a travel day: {hit}")
+
+    # 1c. Shot order: a photo numbered between two of the trip's photos was taken on the trip, whatever its clock said.
+    by_prefix: dict[str, list[int]] = {}
+    for r in conn.execute(f"SELECT path FROM assets WHERE trip_id = ?", (trip_id,)):
+        sn = shot_number(r["path"])
+        if sn:
+            by_prefix.setdefault(sn[0], []).append(sn[1])
+    if by_prefix:
+        import bisect
+        for k in by_prefix:
+            by_prefix[k].sort()
+        # Camera counters wrap every 10,000 shots (about a year or two), so look within a year on either side: enough
+        # for a camera whose clock was a year off, not enough to confuse last year's IMG_0503 with this one.
+        vlo_, vhi_ = (start - timedelta(days=SHOT_DAYS)).isoformat(), (end + timedelta(days=SHOT_DAYS)).isoformat()
+        for r in conn.execute(f"SELECT id, path FROM assets WHERE {VISIBLE} AND (taken_at BETWEEN ? AND ? OR taken_at IS NULL) "
+                              "AND (trip_manual = 0 OR trip_id = ?)", (vlo_, vhi_, trip_id)):
+            sn = shot_number(r["path"])
+            if not sn or sn[0] not in by_prefix:
+                continue
+            nums = by_prefix[sn[0]]
+            i = bisect.bisect_left(nums, sn[1])
+            if 0 < i < len(nums) and nums[i - 1] != sn[1] and nums[i] - nums[i - 1] <= SHOT_GAP:
+                note(r["id"], 1.0, f"shot between two photos of the trip ({sn[0].upper()}{nums[i - 1]} and {sn[0].upper()}{nums[i]})")
+
+    # 1d. People: the trip has a cast. Photos of the cast score up; photos of someone who is never on the trip score down.
+    cast: Counter = Counter()
+    try:
+        for r in conn.execute("""SELECT f.person_id, COUNT(DISTINCT f.asset_id) AS n FROM faces f JOIN assets a ON a.id = f.asset_id
+                                 JOIN persons p ON p.id = f.person_id WHERE a.trip_id = ? AND p.name IS NOT NULL AND p.hidden = 0
+                                 GROUP BY f.person_id""", (trip_id,)):
+            cast[r["person_id"]] = r["n"]
+        named_in_trip = conn.execute("""SELECT COUNT(DISTINCT f.asset_id) FROM faces f JOIN assets a ON a.id = f.asset_id JOIN persons p ON p.id = f.person_id
+                                        WHERE a.trip_id = ? AND p.name IS NOT NULL AND p.hidden = 0""", (trip_id,)).fetchone()[0]
+    except sqlite3.OperationalError:
+        named_in_trip = 0
+    if cast and named_in_trip >= 3:
+        on_trip = {pid for pid, n in cast.items() if n >= 2 or n >= max(1, named_in_trip // 10)}
+        names = {r["id"]: r["name"] for r in conn.execute("SELECT id, name FROM persons WHERE name IS NOT NULL")}
+        seen: dict[int, set] = {}
+        for r in conn.execute(f"""SELECT f.asset_id, f.person_id FROM faces f JOIN assets a ON a.id = f.asset_id JOIN persons p ON p.id = f.person_id
+                                  WHERE a.{VISIBLE.replace(' AND ', ' AND a.')} AND a.taken_at BETWEEN ? AND ? AND p.name IS NOT NULL AND p.hidden = 0
+                                    AND a.trip_id IS NOT ?""", (lo, hi, trip_id)):
+            seen.setdefault(r["asset_id"], set()).add(r["person_id"])
+        for aid, people in seen.items():
+            if aid in member_set:
+                continue
+            shared = sorted(names[p] for p in people if p in on_trip)
+            strangers = sorted(names[p] for p in people if p not in cast)
+            if shared:
+                note(aid, min(0.8, 0.4 * len(shared)), "shows " + " and ".join(shared[:3]) + (", who are on this trip" if len(shared) > 1 else ", who is on this trip"))
+            if strangers and not shared and aid in scores:
+                scores[aid] *= 0.3
+                reasons[aid].append("but shows " + " and ".join(strangers[:2]) + (", who are not in any photo of this trip" if len(strangers) > 1 else ", who is not in any photo of this trip"))
 
     # 2. Looks: similar to the trip's photos (and to the one you clicked).
     search.ensure_schema(conn)

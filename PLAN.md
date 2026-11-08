@@ -368,6 +368,10 @@ Service features (flying log, squadron yearbook) slot into S2 (log) and S9 (year
   pages for index/chapters/trips/events/albums (+ years with everything), stories and
   milestones inline, optional voice notes; `archive` job with progress; Home panel.
 - Phase 6 complete.
+- **Trip suggestion signals** (v0.54.0): shot-order bracketing (`curate.shot_number`, same
+  camera prefix, within a year, gap ≤ 60), the trip's cast from named faces (shared people
+  score up, strangers scale down), travel-day captions within two days. Items 1–3 of the
+  trips/albums plan; 4, 6 next, then album ideas and learned weights.
 - **Clutter keepers** (v0.53.0): `clutter_keep` table; photos left unticked in an opened
   clean-up category, or unticked on an inbox clutter card, are never listed as clutter again;
   "Show kept photos again" forgets them. Set location takes pasted coordinates and Google /

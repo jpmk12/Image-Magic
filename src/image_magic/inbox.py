@@ -84,7 +84,7 @@ def _trip_additions(conn, db_key) -> list[dict]:
         strong = [i for i in s["items"] if i["strong"]]
         if len(strong) < 3:
             continue
-        during = sum(1 for i in strong if any("during" in r for r in i["reasons"]))
+        during = sum(1 for i in strong if any(("during" in r or "shot between" in r or "travel day" in r) for r in i["reasons"]))
         conf = 0.92 if during == len(strong) else 0.84 if during >= len(strong) / 2 else 0.74
         ids = [i["id"] for i in strong]
         reasons = sorted({r.split(",")[0] for i in strong for r in i["reasons"][:1]})[:3]

@@ -344,7 +344,12 @@ program only. Your photos and settings are kept.
 - **Fixing mistakes:** everything the app works out can be corrected, and your corrections
   stick through rebuilds. In the viewer: **Trip ✎ change** moves a photo to another trip, a
   new trip, or no trip, and as soon as you do, the app suggests other photos that belong with
-  it (by date, by how they look, and by their captions) for you to tick and add. **Find more**
+  it (by date, by how they look, by their captions, by the camera's shot numbers, by who is in
+  them, and by travel-day captions) for you to tick and add. A photo numbered between two
+  photos of the trip is taken as part of it even if its clock was wrong; a photo showing
+  people who are on the trip scores up, one showing only someone who never appears on it
+  scores down, and the reason says so; airport, plane, train and road photos the day before or
+  after count as the trip's travel days. **Find more**
   on a trip card does the same at any time. Photos you leave unticked, in that dialog or in an
   inbox trip card, are remembered as "not this trip" and never suggested for it again;
   Shift-click selects a range. On a face card you can untick the faces that are not that
