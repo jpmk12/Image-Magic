@@ -94,14 +94,21 @@ def test_import_job_passes_the_name(tmp_path):
 
 def test_second_account_settings_and_command():
     s = Settings.from_dict({"apple_id": "me@icloud.com", "apple_id_2": "them@icloud.com", "contributor_2": " Sam / <x> ", "library_path": "/lib"})
-    assert s.contributor_2 == "Sam  x"
+    assert s.contributor_2 == "Sam x"
     assert [a[0] for a in s.accounts] == ["me@icloud.com", "them@icloud.com"]
-    assert s.accounts[1][1].name == "Sam  x" and s.accounts[1][2] == "Sam  x" and s.accounts[0][2] is None
+    assert s.accounts[1][1].parts[-2:] == ("accounts", "Sam x") and s.accounts[1][2] == "Sam x" and s.accounts[0][2] is None
     cmd = sync.build_command("icloudpd", s, mode="quick", account=2)
-    assert cmd[cmd.index("--username") + 1] == "them@icloud.com" and cmd[cmd.index("--directory") + 1].endswith("Sam  x")
+    assert cmd[cmd.index("--username") + 1] == "them@icloud.com" and cmd[cmd.index("--directory") + 1].endswith("accounts/Sam x")
     sync.assert_never_deletes(cmd)
     # a name is derived when only the id is given; one account when the second is blank or the same
     assert Settings.from_dict({"apple_id_2": "them@icloud.com"}).contributor_2 == "them"
+    # names that could escape the library, hide the folder, or collide with year folders are not accepted as-is
+    from image_magic.settings import clean_name
+    assert clean_name("../../x") == "x" and clean_name(".sam") == "sam" and clean_name("Sam.") == "Sam"
+    assert clean_name("2019") == "" and clean_name("..") == "" and clean_name("imported") == "imported"
+    assert Settings.from_dict({"apple_id_2": "../../x@icloud.com"}).contributor_2 == "x"
+    assert Settings.from_dict({"apple_id_2": "2019@icloud.com"}).contributor_2 == "second account"
+    assert Settings.from_dict({"apple_id_2": "them@icloud.com", "contributor_2": "sam_j"}).contributor_2 == "sam_j"
     assert len(Settings.from_dict({"apple_id": "a@b.c", "apple_id_2": "a@b.c"}).accounts) == 1
     assert len(Settings(apple_id="a@b.c").accounts) == 1
 
@@ -113,7 +120,12 @@ def test_second_account_folder_is_attributed(tmp_path):
     make_photo(orig / "Sam/2019/IMG_2.JPG", datetime(2019, 3, 2), seed=2)
     conn = catalog.connect(lib / "library.db")
     catalog.scan(conn, orig)
+    make_photo(orig / "SamXj/2019/IMG_3.JPG", datetime(2019, 3, 3), seed=3)
+    make_photo(orig / "Sam_j/2019/IMG_4.JPG", datetime(2019, 3, 4), seed=4)
+    catalog.scan(conn, orig)
     assert catalog.attribute_folder(conn, "Sam", "Sam") == 1
     rows = dict(conn.execute("SELECT path, contributor FROM assets").fetchall())
     assert rows["Sam/2019/IMG_2.JPG"] == "Sam" and rows["2019/IMG_1.JPG"] is None
     assert catalog.attribute_folder(conn, "Sam", "Sam") == 0                    # already named
+    assert catalog.attribute_folder(conn, "Sam_j", "Sam J") == 1                 # '_' is not a wildcard
+    assert dict(conn.execute("SELECT path, contributor FROM assets").fetchall())["SamXj/2019/IMG_3.JPG"] is None

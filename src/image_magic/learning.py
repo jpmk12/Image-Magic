@@ -40,7 +40,7 @@ CREATE TABLE IF NOT EXISTS tuning (
 """
 
 DEFAULTS = {"trip.gap_days": 3.0, "trip.min_photos": 5.0, "face.join": 0.45}
-RANGES = {"trip.gap_days": (3.0, 8.0), "trip.min_photos": (3.0, 12.0), "face.join": (0.38, 0.55)}
+RANGES = {"trip.gap_days": (3.0, 8.0), "trip.min_photos": (3.0, 8.0), "face.join": (0.40, 0.55)}
 AUTO_DEFAULT = 0.9
 MIN_EVIDENCE = 5          # decisions of one sort before anything moves
 
@@ -126,16 +126,16 @@ def learn(conn: sqlite3.Connection) -> dict[str, dict]:
         out["trip.gap_days"] = (round(v, 1), len(gaps), f"You merged {len(gaps)} pairs of trips; up to {v:g} quiet days now stay one trip.")
     # Trips you dissolved ("not a trip") tell how small a group is too small.
     sizes = _vals(conn, "trip_delete")
-    if len(sizes) >= 3 and _q(sizes, 0.75) <= 12:
+    if len(sizes) >= MIN_EVIDENCE and _q(sizes, 0.75) <= 12:        # raising this removes small automatic trips, so it needs more evidence
         v = _clamp("trip.min_photos", max(DEFAULTS["trip.min_photos"], float(int(statistics.median(sizes)) + 1)))
         out["trip.min_photos"] = (v, len(sizes), f"You dissolved {len(sizes)} small trips; a trip now needs at least {int(v)} photos.")
     # People you merged were further apart than the join rule allows; faces you dismissed were closer than it should trust.
     merged = [s for s in _vals(conn, "people_merge") if s > 0]
     dismissed = _vals(conn, "review:face", "dismissed")
     confirmed = _vals(conn, "review:face", "confirmed")
-    if len(merged) >= 3 or len(dismissed) >= MIN_EVIDENCE:
+    if len(merged) >= MIN_EVIDENCE or len(dismissed) >= MIN_EVIDENCE:
         v = DEFAULTS["face.join"]
-        if len(merged) >= 3:
+        if len(merged) >= MIN_EVIDENCE:
             v = min(v, _q(merged, 0.25) - 0.01)
         if len(dismissed) >= MIN_EVIDENCE:
             v = max(v, _q(dismissed, 0.75) + 0.01)
@@ -144,7 +144,7 @@ def learn(conn: sqlite3.Connection) -> dict[str, dict]:
         v = _clamp("face.join", v)
         if abs(v - DEFAULTS["face.join"]) >= 0.005:
             parts = []
-            if len(merged) >= 3:
+            if len(merged) >= MIN_EVIDENCE:
                 parts.append(f"{len(merged)} people merged")
             if len(dismissed) >= MIN_EVIDENCE:
                 parts.append(f"{len(dismissed)} faces dismissed")

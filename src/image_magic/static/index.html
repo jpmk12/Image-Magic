@@ -113,6 +113,7 @@
   html.phone .lb aside { font-size: 15px; padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px)); }
   html.phone .lb aside .tag { padding: 7px 14px; font-size: 14px; }
   html.remote .panel:has(button[data-run="sync"]), html.remote #importpanel, html.remote #cleanpanel { display: none; }
+  html.remote button[title^="Tell the story"] { display: none; }
   html.phone .lb .stage::after { content: ""; position: absolute; left: 50%; bottom: 8px; width: 36px; height: 4px; border-radius: 2px;
                                  background: rgba(255,255,255,.35); transform: translateX(-50%); }
 
@@ -1912,9 +1913,10 @@ async function pollLog() {
 const media = (kind, id) => `/media/${kind}/${id}?t=${encodeURIComponent(TOKEN)}`;
 // Video posters: the first frame, decoded here once and kept by the app as the video's thumbnail.
 const posterQ = { waiting: [], busy: 0, done: new Set(), failed: new Set() };
+const REMOTE = document.documentElement.classList.contains("remote");   // a paired phone: it browses, the laptop decodes
 function videoTile(b, it) {
   const img = document.createElement("img"); img.loading = "lazy"; img.decoding = "async"; img.alt = ""; img.src = media("thumb", it.id);
-  img.onerror = () => { img.remove(); b.classList.add("video"); if (!b.textContent) b.textContent = "▶"; requestPoster(it.id, b); };
+  img.onerror = () => { img.remove(); b.classList.add("video"); if (!b.textContent) b.textContent = "▶"; if (!REMOTE) requestPoster(it.id, b); };
   const badge = document.createElement("span"); badge.className = "badge"; badge.textContent = "▶";
   b.append(img, badge);
 }
@@ -1925,7 +1927,7 @@ function requestPoster(id, tile) {
 function pumpPosters() {
   while (posterQ.busy < 2 && posterQ.waiting.length) {
     const { id, tile } = posterQ.waiting.shift(); posterQ.busy++;
-    makePoster(id).then(ok => { if (ok && tile && tile.isConnected) { tile.classList.remove("video"); tile.textContent = ""; const img = document.createElement("img"); img.src = media("thumb", id) + "&v=" + Date.now(); img.alt = ""; const badge = document.createElement("span"); badge.className = "badge"; badge.textContent = "▶"; tile.append(img, badge); } else posterQ.failed.add(id); })
+    makePoster(id).then(ok => { if (ok && tile && tile.isConnected) { tile.classList.remove("video"); tile.textContent = ""; const img = document.createElement("img"); img.src = media("thumb", id) + "&v=" + Date.now(); img.alt = ""; const badge = document.createElement("span"); badge.className = "badge"; badge.textContent = "▶"; tile.append(img, badge); } else { posterQ.failed.add(id); if (!ok) fetch("/api/poster?id=" + id + "&failed=1", { method: "POST", headers: { "X-Token": TOKEN } }).catch(() => {}); } })
       .catch(() => posterQ.failed.add(id)).finally(() => { posterQ.busy--; pumpPosters(); });
   }
 }
@@ -2984,15 +2986,16 @@ function showGrow(i, stop) {
 }
 $("#grow-play").onclick = () => { if (grow.playing) showGrow(grow.i, true); else { grow.playing = true; $("#grow-play").textContent = "❚❚"; showGrow(grow.i + 1); } };
 $("#grow-close").onclick = () => { clearTimeout(grow.timer); grow.playing = false; $("#grow").classList.add("hidden"); };
+function downloadExport(file) {
+  // A plain link: the browser streams the file to disk with its own progress, nothing is held in memory.
+  const a = document.createElement("a"); a.href = `/media/export/${encodeURIComponent(file)}?t=${encodeURIComponent(TOKEN)}`; a.download = file; a.click();
+}
 async function downloadBook(kind, id, note) {
   if (note) note.textContent = "Making the book… (a minute or two)";
   toast("Making the book… it will download when ready.");
   try {
     const r = await api(`/api/book?kind=${kind}&id=${encodeURIComponent(id)}`);
-    const res = await fetch(`/media/export/${encodeURIComponent(r.file)}`, { headers: { "X-Token": TOKEN } });
-    const blob = await res.blob(), url = URL.createObjectURL(blob);
-    const a = document.createElement("a"); a.href = url; a.download = r.file; a.click();
-    setTimeout(() => URL.revokeObjectURL(url), 60000);
+    downloadExport(r.file);
     if (note) note.textContent = "Saved to the exports folder in your library."; toast("Book ready: " + r.file);
   } catch (e) { toast(e.message); if (note) note.textContent = e.message; }
 }
@@ -3092,11 +3095,11 @@ async function openShare(filters, title, strict) {
     $("#share-check").textContent = `${fmt(r.total)} photos will be shared.` + (r.no_descriptions ? " Turn on AI descriptions to get a sensitivity check of what's in the photos." : "")
       + (r.strict ? ` Strict filter: ${r.removed.length} photo(s) with readable text, tail numbers, badges or documents are left out automatically, and the page carries no captions, places or names.` : "");
     if (r.flagged.length) {
-      const h = document.createElement("p"); h.innerHTML = `<b>${r.flagged.length} photo(s) look sensitive.</b> Untick any you want to leave out:`;
+      const h = document.createElement("p"); h.innerHTML = `<b>${r.flagged.length} photo(s) look sensitive and are left out.</b> Tick any you do want to share:`;
       $("#share-flags").append(h);
       for (const f of r.flagged) {
         const row = document.createElement("label"); row.className = "flag";
-        row.innerHTML = `<input type="checkbox" data-id="${f.id}" checked><img alt=""><span><span class="cap"></span><br><span class="r"></span></span>`;   // ticked = shared, as the label says
+        row.innerHTML = `<input type="checkbox" data-id="${f.id}"><img alt=""><span><span class="cap"></span><br><span class="r"></span></span>`;   // unticked = left out: privacy is the default
         row.querySelector("img").src = media("thumb", f.id);
         row.querySelector(".cap").textContent = f.caption || fmtDate(f.taken_at);
         row.querySelector(".r").textContent = "Flagged for: " + f.reasons.join(", ");
@@ -3109,17 +3112,15 @@ $("#f-share").onclick = () => openShare(grid.filters, $("#f-trip").textContent.r
 $("#share-close").onclick = () => $("#share").classList.add("hidden");
 $("#share-go").onclick = async () => {
   const exclude = [...$$("#share-flags input:not(:checked)")].map(i => +i.dataset.id);
+  if (exclude.length && !confirm(`${exclude.length} flagged photo${exclude.length > 1 ? "s are" : " is"} left out. Export the rest?`)) return;
   const f = shareState.filters;
   const story_key = f.trip ? "trip:" + f.trip : f.chapter ? "chapter:" + f.chapter : f.event ? "event:" + f.event : f.year && !f.month ? "year:" + f.year : null;
   $("#share-note").textContent = "Exporting…"; $("#share-go").disabled = true;
   try {
     const r = await api("/api/share/export", { filters: f, title: $("#share-title").value, exclude, story_key, voice: $("#share-voice").checked, strict: shareState.strict, zip: $("#share-zip").checked });
     if (r.file) {
-      $("#share-note").textContent = "Downloading " + r.file + "…";
-      const res = await fetch(`/media/export/${encodeURIComponent(r.file)}`, { headers: { "X-Token": TOKEN } });
-      const blob = await res.blob(), url = URL.createObjectURL(blob);
-      const a = document.createElement("a"); a.href = url; a.download = r.file; a.click(); setTimeout(() => URL.revokeObjectURL(url), 60000);
-      $("#share-note").textContent = `Done: ${r.file} (${(blob.size / 1048576).toFixed(1)} MB). Also kept in the exports folder of your library.`;
+      downloadExport(r.file);
+      $("#share-note").textContent = `Done: ${r.file} is downloading (your browser shows the progress). Also kept in the exports folder of your library.`;
     } else $("#share-note").textContent = "Done: " + r.folder;
   } catch (e) { $("#share-note").textContent = e.message; }
   $("#share-go").disabled = false;

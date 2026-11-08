@@ -88,12 +88,15 @@ def merge_trips(conn: sqlite3.Connection, src: int, dst: int) -> None:
     """Fold trip `src` into `dst` (your decision: the result is kept across rebuilds)."""
     if src == dst or not conn.execute("SELECT 1 FROM trips WHERE id = ?", (dst,)).fetchone():
         raise ValueError("Pick a different trip to merge into")
-    a, b = (conn.execute("SELECT start_at, end_at FROM trips WHERE id = ?", (t,)).fetchone() for t in (src, dst))
-    if a and b:
-        from . import learning
-        first, second = sorted((a, b), key=lambda r: r["start_at"])
-        gap = (_parse(second["start_at"]) - _parse(first["end_at"])).total_seconds() / 86400
-        learning.record(conn, "trip_merge", "done", round(max(0.0, gap), 2), {"from": src, "into": dst})
+    try:
+        a, b = (conn.execute("SELECT start_at, end_at FROM trips WHERE id = ?", (t,)).fetchone() for t in (src, dst))
+        if a and b:
+            from . import learning
+            first, second = sorted((a, b), key=lambda r: r["start_at"])
+            gap = (_parse(second["start_at"]) - _parse(first["end_at"])).total_seconds() / 86400
+            learning.record(conn, "trip_merge", "done", round(max(0.0, gap), 2), {"from": src, "into": dst})
+    except Exception:
+        pass
     conn.execute("UPDATE assets SET trip_id = ?, trip_manual = 1 WHERE trip_id = ?", (dst, src))
     conn.execute("UPDATE trips SET manual = 1, title_locked = 1 WHERE id = ?", (dst,))
     conn.execute("DELETE FROM trips WHERE id = ?", (src,))

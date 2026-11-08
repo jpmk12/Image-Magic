@@ -133,7 +133,10 @@ program only. Your photos and settings are kept.
   event card makes a short one. Books land in the `exports` folder and download.
 - **Video posters:** videos show a real frame instead of a grey ▶. The first time a video
   appears in a grid, the page decodes its first half-second and hands the frame to the app,
-  which keeps it as that video's thumbnail; books and the archive use it too.
+  which keeps it as that video's thumbnail; books and the archive use it too. A video the
+  laptop cannot decode (no HEVC extension installed, unusual formats) is remembered and shown
+  as a plain frame, so it is not retried on every visit; the first poster saved for a video is
+  the one that stays.
 - **Through the years (Memories tab):** every Christmas, New Year, Valentine's, Easter, Fourth
   of July, Halloween and Thanksgiving side by side, one cover per year, plus each person's
   birthday once they have one. **▶ Replay** plays the best photos year after year, **📖 Book**
@@ -180,9 +183,11 @@ program only. Your photos and settings are kept.
   from Open-Meteo (sends the date and a location rounded to about 1 km).
 - **Share:** with a trip, person, chapter, day or month selected in Photos, click **↗ Share**.
   The app first lists photos that look sensitive (aircraft, bases, uniforms, documents, and
-  similar, from the AI captions) so you can leave them out, then exports a folder with a web
-  page and 1600 px copies of the photos with **all metadata removed**. Zip it to send, or
-  copy it to any web host. Private photos are never included.
+  similar, from the AI captions); they are **left out unless you tick them**, and Export asks
+  once more how many are being left out. It then makes a web page and 1600 px copies of the
+  photos with **all metadata removed**, zipped into one file that your browser downloads
+  (the folder is kept in the library's exports too). Private photos are never included, and
+  paired phones cannot read the exports folder.
 - **Film:** in any replay, click **🎬 Film** to render a video in your browser (slow zooms,
   captions). Pick one of three **built-in music** tracks (generated on your computer, nothing
   to download or license) or a file of your own; music fades out at the end. Your **voice
@@ -207,8 +212,10 @@ program only. Your photos and settings are kept.
   day and place, marked as located "from Google".
 - **Two iCloud accounts, one library:** Settings → Account → *A second Apple ID*. Every sync
   downloads both accounts in turn (you sign in to the second one the first time); the second
-  account's photos live in their own folder and carry that person's name everywhere the
-  contributor shows: the Family panel, filters, books. Nothing is ever deleted from either iCloud.
+  account's photos live in their own folder (`originals/accounts/<name>/`, so they never mix
+  with the year folders) and carry that person's name everywhere the contributor shows: the
+  Family panel, filters, books. If the second account fails to sign in, the first account's
+  new photos are still catalogued. Nothing is ever deleted from either iCloud.
 - **Stories for events and years:** the **✍** button on an event card and **✍ Story** on the
   year panel work like trip and chapter stories: Claude drafts a few paragraphs from the dates,
   places, people and captions (never the pixels), you edit them, and the event book, year book

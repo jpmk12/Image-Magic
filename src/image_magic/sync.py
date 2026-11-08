@@ -94,7 +94,7 @@ def build_command(
     if account == 2:
         if not settings.apple_id_2:
             raise ValueError("The second Apple ID is not set")
-        username, directory = settings.apple_id_2, settings.originals / settings.contributor_2
+        username, directory = settings.apple_id_2, settings.originals / settings.ACCOUNTS_DIR / settings.contributor_2
     else:
         if not settings.apple_id:
             raise ValueError("Apple ID is not set")

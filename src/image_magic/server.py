@@ -608,9 +608,13 @@ def make_handler(app: App):
                 return self._json(404, {"error": "not found"})
             if kind == "/media/thumb":
                 if row["kind"] != "photo":
+                    if not row["sha256"]:
+                        return self._json(404, {"error": "no poster yet"})
                     poster = media.poster_path(settings.library, row["sha256"])
                     if poster.is_file():
                         return self._file(poster, "image/jpeg", cache=True)
+                    if media.poster_failed_path(settings.library, row["sha256"]).exists():
+                        return self._file(media.generic_poster(settings.library), "image/jpeg", cache=True)   # could not be decoded; a plain frame
                     return self._json(404, {"error": "no poster yet"})
                 f = media.thumbnail(settings.library, settings.originals, row["path"], row["sha256"])
                 return self._file(f, "image/jpeg", cache=True)
@@ -620,18 +624,28 @@ def make_handler(app: App):
             return self._json(404, {"error": "not found"})
 
         def _poster_upload(self, q: dict):
-            """POST /api/poster?id=N with a JPEG the page decoded from the video's first frame."""
+            """POST /api/poster?id=N with a JPEG the page decoded from the video's first frame, or
+            POST /api/poster?id=N&failed=1 (laptop only) when the video cannot be decoded, so nobody tries again."""
             n = int(self.headers.get("Content-Length") or 0)
-            if n <= 0 or n > 2_000_000:
+            failed = bool(q.get("failed"))
+            if not failed and (n <= 0 or n > 2_000_000):
                 raise ValueError("Poster too large")
-            data = self.rfile.read(n)
+            data = self.rfile.read(n) if n > 0 else b""
             settings, conn = app.db()
             try:
                 row = conn.execute("SELECT sha256, kind FROM assets WHERE id = ? AND missing = 0", (int(q.get("id") or 0),)).fetchone()
             finally:
                 conn.close()
-            if not row or row["kind"] == "photo":
+            if not row or row["kind"] == "photo" or not row["sha256"]:
                 return self._json(404, {"error": "not found"})
+            if failed:
+                if self.from_phone:
+                    return self._json(403, {"error": "laptop only"})     # a phone's codecs say nothing about the laptop's
+                if not media.poster_path(settings.library, row["sha256"]).is_file():
+                    marker = media.poster_failed_path(settings.library, row["sha256"])
+                    marker.parent.mkdir(parents=True, exist_ok=True)
+                    marker.touch()
+                return self._json(200, {"ok": True})
             media.save_poster(settings.library, row["sha256"], data)
             return self._json(200, {"ok": True})
 

@@ -54,12 +54,34 @@ def poster_path(library: Path, sha256: str) -> Path:
     return library / "derived" / "thumbs" / sha256[:2] / f"{sha256}.jpg"
 
 
+MAX_POSTER_PX = 30_000_000     # a poster frame is a video frame; anything bigger is not one
+
+
+def poster_failed_path(library: Path, sha256: str) -> Path:
+    """Marker left when the page could not decode a video (unsupported codec), so nobody tries again."""
+    return poster_path(library, sha256).with_suffix(".none")
+
+
+def generic_poster(library: Path) -> Path:
+    """The tile shown for videos that cannot be decoded: a plain dark frame (the page adds the ▶ badge)."""
+    dest = library / "derived" / "thumbs" / "_video.jpg"
+    if not dest.is_file():
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        Image.new("RGB", (400, 300), (38, 42, 48)).save(dest, "JPEG", quality=70)
+    return dest
+
+
 def save_poster(library: Path, sha256: str, data: bytes) -> Path:
-    """Store a poster frame the page decoded from a video. Re-encoded through Pillow, so only a real image gets in."""
+    """Store a poster frame the page decoded from a video. Re-encoded through Pillow, so only a real image gets in.
+    The first poster wins: an existing one is never overwritten through this route."""
     import io
     if len(data) > 2_000_000:
         raise ValueError("Poster too large")
     with Image.open(io.BytesIO(data)) as im:
+        if im.width * im.height > MAX_POSTER_PX:
+            raise ValueError("Poster too large")
+        if poster_path(library, sha256).is_file():
+            return poster_path(library, sha256)          # junk is refused above; a real image just does not replace the first
         im = im.convert("RGB")
         im.thumbnail((THUMB_PX, THUMB_PX))
         dest = poster_path(library, sha256)
@@ -67,6 +89,9 @@ def save_poster(library: Path, sha256: str, data: bytes) -> Path:
         tmp = dest.with_suffix(".tmp")
         im.save(tmp, "JPEG", quality=80, optimize=True)
         tmp.replace(dest)
+    failed = poster_failed_path(library, sha256)
+    if failed.exists():
+        failed.unlink()
     return dest
 
 

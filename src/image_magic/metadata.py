@@ -252,6 +252,13 @@ def read_google_sidecar(path: Path) -> SidecarMeta | None:
         return None
     if not isinstance(data, dict):
         return None
+    try:
+        return _google_fields(data)
+    except Exception:          # legal JSON with unexpected shapes (lists where objects were expected, numbers for names)
+        return None
+
+
+def _google_fields(data: dict) -> SidecarMeta:
     meta = SidecarMeta()
     ts = (data.get("photoTakenTime") or {}).get("timestamp")
     try:

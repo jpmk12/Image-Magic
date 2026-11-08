@@ -601,7 +601,10 @@ def merge_people(conn: sqlite3.Connection, src: int, dst: int) -> None:
     if not s or not d:
         raise ValueError("Unknown person")
     from . import learning
-    sim = learning.people_similarity(conn, src, dst)
+    try:
+        sim = learning.people_similarity(conn, src, dst)
+    except Exception:
+        sim = None
     if sim is not None:
         learning.record(conn, "people_merge", "done", sim, {"from": src, "into": dst})
     conn.execute("UPDATE faces SET person_id = ?, locked = 1 WHERE person_id = ?", (dst, src))

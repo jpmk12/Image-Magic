@@ -48,6 +48,7 @@ def read_sources(conn: sqlite3.Connection, originals: Path, progress: Callable[[
     """Sidecars and video atoms for every asset not yet examined. Returns counts by source."""
     rows = conn.execute(
         "SELECT id, path, kind, lat, taken_at, width FROM assets WHERE missing = 0 AND location_source IS NULL").fetchall()
+    metadata._google_index.cache_clear()
     counts = {"exif": 0, "icloud": 0, "google": 0, "video": 0, "none": 0, "favorites": 0, "dates_fixed": 0}
     for i, r in enumerate(rows, 1):
         if cancelled():

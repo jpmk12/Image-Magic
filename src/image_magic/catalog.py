@@ -376,8 +376,9 @@ def attribute_folder(conn: sqlite3.Connection, prefix: str, contributor: str) ->
     name = contributor.strip()[:80]
     if not name or not prefix:
         return 0
-    n = conn.execute("UPDATE assets SET contributor = ? WHERE contributor IS NULL AND path LIKE ?",
-                     (name, prefix.strip("/") + "/%")).rowcount
+    folder = prefix.strip("/") + "/"
+    n = conn.execute("UPDATE assets SET contributor = ? WHERE contributor IS NULL AND substr(path, 1, ?) = ?",
+                     (name, len(folder), folder)).rowcount
     conn.commit()
     return n
 

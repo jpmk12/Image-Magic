@@ -112,6 +112,8 @@ def check_folder(conn: sqlite3.Connection, folder: Path, library: Path, original
         if "inside the library" in str(e):
             raise
     ensure_schema(conn)
+    from . import metadata
+    metadata._google_index.cache_clear()           # the folder may have gained files since it was last indexed
     plan = Plan(folder=str(folder))
     known_sha = {r[0] for r in conn.execute("SELECT sha256 FROM assets WHERE missing = 0")}
     known_hash = [(r[0], r[1]) for r in conn.execute("SELECT id, phash FROM assets WHERE phash IS NOT NULL AND phash != -1 AND missing = 0")
@@ -191,6 +193,8 @@ def run_import(conn: sqlite3.Connection, plan: Plan, library: Path, originals: P
     favourites and descriptions are read when the files are catalogued. `contributor` names who
     the photos came from (a spouse's Google account, an old Android phone)."""
     folder = Path(plan.folder)
+    from . import metadata
+    metadata._google_index.cache_clear()
     todo = list(plan.new) + (list(plan.near) if include_near else [])
     copied = failed = 0
     placed: list[str] = []

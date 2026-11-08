@@ -212,10 +212,13 @@ def decide(conn: sqlite3.Connection, key: str, decision: str) -> None:
     ident = int(ident)
     from . import learning
     value = None
-    if kind == "face":
-        value = learning.face_similarity(conn, ident)
-    elif kind == "trip":
-        value = trip_confidence(conn, ident)
+    try:
+        if kind == "face":
+            value = learning.face_similarity(conn, ident)
+        elif kind == "trip":
+            value = trip_confidence(conn, ident)
+    except Exception:
+        value = None
     learning.record(conn, f"review:{kind}", decision, value, {"key": key})
     if kind == "trip":
         if decision == "confirmed":

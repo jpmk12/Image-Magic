@@ -42,8 +42,11 @@ def test_trip_rules_follow_merges_and_dissolves(tmp_path):
     conn.execute("UPDATE assets SET trip_manual = 0"); conn.execute("DELETE FROM trips"); conn.commit()
     places.rebuild_trips(conn)
     assert conn.execute("SELECT COUNT(*) FROM trips").fetchone()[0] == 1
-    # dissolving small trips raises the minimum size
+    # dissolving small trips raises the minimum size, but only after five of them (it removes trips)
     for n in (5, 6, 5):
+        learning.record(conn, "trip_delete", "done", float(n))
+    assert "trip.min_photos" not in learning.learn(conn)
+    for n in (6, 5):
         learning.record(conn, "trip_delete", "done", float(n))
     learned = learning.learn(conn)
     assert learned["trip.min_photos"]["value"] == 6
@@ -55,7 +58,7 @@ def test_trip_rules_follow_merges_and_dissolves(tmp_path):
     for n in (5, 6, 5, 7, 7, 8, 8, 9, 9, 12, 12, 12):
         learning.record(conn, "trip_delete", "done", float(n))
     learned = learning.learn(conn)
-    assert learned["trip.min_photos"]["value"] <= 12          # never beyond the safe range
+    assert learned["trip.min_photos"]["value"] <= 8           # never beyond the safe range
     # a real "not a trip" is logged with the photo count
     tid = conn.execute("SELECT id FROM trips").fetchone()[0]
     curate.delete_trip(conn, tid)
@@ -69,15 +72,18 @@ def test_face_join_moves_within_bounds(tmp_path):
     conn = catalog.connect(tmp_path / "lib" / "library.db")
     for s in (0.41, 0.40, 0.43):                               # people you merged were this far apart
         learning.record(conn, "people_merge", "done", s)
+    assert "face.join" not in learning.learn(conn)             # three is not enough to loosen face grouping
+    for s in (0.42, 0.41):
+        learning.record(conn, "people_merge", "done", s)
     v = learning.learn(conn)["face.join"]["value"]
-    assert 0.38 <= v < 0.45
+    assert 0.40 <= v < 0.45
     for s in (0.47, 0.48, 0.5, 0.46, 0.49):                   # faces you dismissed were this close
         learning.record(conn, "review:face", "dismissed", s)
     v2 = learning.learn(conn)["face.join"]["value"]
     assert v2 > 0.49 and v2 <= 0.55
     for s in (0.2, 0.1, 0.1):
         learning.record(conn, "people_merge", "done", s)       # even wild merges cannot push below the floor
-    assert learning.learn(conn)["face.join"]["value"] >= 0.38
+    assert learning.learn(conn)["face.join"]["value"] >= 0.40
 
 
 def test_inbox_decisions_are_logged_and_calibrate(tmp_path):

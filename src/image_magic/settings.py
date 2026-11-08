@@ -39,6 +39,16 @@ def default_library_path() -> str:
     return str(Path.home() / "ImageMagic")
 
 
+def clean_name(name: str) -> str:
+    """A person's name that is also safe as one folder name: letters, digits, spaces and ' -; no leading dot,
+    no trailing dot or space, nothing that is only digits or punctuation, at most 40 characters."""
+    name = re.sub(r"[^\w '-]+", " ", str(name), flags=re.U)
+    name = re.sub(r"\s+", " ", name).strip(" .-'")[:40].rstrip(" .")
+    if not re.search(r"[^\W\d_]", name, flags=re.U):     # needs at least one letter
+        return ""
+    return name
+
+
 @dataclass
 class Settings:
     apple_id: str = ""
@@ -117,10 +127,14 @@ class Settings:
         s.auto_sync_hours = max(0, min(s.auto_sync_hours, 24 * 7))
         if not s.library_path:
             s.library_path = default_library_path()
-        s.contributor_2 = re.sub(r"[^\w .'-]+", "", s.contributor_2, flags=re.U).strip()[:40]
+        if s.apple_id_2 and not s.contributor_2.strip():
+            s.contributor_2 = s.apple_id_2.split("@")[0]
+        s.contributor_2 = clean_name(s.contributor_2)
         if s.apple_id_2 and not s.contributor_2:
-            s.contributor_2 = s.apple_id_2.split("@")[0][:40]
+            s.contributor_2 = "second account"
         return s
+
+    ACCOUNTS_DIR = "accounts"          # originals/accounts/<name>/ keeps a second account away from the year folders
 
     @property
     def accounts(self) -> list[tuple[str, Path, str | None]]:
@@ -128,8 +142,8 @@ class Settings:
         out: list[tuple[str, Path, str | None]] = []
         if self.apple_id:
             out.append((self.apple_id, self.originals, None))
-        if self.apple_id_2 and self.apple_id_2 != self.apple_id:
-            out.append((self.apple_id_2, self.originals / self.contributor_2, self.contributor_2))
+        if self.apple_id_2 and self.apple_id_2 != self.apple_id and self.contributor_2:
+            out.append((self.apple_id_2, self.originals / self.ACCOUNTS_DIR / self.contributor_2, self.contributor_2))
         return out
 
     def to_dict(self) -> dict:

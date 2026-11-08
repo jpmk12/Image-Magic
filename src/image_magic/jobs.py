@@ -481,24 +481,30 @@ class JobRunner:
         except Exception as e:
             self._finish("failed", f"Could not start: {e}")
             return
-        downloaded = 0
+        done = 0
+        problem: tuple[str, str] | None = None
         for (apple_id, folder, who), cmd in zip(accounts, cmds):
             folder.mkdir(parents=True, exist_ok=True)
             if len(accounts) > 1:
                 self._add_log(f"— {who or 'your'} photos ({apple_id}) —")
-            code = self._download(settings, cmd, mode, apple_id)
-            if code is None:
-                return                      # already finished (stopped or failed)
-            downloaded = self.state.downloaded
-        self._after_download(settings, downloaded)
+            problem = self._download(settings, cmd, mode, apple_id)
+            if problem:
+                break
+            done += 1
+        if problem and not done:
+            self._finish(*problem)          # nothing was downloaded: report the failure or the stop
+            return
+        if problem:
+            self._add_log(f"{apple_id}: {problem[1]} The photos already downloaded are catalogued now.")
+        self._after_download(settings, self.state.downloaded,
+                             note=f" {who or apple_id}'s account did not finish: {problem[1]}" if problem else "")
 
-    def _download(self, settings: Settings, cmd: list[str], mode: str, apple_id: str) -> int | None:
-        """Run one icloudpd process to completion. Returns its exit code, or None if the job already finished."""
+    def _download(self, settings: Settings, cmd: list[str], mode: str, apple_id: str) -> tuple[str, str] | None:
+        """Run one icloudpd process to completion. Returns None on success, else (state, message) for the caller to report."""
 
         if sync.port_in_use():
-            self._finish("failed", f"Another program on this computer is using port {sync.ICLOUDPD_PORT}, which the "
-                         "iCloud sign-in helper needs. Close that program and try again.")
-            return
+            return ("failed", f"Another program on this computer is using port {sync.ICLOUDPD_PORT}, which the "
+                              "iCloud sign-in helper needs. Close that program and try again.")
         if sync.firewall_rule_present() is False:
             self._add_log("Warning: the firewall rule for the sign-in helper is missing. Re-run the installer and keep "
                           "'Block network access to the iCloud sign-in helper' ticked, or click Cancel if Windows Firewall asks.")
@@ -516,10 +522,9 @@ class JobRunner:
                 text=True, encoding="utf-8", errors="replace", bufsize=1, **extra,
             )
         except Exception as e:
-            self._finish("failed", f"Could not start icloudpd: {e}")
-            return None
+            return ("failed", f"Could not start icloudpd: {e}")
 
-        watcher = threading.Thread(target=self._watch_auth, daemon=True)
+        watcher = threading.Thread(target=self._watch_auth, args=(self._proc,), daemon=True)
         watcher.start()
         assert self._proc.stdout
         for raw in self._proc.stdout:
@@ -538,14 +543,12 @@ class JobRunner:
         self._helper_ok = False
 
         if self._cancel.is_set():
-            self._finish("cancelled", "Sync stopped. Run it again any time; it picks up where it left off.")
-            return None
+            return ("cancelled", "Sync stopped. Run it again any time; it picks up where it left off.")
         if code != 0:
-            self._finish("failed", _explain_icloudpd_failure(code, [line for _, line in list(self.log)[-80:]]))
-            return None
-        return code
+            return ("failed", _explain_icloudpd_failure(code, [line for _, line in list(self.log)[-80:]]))
+        return None
 
-    def _after_download(self, settings: Settings, downloaded: int) -> None:
+    def _after_download(self, settings: Settings, downloaded: int, note: str = "") -> None:
         conn = catalog.connect(settings.db)
         catalog.set_meta(conn, "last_sync", catalog.now_iso())
         conn.commit()
@@ -556,7 +559,7 @@ class JobRunner:
                 if who:
                     conn = catalog.connect(settings.db)
                     try:
-                        catalog.attribute_folder(conn, who, who)     # the second account's photos carry their owner's name
+                        catalog.attribute_folder(conn, f"{settings.ACCOUNTS_DIR}/{who}", who)   # the second account's photos carry their owner's name
                     finally:
                         conn.close()
         except InterruptedError:
@@ -577,14 +580,14 @@ class JobRunner:
                 step(settings, standalone=False)
             except Exception as e:
                 self._add_log(f"{label} failed: {e}")
-        self._finish("cancelled" if self._cancel.is_set() else "done",
+        self._finish("cancelled" if self._cancel.is_set() else "failed" if note else "done",
                      f"Sync complete: {downloaded:,} downloaded, {r.total:,} items in your library, "
-                     f"{r.trips:,} trips.",
+                     f"{r.trips:,} trips." + note,
                      {"downloaded": downloaded, "total": r.total, "missing": r.missing})
 
-    def _watch_auth(self) -> None:
-        """Poll icloudpd's sign-in page to learn when it needs a password or code."""
-        while self._proc is not None and self._proc.poll() is None:
+    def _watch_auth(self, proc) -> None:
+        """Poll icloudpd's sign-in page to learn when it needs a password or code. One watcher per process."""
+        while proc.poll() is None and self._proc is proc:
             try:
                 if not self._helper_ok:
                     # Only ever talk to icloudpd's own page, never to whatever else might sit on the port.

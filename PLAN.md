@@ -368,6 +368,20 @@ Service features (flying log, squadron yearbook) slot into S2 (log) and S9 (year
   pages for index/chapters/trips/events/albums (+ years with everything), stories and
   milestones inline, optional voice notes; `archive` job with progress; Home panel.
 - Phase 6 complete.
+- **Third review round** (v0.50.0): two independent reviewers over v0.44–v0.49 (13
+  security/correctness, 9 performance findings; all measured hot spots were fine). Fixed:
+  Takeout sidecars with odd shapes no longer abort cataloguing; the per-folder Takeout index
+  is cleared on every check/import/scan; posters are first-writer-wins, size-checked, and
+  decode failures are remembered server-side (laptop only) so unsupported videos are not
+  re-fetched on every visit; a failed second iCloud account no longer stops the first account's
+  photos from being catalogued; the second account downloads under originals/accounts/<name>
+  with a strict folder name (no dots, digits-only or path parts) and attribution without LIKE
+  wildcards; flagged share photos are left out unless ticked, with a confirm; exports download
+  as a streamed link instead of a Blob in memory, and phones cannot read /media/export; learned
+  trip size and face thresholds need five decisions and move within tighter ranges; the numbers
+  logged with a decision can never block the decision; one auth watcher per icloudpd process;
+  Tell is hidden on phones (captions are laptop-only). Not changed: holidays.overview (indexed,
+  33 ms measured), map_months (37 ms, cache capped), learn() (0.5 ms).
 - **Second review round** (v0.43.0): 18 security/correctness findings and 23 performance
   findings from two independent reviewers, all fixed except the items judged not worth the
   change (best_of row scans, per-request connection reuse). Phone access is an allowlist
