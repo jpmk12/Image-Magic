@@ -417,7 +417,8 @@ def unlocated_trip_candidates(conn: sqlite3.Connection, limit: int = 5) -> list[
         a, b = datetime.fromisoformat(run[0]).date(), datetime.fromisoformat(run[-1]).date()
         words = _place_words(conn, ids)
         conf = 0.6 + min(0.2, (len(run) - NOGPS_MIN_DAYS) * 0.03) + min(0.1, len(ids) / 400)
-        span = f"{a:%b %-d}" + (f" – {b:%b %-d}" if b != a else "") + f", {a.year}" if a.year == b.year else f"{a:%b %-d, %Y} – {b:%b %-d, %Y}"
+        md = lambda d: f"{d:%b} {d.day}"                        # "Jul 10" on every OS (%-d is Linux-only)
+        span = (md(a) + (f" – {md(b)}" if b != a else "") + f", {a.year}") if a.year == b.year else f"{md(a)}, {a.year} – {md(b)}, {b.year}"
         out.append({"ids": ids, "start": run[0], "end": run[-1], "days": len(run), "span": span, "words": words,
                     "conf": round(conf, 2), "default_title": f"Trip, {span}"})
     out.sort(key=lambda c: -len(c["ids"]))
