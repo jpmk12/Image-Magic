@@ -139,3 +139,34 @@ def test_coordinates_and_map_links_place_the_pin():
     r = places.search("https://maps.google.com/?q=37.8281,-92.1777")
     assert len(r) == 1 and "Saint Robert" in r[0]["region"]
     assert places.search("https://maps.app.goo.gl/AbCdEf") == []
+
+
+def test_unticked_clutter_is_kept_and_not_listed_again(tmp_path):
+    lib = tmp_path / "lib"
+    orig = lib / "originals"
+    for i in range(3):
+        textured(orig / f"2019/good{i}.jpg", datetime(2019, 5, 1 + i, 12), seed=i)
+    Image.new("RGB", (600, 400), (3, 3, 3)).save(orig / "2019/pocket.jpg", "JPEG")
+    Image.new("RGB", (600, 400), (4, 4, 4)).save(orig / "2019/pocket2.jpg", "JPEG")
+    Image.new("RGB", (600, 400), (120, 120, 120)).save(orig / "2019/wall.jpg", "JPEG")
+    conn = catalog.connect(lib / "library.db")
+    catalog.scan(conn, orig)
+    quality.score_pending(conn, lib, orig)
+    c = cleanup.candidates(conn, lib, orig)
+    black = {i["id"] for i in c["groups"]["black"]}
+    assert len(black) == 2 and c["kept"] == 0
+    a, b = sorted(black)
+    # you looked at the black frames and trashed one; the other was left unticked, so it is a keeper
+    cleanup.trash(conn, lib, orig, [a]); cleanup.keep(conn, [b])
+    c2 = cleanup.candidates(conn, lib, orig)
+    assert {i["id"] for i in c2["groups"]["black"]} == set() and c2["kept"] == 1
+    assert cleanup.kept(conn) == {b}
+    # the inbox card does the same with photos you untick before accepting
+    wall = conn.execute("SELECT id FROM assets WHERE path = '2019/wall.jpg'").fetchone()[0]
+    card = {"key": "clutter:test", "kind": "clutter", "conf": 0.95, "ids": [wall], "title": "t", "action": {"do": "trash", "ids": [wall], "auto_ids": []}}
+    from image_magic import inbox
+    inbox.apply(conn, lib, orig, {**card, "all_ids": [wall, b], "action": {"do": "trash", "ids": [wall]}})
+    assert b in cleanup.kept(conn)
+    # and you can change your mind
+    assert cleanup.forget_kept(conn) == 1
+    assert cleanup.candidates(conn, lib, orig)["groups"]["black"] and cleanup.kept(conn) == set()

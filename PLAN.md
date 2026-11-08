@@ -368,6 +368,10 @@ Service features (flying log, squadron yearbook) slot into S2 (log) and S9 (year
   pages for index/chapters/trips/events/albums (+ years with everything), stories and
   milestones inline, optional voice notes; `archive` job with progress; Home panel.
 - Phase 6 complete.
+- **Clutter keepers** (v0.53.0): `clutter_keep` table; photos left unticked in an opened
+  clean-up category, or unticked on an inbox clutter card, are never listed as clutter again;
+  "Show kept photos again" forgets them. Set location takes pasted coordinates and Google /
+  Apple Maps links (v0.52.0).
 - **Feedback round** (v0.51.0): place search parses addresses (street line dropped, "St"→"Saint",
   US state abbreviations, "Town, ST", coordinates) and an explicit online OpenStreetMap lookup
   button; trip suggestions remember unticked photos (`trip_rejections`) from inbox cards, skips

@@ -39,6 +39,10 @@ CREATE TABLE IF NOT EXISTS trash_files (
     created    TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_trash_asset ON trash_files(asset_id);
+CREATE TABLE IF NOT EXISTS clutter_keep (        -- "not clutter": photos you looked at and left; never listed as clutter again
+    asset_id INTEGER PRIMARY KEY,
+    created  TEXT NOT NULL
+);
 """
 MIGRATIONS = {"trashed_at": "TEXT"}
 VISIBLE = "missing = 0 AND kind = 'photo' AND private = 0 AND trashed_at IS NULL"
@@ -106,9 +110,12 @@ def candidates(conn: sqlite3.Connection, library: Path, originals: Path) -> dict
         f"""SELECT id, taken_at, size, quality_score, burst_id FROM assets WHERE {VISIBLE} AND duplicate_of IS NULL
             AND burst_id IS NOT NULL AND burst_best = 0 ORDER BY taken_at DESC LIMIT ?""", (LIMIT_PER_GROUP,)).fetchall()
     groups["bursts"] = [{**_item(r, "an extra frame of a burst; the keeper stays"), "burst": r["burst_id"]} for r in extras]
+    keep_ids = kept(conn)
+    if keep_ids:
+        groups = {k: [i for i in v if i["id"] not in keep_ids] for k, v in groups.items()}
     total_bytes = sum(i["size"] or 0 for g in groups.values() for i in g)
     return {"groups": groups, "counts": {k: len(v) for k, v in groups.items()}, "bytes": total_bytes,
-            "trash": trash_summary(conn)}
+            "kept": len(keep_ids), "trash": trash_summary(conn)}
 
 
 def _files_for(conn: sqlite3.Connection, originals: Path, aid: int) -> list[tuple[str, Path, str]]:
@@ -267,6 +274,30 @@ def keep_frame(conn: sqlite3.Connection, library: Path, originals: Path, burst_i
                  (f"burst:{burst_id}", datetime.now(timezone.utc).isoformat(timespec="seconds")))
     conn.commit()
     return result
+
+
+def keep(conn: sqlite3.Connection, ids: list[int]) -> int:
+    """Remember that these photos are not clutter."""
+    ensure_schema(conn)
+    ids = [int(i) for i in ids]
+    if not ids:
+        return 0
+    from .catalog import now_iso
+    conn.executemany("INSERT OR IGNORE INTO clutter_keep (asset_id, created) VALUES (?, ?)", [(i, now_iso()) for i in ids])
+    conn.commit()
+    return len(ids)
+
+
+def kept(conn: sqlite3.Connection) -> set[int]:
+    ensure_schema(conn)
+    return {r[0] for r in conn.execute("SELECT asset_id FROM clutter_keep")}
+
+
+def forget_kept(conn: sqlite3.Connection) -> int:
+    ensure_schema(conn)
+    n = conn.execute("DELETE FROM clutter_keep").rowcount
+    conn.commit()
+    return n
 
 
 def trash_summary(conn: sqlite3.Connection) -> dict:

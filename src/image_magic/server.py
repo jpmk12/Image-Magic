@@ -1016,6 +1016,11 @@ def make_handler(app: App):
                                                    int(data["keeper"]) if data.get("keeper") else None, bool(data.get("trash_rest")))
                         elif action == "trash":
                             r = cleanup.trash(conn, settings.library, settings.originals, ids)
+                            r["kept"] = cleanup.keep(conn, [int(i) for i in data.get("keep") or []])   # unticked in the categories you looked at
+                        elif action == "keep-photos":
+                            r = {"kept": cleanup.keep(conn, ids)}
+                        elif action == "forget-kept":
+                            r = {"forgotten": cleanup.forget_kept(conn)}
                         elif action == "restore":
                             r = {"restored": cleanup.restore(conn, settings.library, settings.originals, ids or None)}
                         elif action == "empty":

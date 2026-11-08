@@ -1428,10 +1428,15 @@ async function loadCleanTrash() { const t = await api("/api/trash").catch(() => 
 $("#clean-find").onclick = async () => {
   $("#clean-dlg").classList.remove("hidden"); $("#clean-groups").replaceChildren(); $("#clean-sum").textContent = "Looking through your photos…"; $("#clean-note").textContent = "";
   let c; try { c = await api("/api/cleanup"); } catch (e) { $("#clean-sum").textContent = e.message; return; }
-  renderTrash(c.trash); clean.data = c; clean.ticked = {};
+  renderTrash(c.trash); clean.data = c; clean.ticked = {}; clean.seen = new Set();
   for (const [key, , on] of CLEAN_GROUPS) clean.ticked[key] = new Set(on ? (c.groups[key] || []).map(i => i.id) : []);
   const total = Object.values(c.counts).reduce((a, b) => a + b, 0);
-  $("#clean-sum").textContent = total ? `${fmt(total)} candidates in ${Object.values(c.counts).filter(n => n).length} categories (${bytes(c.bytes)}). Open a category, click a photo to see it full size, tick what should go.` : "Nothing looks like clutter. Nice library.";
+  $("#clean-sum").textContent = (total ? `${fmt(total)} candidates in ${Object.values(c.counts).filter(n => n).length} categories (${bytes(c.bytes)}). Open a category, click a photo to see it full size, tick what should go. Photos you leave unticked in a category you opened are remembered as keepers.` : "Nothing looks like clutter. Nice library.")
+    + (c.kept ? ` ${fmt(c.kept)} photo${c.kept === 1 ? "" : "s"} you kept earlier are not listed.` : "");
+  const old = $("#clean-forget"); if (old) old.remove();
+  if (c.kept) { const fb = document.createElement("button"); fb.className = "btn"; fb.id = "clean-forget"; fb.textContent = "Show kept photos again"; fb.style.marginLeft = "8px";
+    fb.onclick = async () => { if (!confirm(`List the ${c.kept} photos you kept earlier as clutter candidates again?`)) return; await api("/api/cleanup/forget-kept", {}).catch(e => toast(e.message)); $("#clean-find").click(); };
+    $("#clean-sum").append(fb); }
   renderCleanGroups();
 };
 function cleanTickedTotal() { return Object.values(clean.ticked).reduce((n, s) => n + s.size, 0); }
@@ -1441,7 +1446,7 @@ function renderCleanGroups() {
   for (const [key, label] of CLEAN_GROUPS) {
     const items = c.groups[key] || []; if (!items.length) continue;
     const b = document.createElement("button"); b.className = "btn" + (clean.open === key ? " primary" : ""); b.textContent = `${label} · ${items.length}` + (clean.ticked[key].size ? ` (${clean.ticked[key].size} ticked)` : "");
-    b.onclick = () => { clean.open = clean.open === key ? null : key; renderCleanGroups(); };
+    b.onclick = () => { clean.open = clean.open === key ? null : key; if (clean.open) clean.seen.add(clean.open); renderCleanGroups(); };
     tabs.append(b);
   }
   box.append(tabs);
@@ -1472,12 +1477,13 @@ function renderCleanGroups() {
 $("#clean-close").onclick = () => $("#clean-dlg").classList.add("hidden");
 $("#clean-go").onclick = async () => {
   const ids = Object.values(clean.ticked || {}).flatMap(s => [...s]);
-  if (!ids.length) return toast("Nothing ticked.");
+  const keep = [...(clean.seen || [])].flatMap(k => (clean.data.groups[k] || []).map(i => i.id).filter(id => !clean.ticked[k].has(id)));
+  if (!ids.length && !keep.length) return toast("Nothing ticked.");
   const per = CLEAN_GROUPS.filter(g => clean.ticked[g[0]] && clean.ticked[g[0]].size).map(g => `${clean.ticked[g[0]].size} ${g[1].toLowerCase()}`).join(", ");
-  if (!confirm(`Move ${ids.length} photos to the app's trash (${per})? They stay in iCloud and can be restored until you empty the trash.`)) return;
+  if (!confirm(`Move ${ids.length} photos to the app's trash${per ? ` (${per})` : ""}? They stay in iCloud and can be restored until you empty the trash.` + (keep.length ? `\n\nThe ${keep.length} unticked photos in the categories you opened will be remembered as keepers and not listed as clutter again.` : ""))) return;
   $("#clean-note").textContent = "Moving…"; $("#clean-go").disabled = true;
-  try { const r = await api("/api/cleanup/trash", { ids }); $("#clean-note").textContent = `${r.trashed} moved to the trash${r.failed.length ? `, ${r.failed.length} failed` : ""}.`; renderTrash(r.trash); refresh(); if (grid.loaded) setFilters(grid.filters);
-    const gone = new Set(ids); for (const k in clean.data.groups) clean.data.groups[k] = clean.data.groups[k].filter(i => !gone.has(i.id)); for (const k in clean.ticked) clean.ticked[k].clear(); renderCleanGroups(); }
+  try { const r = await api("/api/cleanup/trash", { ids, keep }); $("#clean-note").textContent = `${r.trashed} moved to the trash${r.failed.length ? `, ${r.failed.length} failed` : ""}${r.kept ? `; ${r.kept} kept and won't be listed again` : ""}.`; renderTrash(r.trash); refresh(); if (grid.loaded) setFilters(grid.filters);
+    const gone = new Set([...ids, ...keep]); for (const k in clean.data.groups) clean.data.groups[k] = clean.data.groups[k].filter(i => !gone.has(i.id)); for (const k in clean.ticked) clean.ticked[k].clear(); clean.seen = new Set(); renderCleanGroups(); }
   catch (e) { $("#clean-note").textContent = e.message; }
   $("#clean-go").disabled = false;
 };

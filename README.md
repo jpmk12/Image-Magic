@@ -301,7 +301,10 @@ program only. Your photos and settings are kept.
   blank frames, blurry shots, very dark photos, and spare burst frames. The safe categories
   are ticked for you; **very dark** and **documents** are not, because many of those are
   keepers. Click any photo to see it full size (arrow keys move through the category), tick
-  the box in its corner to send it, Shift-click for a range. Ticked photos go to the app's **trash**
+  the box in its corner to send it, Shift-click for a range. Photos you leave unticked in a
+  category you opened are remembered as keepers and not listed as clutter again (the same goes
+  for photos you untick on an inbox clutter card); **Show kept photos again** undoes that.
+  Ticked photos go to the app's **trash**
   inside your library folder, together with their Live Photo clip and sidecar, and can be
   restored exactly until you **Empty trash**. Nothing is ever deleted from iCloud; if iCloud
   sends a trashed photo again at the next sync, it goes straight back to the trash. The viewer

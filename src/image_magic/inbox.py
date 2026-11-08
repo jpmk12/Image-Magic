@@ -310,6 +310,9 @@ def apply(conn, library, originals, card: dict, decision: str = "accepted", name
         undo = None
     elif a.get("do") == "trash":
         ids = [int(i) for i in a["ids"]]
+        left_out = [int(i) for i in (card.get("all_ids") or []) if int(i) not in set(ids)]
+        if left_out:
+            cleanup.keep(conn, left_out)           # unticked on the card: not clutter, never proposed again
         cleanup.trash(conn, library, originals, ids)
         undo = {"do": "restore", "ids": ids}
     else:
