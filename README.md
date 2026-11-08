@@ -180,6 +180,17 @@ program only. Your photos and settings are kept.
   exact copies are skipped, look-alikes (the same picture resized or re-saved) are listed with
   the library photo they match, and the rest are new. Click **Import** to copy the new ones into
   `originals/imported/<year>/<month>/`. Your files are copied, never moved.
+- **Curator inbox:** the top of the Home tab. After each sync the app sorts what it found and
+  files suggestions as cards with a confidence: photos that look like part of a trip, a face
+  group that is probably someone you named, photos with no location whose neighbours agree on a
+  place, two trips that look like one, and clutter. Each card has three choices: accept (the
+  action happens at once), adjust (opens the right tool with those photos selected) or skip
+  (the card stays gone until the facts change). **Accept all high-confidence** takes everything
+  at 90 percent or above except naming people; **Undo last** reverses the most recent decision.
+  With *Let the inbox apply safe suggestions by itself* on (Settings → Privacy, on by default),
+  the app fills in confident locations and trashes byte-identical copies after each sync on its
+  own and lists them in the Activity log; trips, names, blurry and blank frames always wait for
+  you.
 - **Review queue:** on the Home tab, the app's least-certain guesses, ten at a time: a photo that
   joined a trip by date alone or was taken far from the rest, a face that only loosely matches
   its group, a chapter whose first months are spread over several places, and new milestones.
@@ -377,6 +388,7 @@ Place names are looked up **on your computer** from a bundled list of about 145,
 | Map background | Turn off to keep map views from going to OpenStreetMap |
 | Auto sync | Get new photos every hour, every 6 hours or daily while the app is open |
 | "Get new photos" stops after | How many already-downloaded photos in a row before a quick sync stops |
+| Let the inbox apply safe suggestions | After each sync, fill confident locations and trash exact copies on its own; everything else waits (on by default) |
 | Memory of the day notification | One Windows notification a day with a past memory, while the app is open (on by default) |
 | Phone access | Let phones on the same Wi-Fi open the app over HTTPS with a pairing code (off by default) |
 | Second copy (backup folder) | An empty folder on another drive; **Back up now** on the Home tab mirrors the library there with checksum verification |

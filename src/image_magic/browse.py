@@ -79,6 +79,10 @@ def _filters(params: dict, alias: str = "") -> tuple[str, list]:
         args.append(int(params["burst"]))
     if params.get("favorite"):
         where.append(f"{a}favorite = 1")
+    if params.get("ids"):
+        chosen = [int(x) for x in str(params["ids"]).split(",") if x.strip().lstrip("-").isdigit()][:2000]
+        where.append(f"{a}id IN ({','.join('?' * len(chosen)) or 'NULL'})")
+        args += chosen
     if params.get("nolocation"):
         where.append(f"{a}lat IS NULL")
     if params.get("notrip"):

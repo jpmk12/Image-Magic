@@ -345,7 +345,7 @@ def make_handler(app: App):
                     return self._json(200, app.jobs.log_since(since))
                 if path.startswith(("/api/photos", "/api/photo/", "/api/facets", "/api/trips", "/api/replay",
                                     "/api/map", "/api/people", "/api/timeline", "/api/story", "/api/memories",
-                                    "/api/shuffle", "/api/similar/", "/api/review", "/api/context/", "/api/curate/", "/api/events", "/api/home", "/api/voice/", "/api/compare/", "/api/flying", "/api/book", "/api/review-queue", "/api/family", "/api/cleanup", "/api/albums", "/api/places/", "/api/daily", "/api/ids", "/media/")):
+                                    "/api/shuffle", "/api/similar/", "/api/review", "/api/context/", "/api/curate/", "/api/events", "/api/home", "/api/voice/", "/api/compare/", "/api/flying", "/api/book", "/api/review-queue", "/api/family", "/api/cleanup", "/api/albums", "/api/places/", "/api/daily", "/api/ids", "/api/inbox", "/media/")):
                     return self._browse(path, self._query())
             except Exception as e:
                 return self._json(500, {"error": str(e)})
@@ -396,6 +396,9 @@ def make_handler(app: App):
                         n = max(5, min(int(q.get("n") or 30), 300))
                         return self._json(200, browse.replay_items(conn, quality.best_of(conn, where + " AND a.private = 0", args, n)))
                     return self._json(200, browse.replay(conn, q))
+                if path == "/api/inbox":
+                    from . import inbox
+                    return self._json(200, inbox.overview(conn, str(settings.db), settings.library, settings.originals))
                 if path == "/api/ids":
                     ids_ = sorted(browse.ids(conn, q))[:5000]
                     return self._json(200, {"ids": ids_, "total": len(ids_)})
@@ -913,6 +916,31 @@ def make_handler(app: App):
                             from . import chapters, events, places
                             places.refresh(conn); events.rebuild(conn); chapters.rebuild_milestones(conn)
                         return self._json(200, {**r, "trash": cleanup.trash_summary(conn)})
+                    finally:
+                        conn.close()
+                if path.startswith("/api/inbox/"):
+                    from . import inbox
+                    settings, conn = app.db()
+                    try:
+                        action = path.rsplit("/", 1)[1]
+                        if action == "undo":
+                            return self._json(200, {"undone": inbox.undo_last(conn, settings.library, settings.originals)})
+                        cards = {c["key"]: c for c in inbox.suggestions(conn, str(settings.db), settings.library, settings.originals)}
+                        if action == "accept-high":
+                            n = 0
+                            for c in cards.values():
+                                if c["conf"] >= inbox.AUTO_MIN and c["action"]["do"] != "face_name":
+                                    inbox.apply(conn, settings.library, settings.originals, c); n += 1
+                            return self._json(200, {"applied": n})
+                        card = cards.get(str(data.get("key", "")))
+                        if not card:
+                            raise ValueError("That suggestion is no longer current; the list has been refreshed.")
+                        if action == "accept":
+                            return self._json(200, inbox.apply(conn, settings.library, settings.originals, card, name=data.get("name")))
+                        if action == "skip":
+                            inbox.skip(conn, card)
+                            return self._json(200, {"ok": True})
+                        return self._json(404, {"error": "not found"})
                     finally:
                         conn.close()
                 if path == "/api/location/set":

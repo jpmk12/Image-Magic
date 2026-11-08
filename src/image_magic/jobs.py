@@ -208,6 +208,10 @@ class JobRunner:
                                   progress=self._progress("Rated"), cancelled=self._cancel.is_set)
         self.state.message = "Finding events..."
         events.rebuild(conn)
+        if settings.inbox_auto:
+            from . import inbox
+            self.state.message = "Applying confident suggestions..."
+            inbox.auto_apply(conn, str(settings.db), settings.library, settings.originals, log=self._add_log)
         return n
 
     def _run_archive(self, _mode: str) -> None:

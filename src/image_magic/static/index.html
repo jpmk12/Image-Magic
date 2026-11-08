@@ -146,6 +146,12 @@
   .grid.selecting .tile::after { content: ""; position: absolute; top: 8px; left: 8px; width: 22px; height: 22px; border-radius: 50%; border: 2px solid #fff; background: rgba(0,0,0,.35); }
   .grid.selecting .tile.sel::after { content: "✓"; background: var(--accent); color: #fff; font-weight: 700; display: grid; place-items: center; font-size: 14px; }
   .grid.selecting .tile.sel { outline: 3px solid var(--accent); }
+  .ib { display: flex; gap: 14px; align-items: center; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; }
+  .ib .thumbs { display: flex; gap: 4px; flex: none; } .ib .thumbs img, .ib .thumbs .more { width: 52px; height: 52px; border-radius: 8px; object-fit: cover; background: var(--soft); }
+  .ib .thumbs .more { display: grid; place-items: center; font-weight: 600; color: var(--muted); font-size: 12px; }
+  .ib .kind { font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
+  .ib .bar { display: inline-block; width: 64px; height: 6px; border-radius: 3px; background: var(--soft); overflow: hidden; vertical-align: middle; } .ib .bar i { display: block; height: 6px; background: var(--accent); }
+  .ib .t { font-weight: 600; font-size: 15px; margin-top: 2px; } .ib .why { color: var(--muted); font-size: 13px; margin-top: 2px; }
   .og { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 16px; }
   .og-grid { position: relative; display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 6px; user-select: none; min-height: 200px; }
   .og-grid .tile { cursor: pointer; }
@@ -379,6 +385,19 @@
         <div class="bar" id="job-bar"><div></div></div>
       </div>
       <p id="job-last" class="small"></p>
+    </div>
+
+    <div class="panel hidden" id="inboxpanel">
+      <div class="row" style="justify-content:space-between">
+        <div><h2 style="margin:0">Curator inbox</h2><p class="small muted" style="margin:4px 0 0" id="inbox-sum"></p></div>
+        <div class="row">
+          <button class="btn" id="inbox-undo">Undo last</button>
+          <button class="btn primary" id="inbox-high">Accept all high-confidence</button>
+        </div>
+      </div>
+      <div class="row" id="inbox-chips" style="margin:10px 0 6px;flex-wrap:wrap"></div>
+      <div id="inbox-cards" style="display:flex;flex-direction:column;gap:10px"></div>
+      <p class="small muted" id="inbox-foot" style="margin:10px 0 0"></p>
     </div>
 
     <div class="panel hidden" id="dailypanel">
@@ -831,6 +850,9 @@
 
       <div class="panel">
         <h2>Phone access</h2>
+        <label class="check"><input type="checkbox" name="inbox_auto">
+          <span>Let the inbox apply safe suggestions by itself
+          <small>After each sync: fill in locations the app is at least 90% sure of, and move byte-identical copies to the app's trash. Trips, face names, blurry and blank frames always wait for you. Everything it does is listed in the Activity log and can be undone.</small></span></label>
         <label class="check"><input type="checkbox" name="daily_memory">
           <span>Memory of the day notification
           <small>Once a day while the app is open, a Windows notification with a photo from this date in a past year. Nothing leaves the computer.</small></span></label>
@@ -1193,7 +1215,7 @@ async function refresh() {
     renderAiPanel(st);
     renderQualityPanel(st);
     renderBackupPanel(st);
-    if (!refresh.queued || Date.now() - refresh.queued > 60000) { refresh.queued = Date.now(); loadReviewQueue(); loadFamily(); loadCleanTrash(); loadDaily(); }
+    if (!refresh.queued || Date.now() - refresh.queued > 60000) { refresh.queued = Date.now(); loadReviewQueue(); loadFamily(); loadCleanTrash(); loadDaily(); loadInbox(); }
     renderImport(st.job);
   } catch (e) { /* app may be quitting */ }
 }
@@ -1296,6 +1318,50 @@ $("#contrib-files").onchange = async ev => {
   $("#contrib-note").textContent = `${added} added, ${dup} already in the library, ${failed} failed. Trips and events pick them up at the next catalog update.`;
   ev.target.value = ""; loadFamily(); refresh();
 };
+const KIND_COLORS = { trip: "#b45309", people: "#7c3aed", location: "#0369a1", event: "#047857", clutter: "#6b7280" };
+const KIND_LABELS = { trip: "Trips", people: "People", location: "Locations", clutter: "Clutter" };
+const inboxState = { filter: "" };
+async function loadInbox() {
+  const ib = await api("/api/inbox").catch(() => null); const panel = $("#inboxpanel");
+  if (!ib) { panel.classList.add("hidden"); return; }
+  panel.classList.remove("hidden");
+  const el = (t, c, txt) => { const d = document.createElement(t); if (c) d.className = c; if (txt) d.textContent = txt; return d; };
+  $("#inbox-sum").textContent = ib.pending ? `The app sorted your library and has ${ib.pending} suggestion${ib.pending > 1 ? "s" : ""}. Accept, adjust or skip; nothing changes until you say so.` : "Nothing waiting. New suggestions arrive after each sync.";
+  $("#inbox-high").disabled = !ib.high; $("#inbox-high").textContent = `Accept all high-confidence (${ib.high})`;
+  $("#inbox-undo").disabled = !(ib.last && ib.last.undoable);
+  const chips = $("#inbox-chips"); chips.replaceChildren();
+  const mk = (label, key) => { const b = el("button", "btn" + (inboxState.filter === key ? " primary" : ""), label); b.onclick = () => { inboxState.filter = key; loadInbox(); }; chips.append(b); };
+  mk(`All · ${ib.pending}`, ""); for (const [k, n] of Object.entries(ib.counts)) mk(`${KIND_LABELS[k] || k} · ${n}`, k);
+  const box = $("#inbox-cards"); box.replaceChildren();
+  for (const c of ib.cards.filter(c => !inboxState.filter || c.kind === inboxState.filter).slice(0, 8)) {
+    const card = el("div", "ib");
+    const th = el("div", "thumbs"); for (const id of c.covers) { const im = document.createElement("img"); im.src = media("thumb", id); im.alt = ""; im.loading = "lazy"; im.onclick = () => goPhotos({ ids: c.ids.join(","), eventTitle: c.title }); th.append(im); }
+    if (c.count > c.covers.length) th.append(el("div", "more", "+" + (c.count - c.covers.length)));
+    const body = el("div"); body.style.flex = "1"; body.style.minWidth = "0";
+    const head = el("div"); const k = el("span", "kind", KIND_LABELS[c.kind] || c.kind); k.style.color = KIND_COLORS[c.kind] || "var(--muted)";
+    const pct = el("span", "small muted", ` ${Math.round(c.conf * 100)}% sure `); const bar = el("span", "bar"); const fill = document.createElement("i"); fill.style.width = Math.round(c.conf * 100) + "%"; fill.style.background = c.conf >= 0.9 ? "var(--accent)" : c.conf >= 0.8 ? "#d97706" : "#9ca3af"; bar.append(fill);
+    head.append(k, pct, bar); body.append(head, el("div", "t", c.title), el("div", "why", c.why));
+    const acts = el("div", "row"); acts.style.flex = "none";
+    const yes = el("button", "btn primary", c.yes), alt = el("button", "btn", c.alt), skip = el("button", "btn", "✕"); skip.title = "Skip";
+    yes.onclick = async () => { let name; if (c.action.do === "face_name") { name = prompt("Who is this?"); if (!name) return; } try { await api("/api/inbox/accept", { key: c.key, name }); toast("Done"); } catch (e) { toast(e.message); } loadInbox(); refresh(); };
+    alt.onclick = async () => {
+      if (c.action.do === "trip_add") { showTab("organize"); og.filters = { ids: c.ids.join(",") }; await loadOrganize(); c.ids.forEach(i => og.sel.add(i)); ogRender(); }
+      else if (c.action.do === "location") openLocation(c.ids, `${c.count} photos`);
+      else if (c.action.do === "face_merge") { const n = prompt("Who is this?"); if (n) { await api("/api/people/rename", { id: c.person_id, name: n }).catch(e => toast(e.message)); await api("/api/inbox/skip", { key: c.key }).catch(() => {}); loadInbox(); } }
+      else if (c.action.do === "face_name") { await api("/api/people/hide", { id: c.person_id, hidden: true }).catch(e => toast(e.message)); await api("/api/inbox/skip", { key: c.key }).catch(() => {}); loadInbox(); }
+      else if (c.action.do === "trash") $("#clean-find").click();
+      else if (c.action.do === "trip_merge") { await api("/api/inbox/skip", { key: c.key }).catch(() => {}); loadInbox(); }
+    };
+    skip.onclick = async () => { await api("/api/inbox/skip", { key: c.key }).catch(e => toast(e.message)); loadInbox(); };
+    acts.append(yes, alt, skip); card.append(th, body, acts); box.append(card);
+  }
+  const foot = [`${fmt(ib.decided_week)} decisions this week`];
+  if (ib.auto_recent.length) foot.push("applied on its own: " + ib.auto_recent.map(a => a.title).slice(0, 2).join("; "));
+  if (ib.last) foot.push(`last: ${ib.last.decision} · ${ib.last.title}`);
+  $("#inbox-foot").textContent = foot.join(" · ");
+}
+$("#inbox-high").onclick = async () => { try { const r = await api("/api/inbox/accept-high", {}); toast(`Applied ${r.applied} suggestions`); } catch (e) { toast(e.message); } loadInbox(); refresh(); };
+$("#inbox-undo").onclick = async () => { try { const r = await api("/api/inbox/undo", {}); toast("Undone: " + r.undone); } catch (e) { toast(e.message); } loadInbox(); refresh(); };
 async function loadDaily() {
   const d = await api("/api/daily").catch(() => null); if (!d || !d.memory) { $("#dailypanel").classList.add("hidden"); return; }
   $("#dailypanel").classList.remove("hidden");
@@ -1639,7 +1705,7 @@ function setFilters(f) {
   fillCities();
   const chip = $("#f-trip");
   const label = f.trip ? "Trip: " + (f.tripTitle || "") : f.person ? "Person: " + (f.personName || "")
-    : f.chapter ? "Chapter: " + (f.chapterTitle || "") : f.event ? "Event: " + (f.eventTitle || "") : f.burst ? (f.burstTitle || "Burst") : f.flying ? (f.eventTitle || f.monthTitle || "Aircraft") : f.contributor ? (f.eventTitle || "Added by " + f.contributor) : f.album ? "Album: " + (f.albumTitle || "")
+    : f.chapter ? "Chapter: " + (f.chapterTitle || "") : f.event ? "Event: " + (f.eventTitle || "") : f.burst ? (f.burstTitle || "Burst") : f.flying ? (f.eventTitle || f.monthTitle || "Aircraft") : f.contributor ? (f.eventTitle || "Added by " + f.contributor) : f.album ? "Album: " + (f.albumTitle || "") : f.ids ? (f.eventTitle || "Suggested photos")
     : (f.month || f.day) ? (f.monthTitle || f.month || f.day) : "";
   chip.classList.toggle("hidden", !label);
   $("#f-replay").classList.toggle("hidden", !(f.trip || f.day || f.month || f.event || f.flying || f.album));
@@ -1649,7 +1715,7 @@ function setFilters(f) {
   if (label) {
     chip.replaceChildren(document.createTextNode(label));
     const x = document.createElement("button"); x.textContent = "✕"; x.title = "Show all photos";
-    x.onclick = () => setFilters({ ...f, trip: "", person: "", chapter: "", month: "", day: "", event: "", burst: "", flying: "", contributor: "", album: "" }); chip.append(x);
+    x.onclick = () => setFilters({ ...f, trip: "", person: "", chapter: "", month: "", day: "", event: "", burst: "", flying: "", contributor: "", album: "", ids: "" }); chip.append(x);
   }
   loadMorePhotos();
 }
@@ -1712,7 +1778,7 @@ async function loadMorePhotos() {
   grid.loading = true;
   const mine = grid;
   const q = new URLSearchParams({ offset: grid.offset, limit: PAGE });
-  for (const k of ["q", "year", "country", "city", "trip", "kind", "person", "month", "day", "chapter", "event", "best", "burst", "flying", "contributor", "favorite", "album", "person2"]) if (grid.filters[k]) q.set(k, grid.filters[k]);
+  for (const k of ["q", "year", "country", "city", "trip", "kind", "person", "month", "day", "chapter", "event", "best", "burst", "flying", "contributor", "favorite", "album", "person2", "ids"]) if (grid.filters[k]) q.set(k, grid.filters[k]);
   try {
     const res = await api("/api/photos?" + q);
     if (mine !== grid) return;  // filters changed meanwhile

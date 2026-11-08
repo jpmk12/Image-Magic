@@ -27,7 +27,7 @@ from .settings import settings_dir
 CODE_TTL = 600
 MAX_TRIES = 5
 LAPTOP_ONLY = ("/api/settings", "/api/run", "/api/cancel", "/api/auth", "/api/quit", "/api/open-folder",
-               "/api/import/", "/api/share/export", "/api/phone/", "/api/cleanup", "/api/archive")
+               "/api/import/", "/api/share/export", "/api/phone/", "/api/cleanup", "/api/archive", "/api/inbox/")
 
 
 def lan_ips() -> list[str]:

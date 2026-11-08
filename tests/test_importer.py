@@ -27,9 +27,10 @@ def make_photo(path, when, where=HOME, seed=0, size=(600, 400)):
         d.ellipse([x - r, y - r, x + r, y + r], fill=(rng.randint(0, 90), rng.randint(0, 90), rng.randint(0, 90)))
     exif = Image.Exif()
     exif.get_ifd(0x8769)[36867] = when.strftime("%Y:%m:%d %H:%M:%S")
-    lat, lon = where
-    g = exif.get_ifd(0x8825)
-    g[1], g[2], g[3], g[4] = ("N" if lat >= 0 else "S"), dms(lat), ("E" if lon >= 0 else "W"), dms(lon)
+    if where:
+        lat, lon = where
+        g = exif.get_ifd(0x8825)
+        g[1], g[2], g[3], g[4] = ("N" if lat >= 0 else "S"), dms(lat), ("E" if lon >= 0 else "W"), dms(lon)
     im.save(path, "JPEG", exif=exif, quality=90)
 
 

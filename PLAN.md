@@ -368,6 +368,13 @@ Service features (flying log, squadron yearbook) slot into S2 (log) and S9 (year
   pages for index/chapters/trips/events/albums (+ years with everything), stories and
   milestones inline, optional voice notes; `archive` job with progress; Home panel.
 - Phase 6 complete.
+- **Curation sprint: Curator inbox** (v0.41.0): inbox.suggestions (trip additions from
+  curate.suggest_for_trip's strong items, face groups near a named centre or large unnamed
+  groups, unlocated photos with 2-hour neighbours grouped by place, adjacent same-area trips,
+  clutter), stable keys hashed from the photo ids, inbox_decisions with undo payloads
+  (trip_restore, face_unmerge, face_unname, location_clear, restore), accept-high, auto-apply
+  after each scan for locations ≥ 0.9 and exact copies only; Home panel with chips and cards;
+  `ids` filter for "adjust" to land in Organize.
 - **Curation sprint (mockups approved): Organize + Set location** (v0.40.0): Organize tab
   (range/lasso/Ctrl+A selection, quick-select filters nolocation/notrip/noalbum, action bar,
   drag-and-drop and number-key targets); locations.set_manual/clear_manual/nearby_suggestions

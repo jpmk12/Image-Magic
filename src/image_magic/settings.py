@@ -59,6 +59,7 @@ class Settings:
     backup_path: str = ""              # second copy of the library (external drive, NAS); empty = off
     phone_access: bool = False         # also listen on the Wi-Fi address (HTTPS + pairing code)
     daily_memory: bool = True          # a Windows notification with the memory of the day while the app is open
+    inbox_auto: bool = True            # after each sync, apply confident location and clutter suggestions by itself
 
     def __post_init__(self) -> None:
         if not self.library_path:
