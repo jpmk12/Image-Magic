@@ -79,6 +79,12 @@ def _filters(params: dict, alias: str = "") -> tuple[str, list]:
         args.append(int(params["burst"]))
     if params.get("favorite"):
         where.append(f"{a}favorite = 1")
+    if params.get("nolocation"):
+        where.append(f"{a}lat IS NULL")
+    if params.get("notrip"):
+        where.append(f"{a}trip_id IS NULL")
+    if params.get("noalbum"):
+        where.append(f"{a}id NOT IN (SELECT asset_id FROM album_items)")
     if params.get("_album_items"):
         where.append(f"{a}id IN (SELECT asset_id FROM album_items WHERE album_id = ?)")
         args.append(int(params["_album_items"]))

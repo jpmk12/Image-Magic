@@ -238,6 +238,17 @@ program only. Your photos and settings are kept.
   (photos in the new range join, others leave), split at a date into two trips, merge into
   another trip, choose the cover (from the viewer), or **Not a trip**, which takes the trip out
   while its photos stay and are never grouped into it again. All of these survive rebuilds.
+- **Organize tab:** the workbench for bulk fixes. Click selects, **Shift**+click selects a range,
+  dragging on empty space draws a lasso, **Ctrl+A** takes everything shown, **Esc** clears.
+  Quick-select chips grab photos with no location, not in a trip, not in an album, or best
+  only, within a year or month. The bar at the bottom moves the selection to a trip (or a new
+  one), an album, out of its trips, to a location or to the trash. On the right, trips and
+  albums are drop targets: drag the selection onto one, click it, or press its number key.
+- **Set location:** for one photo (viewer → Place) or a selection (Organize → Set location):
+  take the place of photos taken nearby in time (choose how far to look, 20 minutes to 12
+  hours), search a place by name from the offline list, pin it on the map, or copy it from a
+  photo that has it right. Only photos without a place change unless you tick overwrite. A
+  location you set is marked "set by you", survives every rebuild, and anchors its neighbours.
 - **Select mode:** **☑ Select** on the Photos tab lets you tick many photos (or **Select all
   shown**) and then move them to a trip or a new trip, take them out of their trips, add them
   to an album, or move them to the trash in one go.

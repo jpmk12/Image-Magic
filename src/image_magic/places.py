@@ -61,6 +61,33 @@ def _index() -> dict[tuple[int, int], list[tuple[float, float, str, str, str]]]:
     return dict(grid)
 
 
+@lru_cache(maxsize=1)
+def _all_places() -> list[tuple[float, float, str, str, str]]:
+    return [p for cell in _index().values() for p in cell]
+
+
+def search(query: str, limit: int = 8) -> list[dict]:
+    """Places whose name starts with (then contains) the query, bigger-list order kept. Offline."""
+    q = (query or "").strip().lower()
+    if len(q) < 2:
+        return []
+    cc = countries()
+    starts, contains = [], []
+    for la, lo, name, region, code in _all_places():
+        n = name.lower()
+        if n.startswith(q):
+            starts.append((la, lo, name, region, code))
+        elif q in n and len(contains) < limit * 4:
+            contains.append((la, lo, name, region, code))
+        if len(starts) >= limit * 4:
+            break
+    starts.sort(key=lambda p: (p[2].lower() != q, len(p[2])))      # exact name first, then the shortest names
+    out = []
+    for la, lo, name, region, code in (starts + contains)[:limit]:
+        out.append({"lat": la, "lon": lo, "name": name, "region": region or "", "country_code": code, "country": cc.get(code, code)})
+    return out
+
+
 def lookup(lat: float, lon: float) -> Place:
     grid = _index()
     best, best_km = None, float("inf")

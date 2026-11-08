@@ -99,6 +99,7 @@ def infer_nearby(conn: sqlite3.Connection) -> int:
              AND (lat IS NOT NULL OR location_source IN ('none', 'nearby')) ORDER BY taken_at""").fetchall()
     # Inferred positions are recomputed from scratch each time, from real ones only.
     real = [(t, r) for r in rows if r["lat"] is not None and r["location_source"] != "nearby" and (t := _ts(r["taken_at"])) is not None]
+    # (a 'manual' location counts as real: it is never recomputed, and it anchors its neighbours)
     todo = [(t, r) for r in rows if (r["lat"] is None or r["location_source"] == "nearby") and (t := _ts(r["taken_at"])) is not None]
     if not real or not todo:
         return 0
@@ -139,6 +140,66 @@ def infer_nearby(conn: sqlite3.Connection) -> int:
         n += 1
     conn.commit()
     return n
+
+
+def set_manual(conn: sqlite3.Connection, ids: list[int], lat: float, lon: float, overwrite: bool = False) -> int:
+    """Give these photos a place you chose. Kept through every rebuild; inference never touches it."""
+    from . import places
+    lat, lon = float(lat), float(lon)
+    if not (-90 <= lat <= 90 and -180 <= lon <= 180):
+        raise ValueError("That is not a valid location")
+    n = 0
+    for i in ids:
+        cond = "" if overwrite else " AND (lat IS NULL OR location_source IN ('nearby', 'none'))"
+        cur = conn.execute(f"UPDATE assets SET lat = ?, lon = ?, place_km = NULL, city = NULL, region = NULL, country = NULL, "
+                           f"country_code = NULL, location_source = 'manual' WHERE id = ?{cond}", (lat, lon, int(i)))
+        n += cur.rowcount
+    conn.commit()
+    places.update_places(conn)
+    return n
+
+
+def clear_manual(conn: sqlite3.Connection, ids: list[int]) -> int:
+    """Undo a manual location: back to 'none' so inference may fill it again."""
+    n = 0
+    for i in ids:
+        cur = conn.execute("UPDATE assets SET lat = NULL, lon = NULL, place_km = NULL, city = NULL, region = NULL, country = NULL, "
+                           "country_code = NULL, location_source = 'none' WHERE id = ? AND location_source = 'manual'", (int(i),))
+        n += cur.rowcount
+    conn.commit()
+    infer_nearby(conn)
+    from . import places
+    places.update_places(conn)
+    return n
+
+
+def nearby_suggestions(conn: sqlite3.Connection, ids: list[int], window_minutes: int = NEARBY_MINUTES) -> list[dict]:
+    """For each photo: the location its time-neighbours suggest (within the window), with a place name."""
+    from . import places
+    real = conn.execute(
+        """SELECT taken_at, lat, lon FROM assets WHERE missing = 0 AND lat IS NOT NULL AND taken_at IS NOT NULL
+           AND location_source IN ('exif', 'icloud', 'video', 'manual') ORDER BY taken_at""").fetchall()
+    times = [_ts(r["taken_at"]) for r in real]
+    import bisect
+    out = []
+    window = window_minutes * 60
+    for i in ids:
+        r = conn.execute("SELECT id, taken_at, lat, location_source FROM assets WHERE id = ?", (int(i),)).fetchone()
+        if not r or not r["taken_at"]:
+            continue
+        t = _ts(r["taken_at"])
+        if t is None:
+            continue
+        k = bisect.bisect_left(times, t)
+        cands = [(abs(times[j] - t), real[j]) for j in (k - 1, k) if 0 <= j < len(real) and times[j] is not None and abs(times[j] - t) <= window]
+        if not cands:
+            out.append({"id": r["id"], "lat": None, "lon": None, "place": "", "minutes": None, "has": r["lat"] is not None})
+            continue
+        gap, n = min(cands, key=lambda c: c[0])
+        p = places.lookup(n["lat"], n["lon"])
+        out.append({"id": r["id"], "lat": n["lat"], "lon": n["lon"], "minutes": round(gap / 60), "has": r["lat"] is not None,
+                    "place": ", ".join(x for x in [p.city, p.country] if x)})
+    return out
 
 
 def refresh(conn: sqlite3.Connection, originals: Path, progress=None, cancelled=lambda: False) -> dict:

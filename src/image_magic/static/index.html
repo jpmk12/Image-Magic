@@ -146,6 +146,22 @@
   .grid.selecting .tile::after { content: ""; position: absolute; top: 8px; left: 8px; width: 22px; height: 22px; border-radius: 50%; border: 2px solid #fff; background: rgba(0,0,0,.35); }
   .grid.selecting .tile.sel::after { content: "✓"; background: var(--accent); color: #fff; font-weight: 700; display: grid; place-items: center; font-size: 14px; }
   .grid.selecting .tile.sel { outline: 3px solid var(--accent); }
+  .og { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 16px; }
+  .og-grid { position: relative; display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 6px; user-select: none; min-height: 200px; }
+  .og-grid .tile { cursor: pointer; }
+  .og-grid .tile::after { content: ""; position: absolute; top: 8px; left: 8px; width: 22px; height: 22px; border-radius: 50%; border: 2px solid #fff; background: rgba(0,0,0,.35); }
+  .og-grid .tile.sel::after { content: "✓"; background: var(--accent); color: #fff; font-weight: 700; display: grid; place-items: center; font-size: 14px; }
+  .og-grid .tile.sel { outline: 3px solid var(--accent); outline-offset: -3px; }
+  .og-grid .tile .tag { position: absolute; right: 6px; bottom: 6px; background: #b45309; color: #fff; font-size: 10px; padding: 1px 5px; border-radius: 4px; }
+  #og-lasso { position: absolute; border: 2px dashed var(--accent); background: rgba(13,148,136,.10); border-radius: 6px; pointer-events: none; display: none; z-index: 3; }
+  .og-bar { position: sticky; bottom: 10px; z-index: 5; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; background: #1c2429; color: #fff; border-radius: 14px; padding: 10px 14px; box-shadow: 0 10px 30px -12px rgba(0,0,0,.5); margin-top: 10px; }
+  .og-bar .btn { background: #2c3640; color: #fff; border-color: transparent; }
+  .og-bar .btn.primary { background: var(--accent); }
+  .og-bar .btn.danger { background: #7f1d1d; }
+  .target { display: flex; align-items: center; gap: 10px; border: 1px dashed var(--line); background: var(--soft); border-radius: 10px; padding: 8px 10px; text-align: left; width: 100%; cursor: pointer; color: var(--text); font: inherit; }
+  .target:hover, .target.over { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, var(--panel)); }
+  .target img { width: 36px; height: 36px; border-radius: 7px; object-fit: cover; background: var(--soft); flex: none; }
+  .target .k { font-size: 11px; color: var(--muted); border: 1px solid var(--line); border-radius: 5px; padding: 1px 6px; }
   #selbar { position: sticky; bottom: 10px; z-index: 5; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 10px 14px; box-shadow: var(--shadow); margin-top: 10px; }
 
   /* ---- timeline */
@@ -306,6 +322,7 @@
   <nav>
     <button data-tab="home" class="active"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11.5 12 4l9 7.5"/><path d="M5 10v10h14V10"/></svg>Home</button>
     <button data-tab="photos"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>Photos</button>
+    <button data-tab="organize"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h10M4 17h7"/><path d="M17 15l2 2 4-4"/></svg>Organize</button>
     <button data-tab="timeline"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Timeline</button>
     <button data-tab="memories"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l1.8 4.6L18.5 9l-4.7 1.4L12 15l-1.8-4.6L5.5 9l4.7-1.4z"/><path d="M19 15l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8z"/></svg>Memories</button>
     <button data-tab="people"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><circle cx="17" cy="9" r="2.5"/><path d="M15.5 14.5a5 5 0 0 1 6 4.5"/></svg>People</button>
@@ -536,6 +553,56 @@
     </div>
     <p class="muted" id="grid-empty" style="display:none">No photos here yet. Download some from the Home tab.</p>
     <div id="grid-more" style="height:40px"></div>
+  </section>
+
+  <!-- ORGANIZE -->
+  <section id="tab-organize" class="hidden">
+    <div class="row" style="justify-content:space-between;margin-bottom:10px">
+      <p class="muted small" style="margin:0">Click selects · <b>Shift</b>+click selects a range · drag on empty space draws a lasso · <b>Ctrl+A</b> all · <b>Esc</b> clears · keys <b>1–9</b> send the selection to a target on the right.</p>
+      <div class="row">
+        <select id="og-year"><option value="">All years</option></select>
+        <select id="og-month" class="hidden"><option value="">Whole year</option></select>
+      </div>
+    </div>
+    <div class="row" style="margin-bottom:10px;flex-wrap:wrap">
+      <span class="small muted">Quick select:</span>
+      <button class="btn" data-og="nolocation">No location</button>
+      <button class="btn" data-og="notrip">Not in a trip</button>
+      <button class="btn" data-og="noalbum">Not in an album</button>
+      <button class="btn" data-og="best">Best only</button>
+      <button class="btn" id="og-all">All shown</button>
+      <button class="btn" id="og-clear">Clear</button>
+      <span class="small muted" id="og-count" style="margin-left:auto"></span>
+    </div>
+    <div class="og">
+      <div>
+        <div class="og-grid" id="og-grid"><div id="og-lasso"></div></div>
+        <div style="text-align:center;margin:10px 0"><button class="btn hidden" id="og-more">Show more</button></div>
+        <div class="og-bar" id="og-bar">
+          <b id="og-selcount">0 selected</b>
+          <span class="small" id="og-hint" style="color:#9fb0b7">Tip: click the first photo, Shift+click the last.</span>
+          <span style="margin-left:auto"></span>
+          <button class="btn primary" id="og-trip">Trip ▾</button>
+          <button class="btn" id="og-album">Album ▾</button>
+          <button class="btn" id="og-loc">Set location…</button>
+          <button class="btn" id="og-notrip">Not part of a trip</button>
+          <button class="btn danger" id="og-trash">Trash</button>
+        </div>
+      </div>
+      <aside>
+        <div class="panel" style="padding:14px">
+          <div class="small muted" style="font-weight:700;letter-spacing:.04em;text-transform:uppercase">Drop targets</div>
+          <p class="small muted" style="margin:4px 0 10px">Drag the selection onto a target, or click it. Keys 1–9 pick the first nine.</p>
+          <div class="small" style="font-weight:600;margin:6px 0">Trips</div>
+          <div id="og-trips" style="display:flex;flex-direction:column;gap:6px"></div>
+          <button class="target" id="og-newtrip" style="margin-top:6px;color:var(--accent);font-weight:600">+ New trip from selection</button>
+          <div class="small" style="font-weight:600;margin:12px 0 6px">Albums</div>
+          <div id="og-albums" style="display:flex;flex-direction:column;gap:6px"></div>
+          <button class="target" id="og-newalbum" style="margin-top:6px;color:var(--accent);font-weight:600">+ New album from selection</button>
+          <div class="small" id="og-toast" style="margin-top:12px;min-height:36px;background:color-mix(in srgb, var(--accent) 10%, var(--panel));color:var(--accent);border-radius:10px;padding:8px 10px">Select some photos, then pick a target.</div>
+        </div>
+      </aside>
+    </div>
   </section>
 
   <!-- TIMELINE -->
@@ -868,6 +935,41 @@
   </div>
 </div>
 
+<div class="story share hidden" id="loc-dlg">
+  <div class="card" style="width:min(900px,100%)">
+    <div class="row" style="justify-content:space-between"><h2 id="loc-title" style="margin:0">Set location</h2><button class="btn" id="loc-close">✕</button></div>
+    <p class="small muted" id="loc-sum"></p>
+    <div class="row" style="margin:6px 0 10px">
+      <button class="btn" data-loctab="nearby">Same as nearby photos</button>
+      <button class="btn" data-loctab="search">Search a place</button>
+      <button class="btn" data-loctab="map">Pin on the map</button>
+      <button class="btn" data-loctab="copy">Copy from a photo</button>
+    </div>
+    <div class="row" style="align-items:flex-start;gap:16px">
+      <div style="flex:1;min-width:0">
+        <div id="loc-nearby" class="loc-pane">
+          <div class="row"><span class="small">Look up to</span><select id="loc-window"><option value="20">20 minutes</option><option value="120" selected>2 hours</option><option value="360">6 hours</option><option value="720">12 hours</option></select><span class="small">away for a located photo</span></div>
+          <div id="loc-nearby-list" class="small" style="margin-top:8px;max-height:240px;overflow:auto"></div>
+        </div>
+        <div id="loc-search" class="loc-pane hidden">
+          <input type="text" id="loc-q" placeholder="Type a place: Petra, Dover, Tokyo…" style="width:100%">
+          <div id="loc-results" style="display:flex;flex-direction:column;gap:6px;margin-top:8px"></div>
+          <p class="small muted">Looked up on this computer from the bundled list of 145,000 places. Nothing is sent anywhere.</p>
+        </div>
+        <div id="loc-map" class="loc-pane hidden"><div id="loc-mapbox" style="height:300px;border-radius:12px;overflow:hidden;background:var(--soft)"></div><p class="small muted" id="loc-mapnote">Click the map to place the pin.</p></div>
+        <div id="loc-copy" class="loc-pane hidden"><p class="small muted">Pick one photo that has the right location; the selection takes its place.</p><div id="loc-donors" class="mem-row"></div></div>
+      </div>
+      <div style="width:240px;flex:none;background:var(--soft);border-radius:12px;padding:12px">
+        <div class="small muted" style="font-weight:700;letter-spacing:.04em;text-transform:uppercase">Will change</div>
+        <div style="font-size:24px;font-weight:700"><span id="loc-n">0</span> <span class="small muted" style="font-weight:500">photos</span></div>
+        <div class="small" style="margin-top:4px">→ <b id="loc-target">choose a place</b></div>
+        <label class="small" style="display:flex;gap:8px;align-items:center;margin-top:10px"><input type="checkbox" id="loc-overwrite"> Overwrite photos that already have a place (<span id="loc-has">0</span>)</label>
+        <p class="small muted" style="margin:10px 0 0">Recorded as "set by you" and kept through every rebuild.</p>
+      </div>
+    </div>
+    <div class="row" style="margin-top:14px;justify-content:flex-end"><span class="small" id="loc-note" style="margin-right:auto;color:var(--accent)"></span><button class="btn primary" id="loc-apply">Apply</button></div>
+  </div>
+</div>
 <div class="story share hidden" id="place-dlg">
   <div class="card" style="width:min(960px,100%)">
     <div class="row" style="justify-content:space-between"><h2 id="place-title" style="margin:0"></h2><button class="btn" id="place-close">✕</button></div>
@@ -988,10 +1090,11 @@ function showTab(name) {
   const active = $$("nav button").find(b => b.dataset.tab === name);
   if (active) $("#page-title").textContent = active.textContent.trim();
   $$("main > section").forEach(s => s.classList.toggle("hidden", s.id !== "tab-" + name));
-  document.querySelector("main").classList.toggle("wide", ["photos", "trips", "map"].includes(name));
+  document.querySelector("main").classList.toggle("wide", ["photos", "trips", "map", "organize"].includes(name));
   if (name === "settings") loadSettings();
   if (name === "photos") ensurePhotos();
   if (name === "trips") { loadTrips(); loadEvents(); loadAlbums(); }
+  if (name === "organize") loadOrganize();
   if (name === "people") loadPeople();
   if (name === "timeline") loadTimeline();
   if (name === "memories") { loadMemories(); cmpOptions(); loadFlying(); }
@@ -1700,7 +1803,8 @@ async function openLightbox(i, items) {
       if (desc && desc.text) add("Text in photo", desc.text);
     }
     add("Taken", d.taken_at ? new Date(d.taken_at).toLocaleString() : "");
-    add("Place", [d.city, d.region, d.country].filter(Boolean).join(", ") + ({ nearby: " (from photos taken minutes apart)", icloud: " (from iCloud's record)", video: " (from the video)" }[d.location_source] || ""));
+    add("Place", ([d.city, d.region, d.country].filter(Boolean).join(", ") || "No location") + ({ nearby: " (from photos taken minutes apart)", icloud: " (from iCloud's record)", video: " (from the video)", manual: " (set by you)" }[d.location_source] || ""),
+      () => openLocation([d.id], d.taken_at ? fmtDate(d.taken_at) : "this photo"));
     if (d.title) add("Title", d.title);
     if (d.favorite) add("Favourite", "♥ Hearted in iCloud Photos");
     {
@@ -1788,6 +1892,185 @@ document.addEventListener("keydown", e => {
   if (e.key === "ArrowLeft") $("#lb-prev").click();
   if (e.key === "ArrowRight") $("#lb-next").click();
 });
+
+// ---- organize
+const og = { filters: {}, items: [], offset: 0, total: 0, sel: new Set(), last: null, targets: [], loading: false };
+async function loadOrganize(reset) {
+  if (reset !== false) { og.items = []; og.offset = 0; og.sel.clear(); og.last = null; $("#og-grid").querySelectorAll(".tile").forEach(t => t.remove()); }
+  if (!og.yearsLoaded) { og.yearsLoaded = true; const f = await api("/api/facets").catch(() => null); if (f) for (const y of f.years) $("#og-year").append(new Option(`${y.year} (${fmt(y.n)})`, y.year)); }
+  const q = new URLSearchParams({ offset: og.offset, limit: 300 });
+  for (const [k, v] of Object.entries(og.filters)) if (v) q.set(k, v);
+  og.loading = true;
+  try {
+    const res = await api("/api/photos?" + q); og.total = res.total;
+    const frag = document.createDocumentFragment();
+    for (const it of res.items) {
+      const idx = og.items.length; og.items.push(it);
+      const b = document.createElement("button"); b.className = "tile"; b.dataset.id = it.id; b.dataset.idx = idx; b.title = [fmtDate(it.taken_at), placeLabel(it)].filter(Boolean).join(" · ");
+      if (it.kind === "video") { b.classList.add("video"); b.textContent = "▶"; } else { const img = document.createElement("img"); img.loading = "lazy"; img.decoding = "async"; img.src = media("thumb", it.id); img.alt = ""; b.append(img); }
+      if (!placeLabel(it)) { const t = document.createElement("span"); t.className = "tag"; t.textContent = "no place"; b.append(t); }
+      b.onclick = ev => ogPick(idx, ev); b.ondblclick = () => openLightbox(idx, og.items);
+      b.draggable = true; b.ondragstart = ev => { if (!og.sel.has(it.id)) ogPick(idx, {}); ev.dataTransfer.setData("text/plain", "selection"); ev.dataTransfer.effectAllowed = "copyMove"; };
+      frag.append(b);
+    }
+    $("#og-grid").append(frag); og.offset += res.items.length;
+    $("#og-count").textContent = `${fmt(og.total)} photos`; $("#og-more").classList.toggle("hidden", og.offset >= og.total);
+  } catch (e) { toast(e.message); } finally { og.loading = false; }
+  ogRender(); loadTargets();
+}
+function ogPick(idx, ev) {
+  const it = og.items[idx]; if (!it) return;
+  if (ev.shiftKey && og.last != null) { const [a, b] = [Math.min(og.last, idx), Math.max(og.last, idx)]; for (let k = a; k <= b; k++) og.sel.add(og.items[k].id); }
+  else if (og.sel.has(it.id)) og.sel.delete(it.id); else og.sel.add(it.id);
+  og.last = idx; ogRender();
+}
+function ogRender() {
+  $$("#og-grid .tile").forEach(t => t.classList.toggle("sel", og.sel.has(+t.dataset.id)));
+  $("#og-selcount").textContent = `${og.sel.size} selected`;
+  $("#og-hint").textContent = og.sel.size ? "Shift+click extends · Esc clears · drag onto a target" : "Tip: click the first photo, Shift+click the last.";
+}
+$("#og-year").onchange = e => { og.filters.year = e.target.value; og.filters.month = ""; const m = $("#og-month"); m.classList.toggle("hidden", !e.target.value); m.length = 1; if (e.target.value) for (let i = 1; i <= 12; i++) m.append(new Option(MONTHS[i - 1], `${e.target.value}-${String(i).padStart(2, "0")}`)); loadOrganize(); };
+$("#og-month").onchange = e => { og.filters.month = e.target.value; loadOrganize(); };
+$$("[data-og]").forEach(b => b.onclick = () => { const k = b.dataset.og; og.filters[k] = og.filters[k] ? "" : "1"; b.classList.toggle("primary", !!og.filters[k]); loadOrganize(); });
+$("#og-all").onclick = () => { og.items.forEach(it => og.sel.add(it.id)); ogRender(); };
+$("#og-clear").onclick = () => { og.sel.clear(); og.last = null; ogRender(); };
+$("#og-more").onclick = () => loadOrganize(false);
+// lasso on empty grid space
+(() => {
+  const grid = $("#og-grid"), box = $("#og-lasso"); let start = null;
+  grid.addEventListener("mousedown", ev => { if (ev.target !== grid) return; const r = grid.getBoundingClientRect(); start = { x: ev.clientX - r.left, y: ev.clientY - r.top, add: ev.shiftKey }; box.style.display = "block"; ev.preventDefault(); });
+  document.addEventListener("mousemove", ev => {
+    if (!start) return; const r = grid.getBoundingClientRect(); const x = ev.clientX - r.left, y = ev.clientY - r.top;
+    const L = Math.min(start.x, x), T = Math.min(start.y, y), W = Math.abs(x - start.x), H = Math.abs(y - start.y);
+    Object.assign(box.style, { left: L + "px", top: T + "px", width: W + "px", height: H + "px" });
+    if (!start.add) og.sel.clear();
+    $$("#og-grid .tile").forEach(t => { const b = t.getBoundingClientRect(); const tl = b.left - r.left, tt = b.top - r.top; if (tl < L + W && tl + b.width > L && tt < T + H && tt + b.height > T) og.sel.add(+t.dataset.id); });
+    ogRender();
+  });
+  document.addEventListener("mouseup", () => { if (start) { start = null; box.style.display = "none"; } });
+})();
+document.addEventListener("keydown", e => {
+  if ($("#tab-organize").classList.contains("hidden") || ["INPUT", "SELECT", "TEXTAREA"].includes(document.activeElement.tagName) || lbIndex >= 0) return;
+  if (e.key === "Escape") { og.sel.clear(); ogRender(); }
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "a") { e.preventDefault(); $("#og-all").click(); }
+  if (/^[1-9]$/.test(e.key) && og.targets[+e.key - 1]) og.targets[+e.key - 1].send();
+});
+const ogIds = () => [...og.sel];
+async function ogSend(label, fn) {
+  if (!og.sel.size) return toast("Select some photos first.");
+  const n = og.sel.size;
+  try { await fn(ogIds()); $("#og-toast").textContent = `${n} photos → ${label}.`; og.sel.clear(); loadOrganize(); refresh(); } catch (e) { toast(e.message); }
+}
+async function loadTargets() {
+  const [trips, albums] = await Promise.all([api("/api/trips").catch(() => []), api("/api/albums").catch(() => [])]);
+  og.targets = [];
+  const mk = (box, title, sub, cover, send) => {
+    const key = og.targets.length + 1;
+    const b = document.createElement("button"); b.className = "target";
+    const img = document.createElement("img"); img.alt = ""; if (cover) img.src = media("thumb", cover);
+    const t = document.createElement("span"); t.style.flex = "1"; t.style.minWidth = "0"; t.innerHTML = "<b></b><br><span class='small muted'></span>"; t.querySelector("b").textContent = title; t.querySelector("span").textContent = sub;
+    const k = document.createElement("span"); k.className = "k"; k.textContent = key <= 9 ? key : "";
+    b.append(img, t, k); b.onclick = send;
+    b.ondragover = ev => { ev.preventDefault(); b.classList.add("over"); }; b.ondragleave = () => b.classList.remove("over"); b.ondrop = ev => { ev.preventDefault(); b.classList.remove("over"); send(); };
+    box.append(b); og.targets.push({ send });
+  };
+  const tb = $("#og-trips"); tb.replaceChildren();
+  for (const t of trips.slice(0, 8)) mk(tb, t.title, `${fmtDate(t.start_at)} · ${fmt(t.photo_count)} photos`, t.cover_id, () => ogSend("trip " + t.title, ids => api("/api/curate/trip", { ids, trip: t.id })));
+  const ab = $("#og-albums"); ab.replaceChildren();
+  for (const a of albums.filter(a => a.kind === "manual").slice(0, 6)) mk(ab, a.title, `${fmt(a.photo_count)} photos`, a.cover_id, () => ogSend("album " + a.title, ids => api("/api/albums/add", { id: a.id, ids })));
+}
+$("#og-newtrip").onclick = () => { const n = prompt("Name the trip:"); if (n && n.trim()) ogSend("new trip " + n.trim(), ids => api("/api/curate/trip", { ids, trip: { new: n.trim() } })); };
+$("#og-newalbum").onclick = () => { const n = prompt("Album name:"); if (n && n.trim()) ogSend("new album " + n.trim(), ids => api("/api/albums/create", { title: n.trim(), kind: "manual", ids })); };
+$("#og-trip").onclick = async ev => {
+  const anchor = ev.currentTarget; if (!og.sel.size) return toast("Select some photos first.");
+  const trips = await api("/api/trips").catch(() => []);
+  const items = [{ head: `Move ${og.sel.size} photos to…` }];
+  for (const t of trips.slice(0, 15)) items.push({ label: `${t.title} · ${new Date(t.start_at).toLocaleDateString(undefined, { month: "short", year: "numeric" })}`, run: () => ogSend("trip " + t.title, ids => api("/api/curate/trip", { ids, trip: t.id })) });
+  items.push("-", { label: "A new trip…", run: () => $("#og-newtrip").click() }); showMenu(anchor, items);
+};
+$("#og-album").onclick = async ev => {
+  const anchor = ev.currentTarget; if (!og.sel.size) return toast("Select some photos first.");
+  const list = (await api("/api/albums").catch(() => [])).filter(a => a.kind === "manual");
+  const items = [{ head: `Add ${og.sel.size} photos to…` }];
+  for (const a of list.slice(0, 12)) items.push({ label: a.title, run: () => ogSend("album " + a.title, ids => api("/api/albums/add", { id: a.id, ids })) });
+  items.push("-", { label: "New album…", run: () => $("#og-newalbum").click() }); showMenu(anchor, items);
+};
+$("#og-notrip").onclick = () => ogSend("no trip", ids => api("/api/curate/trip", { ids, trip: "none" }));
+$("#og-trash").onclick = () => { if (og.sel.size && confirm(`Move ${og.sel.size} photos to the app's trash? They stay in iCloud and can be restored from the Home tab.`)) ogSend("the trash", ids => api("/api/cleanup/trash", { ids })); };
+$("#og-loc").onclick = () => { if (!og.sel.size) return toast("Select some photos first."); openLocation(ogIds(), `${og.sel.size} photos`); };
+
+// ---- set location dialog
+const loc = { ids: [], tab: "nearby", target: null, label: "", map: null, marker: null, has: 0 };
+async function openLocation(ids, title) {
+  loc.ids = ids; loc.target = null; loc.label = ""; $("#loc-note").textContent = "";
+  $("#loc-title").textContent = `Set location for ${title}`; $("#loc-dlg").classList.remove("hidden");
+  $("#loc-sum").textContent = "Only photos without a place change unless you tick overwrite.";
+  locTab("nearby");
+}
+function locTab(name) {
+  loc.tab = name; $$("[data-loctab]").forEach(b => b.classList.toggle("primary", b.dataset.loctab === name)); $$(".loc-pane").forEach(p => p.classList.toggle("hidden", p.id !== "loc-" + name));
+  loc.target = null; loc.label = "";
+  if (name === "nearby") locNearby(); if (name === "map") locMap(); if (name === "copy") locDonors(); if (name === "search") { $("#loc-q").focus(); }
+  locSummary();
+}
+$$("[data-loctab]").forEach(b => b.onclick = () => locTab(b.dataset.loctab));
+function locSummary() {
+  const n = $("#loc-overwrite").checked ? loc.ids.length : Math.max(0, loc.ids.length - loc.has);
+  $("#loc-n").textContent = loc.tab === "nearby" && loc.nearbyN != null ? loc.nearbyN : n; $("#loc-has").textContent = loc.has;
+  $("#loc-target").textContent = loc.label || (loc.tab === "nearby" ? "what the neighbours say" : "choose a place");
+}
+$("#loc-overwrite").onchange = () => { if (loc.tab === "nearby") locNearby(); else locSummary(); };
+$("#loc-window").onchange = locNearby;
+async function locNearby() {
+  const box = $("#loc-nearby-list"); box.textContent = "Looking…";
+  let r; try { r = await api("/api/location/nearby", { ids: loc.ids, window: +$("#loc-window").value }); } catch (e) { box.textContent = e.message; return; }
+  const s = r.suggestions, ow = $("#loc-overwrite").checked;
+  loc.has = s.filter(x => x.has).length;
+  const usable = s.filter(x => x.lat != null && (ow || !x.has));
+  loc.nearbyN = usable.length; loc.label = usable.length ? [...new Set(usable.map(x => x.place || "an unnamed spot"))].slice(0, 3).join(", ") : "";
+  const groups = {}; for (const x of usable) groups[x.place || "an unnamed spot"] = (groups[x.place || "an unnamed spot"] || 0) + 1;
+  box.replaceChildren();
+  for (const [place, n] of Object.entries(groups)) { const d = document.createElement("div"); d.textContent = `${n} → ${place}`; box.append(d); }
+  const none = s.filter(x => x.lat == null).length; if (none) { const d = document.createElement("div"); d.className = "muted"; d.textContent = `${none} have no located photo within that window; widen it or use another tab.`; box.append(d); }
+  if (!s.length) box.textContent = "Nothing to do.";
+  locSummary();
+}
+let locTimer = null;
+$("#loc-q").oninput = () => { clearTimeout(locTimer); locTimer = setTimeout(async () => {
+  const res = await api("/api/places/search?q=" + encodeURIComponent($("#loc-q").value)).catch(() => []);
+  const box = $("#loc-results"); box.replaceChildren();
+  for (const p of res) { const b = document.createElement("button"); b.className = "target"; b.textContent = `${p.name}, ${p.region ? p.region + ", " : ""}${p.country}`;
+    b.onclick = () => { loc.target = { lat: p.lat, lon: p.lon }; loc.label = `${p.name}, ${p.country}`; $$("#loc-results .target").forEach(x => x.classList.remove("over")); b.classList.add("over"); locSummary(); }; box.append(b); }
+}, 250); };
+function locMap() {
+  if (typeof L === "undefined") { $("#loc-mapnote").textContent = "The map could not load."; return; }
+  if (!loc.map) {
+    loc.map = L.map("loc-mapbox").setView([20, 10], 2);
+    L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 18 }).addTo(loc.map);
+    loc.map.on("click", e => { loc.target = { lat: e.latlng.lat, lon: e.latlng.lng }; if (!loc.marker) loc.marker = L.marker(e.latlng).addTo(loc.map); else loc.marker.setLatLng(e.latlng); loc.label = `the pin (${e.latlng.lat.toFixed(4)}, ${e.latlng.lng.toFixed(4)})`; locSummary(); });
+  }
+  setTimeout(() => loc.map.invalidateSize(), 80);
+}
+async function locDonors() {
+  const box = $("#loc-donors"); box.replaceChildren();
+  const q = new URLSearchParams({ limit: 24 }); if (og.filters.year) q.set("year", og.filters.year); if (og.filters.month) q.set("month", og.filters.month);
+  const res = await api("/api/photos?" + q).catch(() => ({ items: [] }));
+  const items = res.items.filter(it => placeLabel(it)).slice(0, 18);
+  items.forEach((it, i) => { const t = tileFor(it, items, i); t.style.width = "96px"; t.onclick = () => { loc.target = { from_asset: it.id }; loc.label = placeLabel(it); $$("#loc-donors .tile").forEach(x => x.style.outline = ""); t.style.outline = "3px solid var(--accent)"; locSummary(); }; box.append(t); });
+  if (!items.length) box.textContent = "No located photos in the current view to copy from.";
+}
+$("#loc-close").onclick = () => $("#loc-dlg").classList.add("hidden");
+$("#loc-apply").onclick = async () => {
+  const ow = $("#loc-overwrite").checked; $("#loc-note").textContent = "Applying…";
+  try {
+    let r;
+    if (loc.tab === "nearby") r = await api("/api/location/nearby", { ids: loc.ids, window: +$("#loc-window").value, apply: true, overwrite: ow });
+    else if (!loc.target) throw new Error("Choose a place first.");
+    else r = await api("/api/location/set", { ids: loc.ids, ...loc.target, overwrite: ow });
+    $("#loc-note").textContent = `Done: ${r.changed} photos updated.`; refresh();
+    if (!$("#tab-organize").classList.contains("hidden")) loadOrganize(); if (lbIndex >= 0) openLightbox(lbIndex, lbItems === grid.items ? undefined : lbItems);
+  } catch (e) { $("#loc-note").textContent = e.message; }
+};
 
 // ---- timeline
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];

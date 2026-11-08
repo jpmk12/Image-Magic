@@ -345,7 +345,7 @@ def make_handler(app: App):
                     return self._json(200, app.jobs.log_since(since))
                 if path.startswith(("/api/photos", "/api/photo/", "/api/facets", "/api/trips", "/api/replay",
                                     "/api/map", "/api/people", "/api/timeline", "/api/story", "/api/memories",
-                                    "/api/shuffle", "/api/similar/", "/api/review", "/api/context/", "/api/curate/", "/api/events", "/api/home", "/api/voice/", "/api/compare/", "/api/flying", "/api/book", "/api/review-queue", "/api/family", "/api/cleanup", "/api/albums", "/api/places/", "/api/daily", "/media/")):
+                                    "/api/shuffle", "/api/similar/", "/api/review", "/api/context/", "/api/curate/", "/api/events", "/api/home", "/api/voice/", "/api/compare/", "/api/flying", "/api/book", "/api/review-queue", "/api/family", "/api/cleanup", "/api/albums", "/api/places/", "/api/daily", "/api/ids", "/media/")):
                     return self._browse(path, self._query())
             except Exception as e:
                 return self._json(500, {"error": str(e)})
@@ -396,6 +396,12 @@ def make_handler(app: App):
                         n = max(5, min(int(q.get("n") or 30), 300))
                         return self._json(200, browse.replay_items(conn, quality.best_of(conn, where + " AND a.private = 0", args, n)))
                     return self._json(200, browse.replay(conn, q))
+                if path == "/api/ids":
+                    ids_ = sorted(browse.ids(conn, q))[:5000]
+                    return self._json(200, {"ids": ids_, "total": len(ids_)})
+                if path == "/api/places/search":
+                    from . import places
+                    return self._json(200, places.search(str(q.get("q") or ""), 8))
                 if path == "/api/facets":
                     return self._json(200, app.cached("facets", conn, lambda: browse.facets(conn)))
                 if path == "/api/trips":
@@ -907,6 +913,49 @@ def make_handler(app: App):
                             from . import chapters, events, places
                             places.refresh(conn); events.rebuild(conn); chapters.rebuild_milestones(conn)
                         return self._json(200, {**r, "trash": cleanup.trash_summary(conn)})
+                    finally:
+                        conn.close()
+                if path == "/api/location/set":
+                    from . import locations
+                    settings, conn = app.db()
+                    try:
+                        ids = [int(i) for i in data.get("ids") or []]
+                        if data.get("from_asset"):
+                            src = conn.execute("SELECT lat, lon FROM assets WHERE id = ?", (int(data["from_asset"]),)).fetchone()
+                            if not src or src["lat"] is None:
+                                raise ValueError("That photo has no location to copy")
+                            lat, lon = src["lat"], src["lon"]
+                        else:
+                            lat, lon = float(data["lat"]), float(data["lon"])
+                        n = locations.set_manual(conn, ids, lat, lon, bool(data.get("overwrite")))
+                        from . import chapters, events, places
+                        places.refresh(conn); events.rebuild(conn); chapters.rebuild_milestones(conn)
+                        return self._json(200, {"changed": n})
+                    finally:
+                        conn.close()
+                if path == "/api/location/nearby":
+                    from . import locations
+                    settings, conn = app.db()
+                    try:
+                        ids = [int(i) for i in data.get("ids") or []]
+                        window = max(5, min(int(data.get("window") or 20), 720))
+                        sugg = locations.nearby_suggestions(conn, ids, window)
+                        if data.get("apply"):
+                            n = 0
+                            for s_ in sugg:
+                                if s_["lat"] is not None and (not s_["has"] or data.get("overwrite")):
+                                    n += locations.set_manual(conn, [s_["id"]], s_["lat"], s_["lon"], bool(data.get("overwrite")))
+                            from . import chapters, events, places
+                            places.refresh(conn); events.rebuild(conn); chapters.rebuild_milestones(conn)
+                            return self._json(200, {"changed": n})
+                        return self._json(200, {"suggestions": sugg})
+                    finally:
+                        conn.close()
+                if path == "/api/location/clear":
+                    from . import locations
+                    settings, conn = app.db()
+                    try:
+                        return self._json(200, {"changed": locations.clear_manual(conn, [int(i) for i in data.get("ids") or []])})
                     finally:
                         conn.close()
                 if path == "/api/review-queue/decide":
