@@ -34,7 +34,7 @@ PHONE_GET = ("/api/status", "/api/photos", "/api/photo/", "/api/facets", "/api/t
              "/api/compare/options", "/api/ids", "/api/family", "/api/flying", "/api/holidays",
              "/media/thumb/", "/media/view/", "/media/face/", "/media/voice/")
 PHONE_POST = ("/api/ask", "/api/voice", "/api/voice/delete", "/api/contribute", "/api/compare", "/api/poster")
-PHONE_GET_EXACT_DENY = ("/api/people/book", "/api/people/gif", "/api/review-queue", "/api/phone", "/api/log", "/api/settings", "/api/book", "/api/places/geocode")
+PHONE_GET_EXACT_DENY = ("/api/people/book", "/api/people/gif", "/api/review-queue", "/api/phone", "/api/log", "/api/settings", "/api/book", "/api/places/geocode", "/api/albums/suggest")
 
 
 def lan_ips() -> list[str]:

@@ -149,6 +149,19 @@ def learn(conn: sqlite3.Connection) -> dict[str, dict]:
             if len(dismissed) >= MIN_EVIDENCE:
                 parts.append(f"{len(dismissed)} faces dismissed")
             out["face.join"] = (round(v, 3), len(merged) + len(dismissed), f"Faces join a person at similarity {v:.2f} ({', '.join(parts)}).")
+    # Trip suggestion signals: a reason you keep accepting counts for more, one you keep rejecting for less.
+    for sig in ("time", "looks", "words", "shot", "people", "travel"):
+        acc = len(_vals(conn, f"signal:{sig}", "accepted")) + conn.execute(
+            "SELECT COUNT(*) FROM decision_log WHERE kind = ? AND outcome = 'accepted' AND value IS NULL", (f"signal:{sig}",)).fetchone()[0]
+        rej = len(_vals(conn, f"signal:{sig}", "skipped")) + conn.execute(
+            "SELECT COUNT(*) FROM decision_log WHERE kind = ? AND outcome = 'skipped' AND value IS NULL", (f"signal:{sig}",)).fetchone()[0]
+        n = acc + rej
+        if n < 2 * MIN_EVIDENCE:
+            continue
+        rate = acc / n
+        w = round(max(0.5, min(1.5, 0.5 + rate)), 2)             # 50% agreement = unchanged; always on = 1.5x; never = 0.5x
+        if abs(w - 1.0) >= 0.1:
+            out[f"signal.{sig}"] = (w, n, f"Trip hints by {sig} count {w:g}x: you kept {acc} of {n} photos suggested for that reason.")
     # Inbox: per kind, how often you agree, at what confidence.
     for (kind,) in conn.execute("SELECT DISTINCT substr(kind, 7) FROM decision_log WHERE kind LIKE 'inbox:%'").fetchall():
         acc = _vals(conn, f"inbox:{kind}", "accepted")

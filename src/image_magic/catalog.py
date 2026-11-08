@@ -103,7 +103,7 @@ class LibraryUnavailable(RuntimeError):
     """The photo folder is missing or looks unplugged; nothing was changed."""
 
 
-SCHEMA_VERSION = 44          # bump when SCHEMA, any module SCHEMA, MIGRATIONS or the indexes change
+SCHEMA_VERSION = 45          # bump when SCHEMA, any module SCHEMA, MIGRATIONS or the indexes change
 _verified: set[str] = set()  # db files whose schema this process has already brought up to date
 
 
@@ -121,8 +121,8 @@ def connect(db_file: Path) -> sqlite3.Connection:
         return conn                                  # ~45 DDL statements skipped on every later request
     run_script(conn, SCHEMA)
     # Every feature's tables exist from the start, so request handlers never run DDL.
-    from . import albums, ask, chapters, cleanup, confidence, describe, events, faces, flying, inbox, learning, notes, review, search
-    for mod in (faces, describe, search, chapters, ask, notes, flying, confidence, cleanup, albums, inbox, learning):
+    from . import albumideas, albums, ask, chapters, cleanup, confidence, describe, events, faces, flying, inbox, learning, notes, review, search
+    for mod in (faces, describe, search, chapters, ask, notes, flying, confidence, cleanup, albums, inbox, learning, albumideas):
         run_script(conn, mod.SCHEMA if mod is not describe else describe.DB_SCHEMA)
     run_script(conn, review.SCHEMA)
     conn.commit()

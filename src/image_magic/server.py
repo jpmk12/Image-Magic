@@ -471,6 +471,9 @@ def make_handler(app: App):
                     from . import events
                     return self._json(200, app.cached(f"events:{q.get('year')}:{q.get('trip')}", conn,
                                                       lambda: events.events(conn, q.get("year"), int(q["trip"]) if q.get("trip") else None), ttl=600))
+                if path == "/api/albums/suggest":
+                    from . import albumideas
+                    return self._json(200, albumideas.suggest_for_album(conn, str(settings.db), int(q.get("album") or 0)))
                 if path == "/api/curate/stops":
                     from . import curate
                     return self._json(200, curate.stops(conn, int(q.get("trip") or 0)))
@@ -993,6 +996,9 @@ def make_handler(app: App):
                             aid = albums.create(conn, str(data.get("title", "")), str(data.get("kind") or "manual"),
                                                 dict(data.get("filters") or {}), ids)
                             return self._json(200, {"id": aid})
+                        if action == "reject":
+                            from . import albumideas
+                            return self._json(200, {"rejected": albumideas.reject_for_album(conn, int(data["id"]), ids)})
                         if action == "add":
                             albums.add(conn, int(data["id"]), ids)
                         elif action == "remove":

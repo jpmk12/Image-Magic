@@ -225,6 +225,18 @@ program only. Your photos and settings are kept.
 - **Stops:** **📍 Stops** on a trip card shows the trip as a sequence of places in order, with
   the photos of each. Move a whole stop to another trip, split it off as a trip of its own,
   take it out of the trip, or give it a location, in one go.
+- **Album ideas:** the inbox proposes albums from four sources: **themes**, groups of photos
+  that look alike in the visual index (named from their captions when there are any); **people
+  sets**, two to four named people who keep appearing in the same frame, and people often
+  photographed alone; **places you keep going back to**, the same 200-metre spot on five or
+  more different days (home included); and **big events** with several named people. Each
+  card shows exactly the photos it means; untick, name it, accept. Skipped ideas stay gone.
+- **Find more for an album:** on a hand-picked album, **🔍 Find more** proposes photos that
+  look like the album's or show the people it is about; unticked ones are remembered.
+- **Learned trip hints:** the six signals behind trip suggestions (time, looks, captions,
+  shot numbers, people, travel days) each earn a weight from what you keep and reject, from
+  0.5× to 1.5×, after ten decisions involving that signal. Settings → What the app has learned
+  shows them.
 - **Stories for events and years:** the **✍** button on an event card and **✍ Story** on the
   year panel work like trip and chapter stories: Claude drafts a few paragraphs from the dates,
   places, people and captions (never the pixels), you edit them, and the event book, year book

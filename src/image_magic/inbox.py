@@ -88,10 +88,34 @@ def _trip_additions(conn, db_key) -> list[dict]:
         conf = 0.92 if during == len(strong) else 0.84 if during >= len(strong) / 2 else 0.74
         ids = [i["id"] for i in strong]
         reasons = sorted({r.split(",")[0] for i in strong for r in i["reasons"][:1]})[:3]
+        signals = {str(i["id"]): sorted({curate.signal_of(r) for r in i["reasons"]}) for i in strong}
         out.append({"key": _key("trip", ids, str(t["id"])), "kind": "trip", "conf": conf, "ids": ids, "trip_id": t["id"],
                     "title": f"{len(ids)} photos look like part of {t['title']}", "why": "; ".join(reasons).capitalize() + ".",
-                    "yes": f"Add to {t['title']}", "alt": "Pick which…", "action": {"do": "trip_add", "trip": t["id"], "ids": ids}})
+                    "yes": f"Add to {t['title']}", "alt": "Pick which…", "action": {"do": "trip_add", "trip": t["id"], "ids": ids, "signals": signals}})
     return out
+
+
+def _album_ideas(conn, db_key) -> list[dict]:
+    from . import albumideas
+    out = []
+    for idea in albumideas.ideas(conn, db_key):
+        out.append({"key": _key("album", idea["ids"], f"{idea['kind']}:{idea['ref']}"), "kind": "album", "conf": idea["conf"], "ids": idea["ids"],
+                    "title": f"Album idea: {idea['title']} ({len(idea['ids'])} photos)", "why": idea["why"],
+                    "yes": "Make the album…", "alt": "Pick which…",
+                    "action": {"do": "album_create", "ids": idea["ids"], "title": idea["title"], "idea": {"kind": idea["kind"], "ref": idea["ref"]}}})
+    return out
+
+
+def _log_signals(conn, action: dict, accepted: list[int], rejected: list[int]) -> None:
+    """Remember, per signal, whether the photos it argued for were kept."""
+    from . import learning
+    sig = action.get("signals") or {}
+    for aid in accepted:
+        for s_ in sig.get(str(aid), []):
+            learning.record(conn, f"signal:{s_}", "accepted", None, None)
+    for aid in rejected:
+        for s_ in sig.get(str(aid), []):
+            learning.record(conn, f"signal:{s_}", "skipped", None, None)
 
 
 def _new_trips(conn) -> list[dict]:
@@ -212,7 +236,7 @@ def _clutter(conn, library, originals) -> list[dict]:
 def suggestions(conn, db_key: str, library, originals) -> list[dict]:
     ensure_schema(conn)
     decided = {r[0] for r in conn.execute("SELECT key FROM inbox_decisions")}
-    cards = _trip_additions(conn, db_key) + _new_trips(conn) + _face_names(conn) + _locations(conn) + _trip_merges(conn) + _clutter(conn, library, originals)
+    cards = _trip_additions(conn, db_key) + _new_trips(conn) + _face_names(conn) + _locations(conn) + _trip_merges(conn) + _clutter(conn, library, originals) + _album_ideas(conn, db_key)
     from . import learning
     out = []
     for c in cards:
@@ -278,6 +302,7 @@ def summary_of(card: dict) -> str:
     a = card.get("action") or {}
     n = len(a.get("ids") or a.get("points") or card.get("ids") or [])
     return {"trip_add": f"{n} photos added to the trip", "trip_create": f"New trip made with {n} photos" + (f": {card['made_title']}" if card.get("made_title") else ""),
+            "album_create": f"Album made with {n} photos" + (f": {card['made_title']}" if card.get("made_title") else ""),
             "face_merge": "Face group merged", "face_name": "Person named",
             "location": f"{n} photos given a location", "trip_merge": "Trips merged", "trash": f"{n} photos moved to the trash"}.get(a.get("do"), "Done")
 
@@ -300,6 +325,7 @@ def apply(conn, library, originals, card: dict, decision: str = "accepted", name
         left_out = [int(i) for i in (card.get("all_ids") or []) if int(i) not in set(ids)]
         if left_out:
             reject_for_trip(conn, int(a["trip"]), left_out)
+        _log_signals(conn, a, ids, left_out)
         ph = ",".join("?" * len(ids))
         before = {r[0]: (r[1], r[2]) for r in conn.execute(f"SELECT id, trip_id, trip_manual FROM assets WHERE id IN ({ph}) OR live_pair_id IN ({ph})", ids + ids)}
         curate.set_trip(conn, ids, int(a["trip"]))
@@ -312,6 +338,13 @@ def apply(conn, library, originals, card: dict, decision: str = "accepted", name
         r = curate.create_trip(conn, ids, None, place=name)
         card["made_title"] = r["title"]
         undo = {"do": "trip_uncreate", "before": r["before"], "trip": r["trip"], "located": r["located"]}
+    elif a.get("do") == "album_create":
+        from . import albums
+        ids = [int(i) for i in a["ids"]]
+        title = (name or "").strip() or a.get("title") or "Album"
+        aid = albums.create(conn, title, "manual", None, ids)
+        card["made_title"] = title
+        undo = {"do": "album_delete", "album": aid}
     elif a.get("do") == "face_merge":
         for fid in a.get("detach") or []:
             faces.move_face(conn, int(fid), None)       # "not this person": those faces leave the group first
@@ -359,6 +392,10 @@ def skip(conn, card: dict) -> None:
     a = card.get("action") or {}
     if a.get("do") == "trip_add":
         reject_for_trip(conn, int(a["trip"]), a.get("ids") or [])
+        _log_signals(conn, a, [], [int(i) for i in a.get("ids") or []])
+    if a.get("do") == "album_create" and a.get("idea"):
+        from . import albumideas
+        albumideas.reject(conn, a["idea"]["kind"], a["idea"]["ref"])
     if a.get("do") == "trip_create":
         reject_for_trip(conn, 0, a.get("ids") or [])
     conn.execute("INSERT OR REPLACE INTO inbox_decisions (key, decision, undo, title, created) VALUES (?, 'skipped', NULL, ?, ?)",
@@ -383,6 +420,9 @@ def undo_last(conn, library, originals) -> str:
         from . import curate
         for tid in {t for _, t, _ in u["before"] if t}:
             curate._recount(conn, tid)
+    elif u["do"] == "album_delete":
+        from . import albums
+        albums.delete(conn, int(u["album"]))
     elif u["do"] == "trip_uncreate":
         for i, t, m in u["before"]:
             conn.execute("UPDATE assets SET trip_id = ?, trip_manual = ? WHERE id = ?", (t, m, i))

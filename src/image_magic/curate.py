@@ -30,6 +30,25 @@ TRAVEL_TERMS = ("airport", "airplane", "aeroplane", "plane", "boarding", "boardi
 _SHOT_RE = __import__("re").compile(r"^(.*?)(\d{3,6})(?:\D.*)?$")
 
 
+SIGNALS = ("time", "looks", "words", "shot", "people", "travel")
+
+
+def signal_of(reason: str) -> str:
+    """Which signal a reason line came from (the learning module tunes a weight per signal)."""
+    r = reason.lower()
+    if r.startswith("shot between"):
+        return "shot"
+    if r.startswith("a travel day"):
+        return "travel"
+    if r.startswith("shows ") or r.startswith("but shows"):
+        return "people"
+    if r.startswith("looks like"):
+        return "looks"
+    if r.startswith("mentions"):
+        return "words"
+    return "time"
+
+
 def shot_number(path: str) -> tuple[str, int] | None:
     """IMG_4411.HEIC -> ("img_", 4411): the camera's running number, with its prefix so IMG_ and DSC_ never mix."""
     stem = path.rsplit("/", 1)[-1].rsplit(".", 1)[0]
@@ -206,10 +225,13 @@ def suggest_for_trip(conn: sqlite3.Connection, db_key: str, trip_id: int, seed_i
     scores: dict[int, float] = {}
     reasons: dict[int, list[str]] = {}
 
+    from . import learning
+    weights = {s_: learning.get(conn, f"signal.{s_}", 1.0) for s_ in SIGNALS}
+
     def note(aid: int, score: float, why: str) -> None:
         if aid in member_set:
             return
-        scores[aid] = scores.get(aid, 0) + score
+        scores[aid] = scores.get(aid, 0) + score * weights.get(signal_of(why), 1.0)   # what you accepted before counts for more
         reasons.setdefault(aid, []).append(why)
 
     # 1. Time: photos just before/after the trip, or inside its window but not in it.

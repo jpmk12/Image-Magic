@@ -1520,8 +1520,8 @@ $("#contrib-files").onchange = async ev => {
   $("#contrib-note").textContent = `${added} added, ${dup} already in the library, ${failed} failed. Trips and events pick them up at the next catalog update.`;
   ev.target.value = ""; loadFamily(); refresh();
 };
-const KIND_COLORS = { trip: "#b45309", people: "#7c3aed", location: "#0369a1", event: "#047857", clutter: "#6b7280" };
-const KIND_LABELS = { trip: "Trips", people: "People", location: "Locations", clutter: "Clutter" };
+const KIND_COLORS = { trip: "#b45309", people: "#7c3aed", location: "#0369a1", event: "#047857", clutter: "#6b7280", album: "#be185d" };
+const KIND_LABELS = { trip: "Trips", people: "People", location: "Locations", clutter: "Clutter", album: "Album ideas" };
 const inboxState = { filter: "" };
 async function loadInbox() {
   const ib = await api("/api/inbox").catch(() => null); const panel = $("#inboxpanel");
@@ -1567,6 +1567,7 @@ async function loadInbox() {
 }
 async function acceptCard(c, only, faces) {
   let name; if (c.action.do === "face_name") { name = prompt("Who is this?"); if (!name) return; }
+  if (c.action.do === "album_create") { name = prompt("Name for the album:", c.action.title || ""); if (name === null) return; }
   if (c.action.do === "trip_create") { name = prompt("Where was this trip? A town or country (e.g. Petra, Jordan) names the trip and places its photos; leave blank to decide later.", (c.action.words || [])[0] || ""); if (name === null) return; }
   try {
     const r = await api("/api/inbox/accept", { key: c.key, name, ids: only || null, faces: faces || null });
@@ -1595,7 +1596,7 @@ async function openReview(c, handlers) {
   $("#rev-title").textContent = c.title; $("#rev-why").textContent = `${c.why} ${Math.round(c.conf * 100)}% sure.`;
   $("#rev-accept").textContent = c.yes; $("#rev-dlg").classList.remove("hidden");
   const body = $("#rev-body"); body.replaceChildren();
-  const perPhoto = ["trip_add", "trip_create", "location", "trash"].includes(c.action.do);
+  const perPhoto = ["trip_add", "trip_create", "album_create", "location", "trash"].includes(c.action.do);
   const perFace = !!(c.faces && ["face_merge", "face_name"].includes(c.action.do));
   if (perFace) rev.ticked = new Set(c.faces);                     // face cards tick by face, not by photo
   $("#rev-hint").textContent = perPhoto ? "These are exactly the photos this decision is about. Untick any that don't belong (Shift-click for a range); double-click to look closer."
@@ -1645,7 +1646,7 @@ async function openReview(c, handlers) {
   revCount();
 }
 function revCount() {
-  const c = rev.card; const perPhoto = ["trip_add", "trip_create", "location", "trash"].includes(c.action.do); const perFace = !!(c.faces && ["face_merge", "face_name"].includes(c.action.do));
+  const c = rev.card; const perPhoto = ["trip_add", "trip_create", "album_create", "location", "trash"].includes(c.action.do); const perFace = !!(c.faces && ["face_merge", "face_name"].includes(c.action.do));
   $("#rev-count").textContent = perPhoto ? `${rev.ticked.size} of ${c.ids.length} ticked` : perFace ? `${rev.ticked.size} of ${c.faces.length} faces ticked` : `${c.ids.length} photos`;
   $("#rev-accept").disabled = (perPhoto || perFace) && !rev.ticked.size;
 }
@@ -1653,7 +1654,7 @@ $("#rev-close").onclick = () => $("#rev-dlg").classList.add("hidden");
 $("#rev-skip").onclick = async () => { const c = rev.card; $("#rev-dlg").classList.add("hidden"); if (rev.onSkip) return rev.onSkip(); await api("/api/inbox/skip", { key: c.key }).catch(e => toast(e.message)); showDone(c, "Skipped; it won't come back unless the facts change"); };
 $("#rev-accept").onclick = async () => {
   const c = rev.card; $("#rev-dlg").classList.add("hidden"); showTab("home"); if (rev.onAccept) return rev.onAccept();
-  const perPhoto = ["trip_add", "trip_create", "location", "trash"].includes(c.action.do); const perFace = !!(c.faces && ["face_merge", "face_name"].includes(c.action.do));
+  const perPhoto = ["trip_add", "trip_create", "album_create", "location", "trash"].includes(c.action.do); const perFace = !!(c.faces && ["face_merge", "face_name"].includes(c.action.do));
   await acceptCard(c, perPhoto && rev.ticked.size < c.ids.length ? [...rev.ticked] : null, perFace && rev.ticked.size < c.faces.length ? [...rev.ticked] : null);
 };
 $("#inbox-high").onclick = async () => { try { const r = await api("/api/inbox/accept-high", {}); toast(`Applied ${r.applied} suggestions`); } catch (e) { toast(e.message); } loadInbox(); refresh(); };
@@ -3073,8 +3074,34 @@ async function openStops(t, all) {
   if (!stops.length) list.textContent = "This trip has no photos.";
 }
 $("#stops-close").onclick = () => $("#stops").classList.add("hidden");
+async function openAlbumMore(a) {
+  sugg.trip = null; sugg.album = a.id;
+  $("#sugg-title").textContent = `More photos for ${a.title}?`; $("#sugg-note").textContent = ""; $("#sugg-grid").replaceChildren();
+  $("#sugg-intro").textContent = "These photos look like the album's, or show the people it is about. Tick the ones that belong (Shift-click for a range). Unticked photos are remembered and not suggested for this album again.";
+  $("#sugg-add").textContent = "Add selected to album";
+  $("#sugg").classList.remove("hidden"); $("#sugg-count").textContent = "Looking…";
+  try {
+    const r = await api(`/api/albums/suggest?album=${a.id}`);
+    $("#sugg-count").textContent = r.items.length ? `${r.items.length} candidates` : "Nothing else looks like this album yet (it needs a few photos, and the visual index helps).";
+    suggRender(r.items);
+  } catch (e) { $("#sugg-count").textContent = e.message; }
+}
+function suggRender(items) {
+  sugg.last = null;
+  $("#sugg-grid").replaceChildren(...items.map((it, i) => {
+    const l = document.createElement("label"); l.style.position = "relative";
+    const cb = document.createElement("input"); cb.type = "checkbox"; cb.value = it.id; cb.checked = it.strong;
+    l.onclick = ev => { if (ev.shiftKey && sugg.last !== null) { ev.preventDefault(); const boxes = $$("#sugg-grid input"); const on = !cb.checked || sugg.lastOn === undefined ? !cb.checked : sugg.lastOn; const [a, b] = [Math.min(sugg.last, i), Math.max(sugg.last, i)]; for (let k = a; k <= b; k++) boxes[k].checked = on; } sugg.last = i; sugg.lastOn = cb.checked; };
+    const im = document.createElement("img"); im.src = media("thumb", it.id); im.alt = ""; im.loading = "lazy";
+    const why = document.createElement("div"); why.className = "why";
+    why.textContent = `${new Date(it.taken_at).toLocaleDateString()} · ${it.reasons.join("; ")}`;
+    l.append(cb, im, why); return l;
+  }));
+}
 async function openSuggestions(tripId, title, seed) {
-  sugg.trip = tripId;
+  sugg.trip = tripId; sugg.album = null;
+  $("#sugg-intro").textContent = "These photos look like they belong to the trip, based on when they were taken, how they look, and their captions. Tick the ones that do (Shift-click for a range). Photos you leave unticked are remembered and not suggested for this trip again.";
+  $("#sugg-add").textContent = "Add selected to trip";
   $("#sugg-title").textContent = `More photos from ${title}?`; $("#sugg-note").textContent = ""; $("#sugg-grid").replaceChildren();
   $("#sugg").classList.remove("hidden"); $("#sugg-count").textContent = "Looking…";
   try {
@@ -3099,6 +3126,11 @@ $("#sugg-add").onclick = async () => {
   const ids = $$("#sugg-grid input:checked").map(i => +i.value);
   const rejected = $$("#sugg-grid input:not(:checked)").map(i => +i.value);
   if (!ids.length) return toast("Nothing selected.");
+  if (sugg.album) {
+    try { await api("/api/albums/add", { id: sugg.album, ids }); if (rejected.length) await api("/api/albums/reject", { id: sugg.album, ids: rejected }); $("#sugg-note").textContent = `Added ${ids.length} photo${ids.length > 1 ? "s" : ""}.` + (rejected.length ? ` The ${rejected.length} unticked won't be suggested for this album again.` : ""); $$("#sugg-grid label").forEach(l => l.remove()); loadAlbums(); }
+    catch (e) { $("#sugg-note").textContent = e.message; }
+    return;
+  }
   try { await api("/api/curate/trip", { ids, trip: sugg.trip, rejected }); $("#sugg-note").textContent = `Added ${ids.length} photo${ids.length > 1 ? "s" : ""}.` + (rejected.length ? ` The ${rejected.length} unticked won't be suggested for this trip again.` : ""); $$("#sugg-grid label").forEach(l => l.remove()); loadTrips(); }
   catch (e) { $("#sugg-note").textContent = e.message; }
 };
@@ -3465,7 +3497,9 @@ async function loadAlbums() {
     const mk = (label, fn, cls) => { const x = document.createElement("button"); x.className = "btn" + (cls ? " " + cls : ""); x.textContent = label; x.style.margin = "0 14px 12px"; x.onclick = ev => { ev.stopPropagation(); fn(); }; return x; };
     const row = document.createElement("div"); row.className = "row";
     row.append(mk("▶ Replay", () => openReplay({ album: a.id }, a.title), "primary"), mk("↗ Share", () => openShare({ album: a.id }, a.title)),
-      mk("📖 Book", () => downloadBook("album", a.id)),
+      mk("📖 Book", () => downloadBook("album", a.id)));
+    if (a.kind === "manual") row.append(mk("🔍 Find more", () => openAlbumMore(a)));
+    row.append(
       mk("Delete", async () => { if (confirm(`Delete the album "${a.title}"? The photos stay in your library.`)) { await api("/api/albums/delete", { id: a.id }).catch(e => toast(e.message)); loadAlbums(); } }));
     b.append(row); return b;
   }));

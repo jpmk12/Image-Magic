@@ -368,6 +368,13 @@ Service features (flying log, squadron yearbook) slot into S2 (log) and S9 (year
   pages for index/chapters/trips/events/albums (+ years with everything), stories and
   milestones inline, optional voice notes; `archive` job with progress; Home panel.
 - Phase 6 complete.
+- **Album ideas and learned signal weights** (v0.56.0): `albumideas.py` (themes by spherical
+  k-means over the visual index, people sets from named faces, recurring 200 m cells, big
+  events) as inbox `album_create` cards with skip memory (`album_rejections`); `suggest_for_album`
+  + `album_find_rejections` behind 🔍 Find more on hand-picked albums; `curate.signal_of` tags
+  each reason, `inbox._log_signals` records keeps/rejects per signal, `learning.learn` sets
+  `signal.<name>` weights (0.5–1.5) that `suggest_for_trip` applies. Items 5, 7–11. The
+  trips/albums plan is complete.
 - **GPS-less trips and stops** (v0.55.0): `curate.unlocated_trip_candidates` (runs of ≥3
   unlocated days, ≥12 photos, no located photos those days, outside existing trips) as an
   inbox `trip_create` card with a place prompt (`curate.create_trip` names the trip, sets its
