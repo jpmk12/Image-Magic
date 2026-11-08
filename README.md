@@ -194,6 +194,16 @@ program only. Your photos and settings are kept.
   exact copies are skipped, look-alikes (the same picture resized or re-saved) are listed with
   the library photo they match, and the rest are new. Click **Import** to copy the new ones into
   `originals/imported/<year>/<month>/`. Your files are copied, never moved.
+- **Stories for events and years:** the **✍** button on an event card and **✍ Story** on the
+  year panel work like trip and chapter stories: Claude drafts a few paragraphs from the dates,
+  places, people and captions (never the pixels), you edit them, and the event book, year book
+  and life book carry them.
+- **Tell the story:** **🎤 Tell** on a trip, an event or a year walks you through its twenty
+  best photos one at a time: type one line and press Enter, or press R and say it as a voice
+  note, → to skip, Esc to stop. Captions and notes show in the viewer, replays and books, and
+  search finds the words.
+- **Share as one file:** the share dialog now makes a single .zip of the page and the stripped
+  photos and downloads it when ready; untick the box to get the folder instead.
 - **Learning from your decisions:** every inbox accept or skip, every review-queue confirm or
   dismiss, every trip you merge or dissolve and every two people you merge is remembered (on
   the laptop only). After a handful of each, the automatic rules tune themselves to your

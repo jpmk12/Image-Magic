@@ -558,7 +558,7 @@ def make_handler(app: App):
                     f = settings.library / "exports" / Path(ident).name
                     if not f.is_file():
                         return self._json(404, {"error": "not found"})
-                    ctype = "application/pdf" if f.suffix == ".pdf" else "image/gif" if f.suffix == ".gif" else "application/octet-stream"
+                    ctype = "application/pdf" if f.suffix == ".pdf" else "image/gif" if f.suffix == ".gif" else "application/zip" if f.suffix == ".zip" else "application/octet-stream"
                     return self._file(f, ctype)
                 asset_id = int(ident)
                 if kind == "/api/context":
@@ -944,11 +944,15 @@ def make_handler(app: App):
                                               exclude=[int(i) for i in data.get("exclude") or []],
                                               story_key=data.get("story_key"), voice=bool(data.get("voice")),
                                               strict=bool(data.get("strict")))
-                        try:
-                            _open_folder(folder)
-                        except Exception:
-                            pass   # opening the folder is a convenience; the export succeeded
-                        return self._json(200, {"folder": str(folder)})
+                        out = {"folder": str(folder)}
+                        if data.get("zip", True):
+                            out["file"] = share.zip_folder(folder).name     # downloaded by the page from /media/export/
+                        else:
+                            try:
+                                _open_folder(folder)
+                            except Exception:
+                                pass   # opening the folder is a convenience; the export succeeded
+                        return self._json(200, out)
                     finally:
                         conn.close()
                 if path in ("/api/story/write", "/api/story/save", "/api/ask"):

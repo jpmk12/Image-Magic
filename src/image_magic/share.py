@@ -165,6 +165,18 @@ def export(conn: sqlite3.Connection, originals: Path, library: Path, params: dic
     return folder
 
 
+def zip_folder(folder: Path) -> Path:
+    """One file to send: <folder>.zip beside the folder, images stored as they are (already JPEG)."""
+    import zipfile
+    out = folder.with_suffix(".zip")
+    with zipfile.ZipFile(out, "w", compression=zipfile.ZIP_DEFLATED) as z:
+        for f in sorted(folder.rglob("*")):
+            if f.is_file():
+                z.write(f, f"{folder.name}/{f.relative_to(folder).as_posix()}",
+                        compress_type=zipfile.ZIP_STORED if f.suffix.lower() in (".jpg", ".jpeg", ".webm", ".m4a", ".ogg", ".mp4") else zipfile.ZIP_DEFLATED)
+    return out
+
+
 def _page(title: str, story: str, items: list[dict]) -> str:
     esc = html.escape
     tiles = "\n".join(

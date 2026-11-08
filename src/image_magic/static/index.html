@@ -317,6 +317,9 @@
 
   /* ---- lightbox */
   .lb { position: fixed; inset: 0; background: rgba(5,7,10,.94); z-index: 2000; display: flex; }
+  #tell-side { width: 340px; flex: none; background: var(--panel); color: var(--fg); padding: 18px 20px; overflow: auto; }
+  #tell-side textarea { width: 100%; box-sizing: border-box; font: inherit; padding: 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--fg); }
+  #tell-side kbd { font: inherit; font-size: 11px; border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; }
   .lb .stage { flex: 1; display: grid; place-items: center; position: relative; min-width: 0; }
   .lb img, .lb video { max-width: 100%; max-height: 100vh; object-fit: contain; }
   .lb .nav { position: absolute; top: 50%; transform: translateY(-50%); background: rgba(255,255,255,.12);
@@ -648,7 +651,7 @@
     <div class="panel" id="yr-panel">
       <div class="row" style="justify-content:space-between">
         <div class="row"><h2 style="margin:0">Your year in review</h2><select id="yr-year"></select></div>
-        <div class="row"><button class="btn" id="yr-book" title="A printable PDF: a page per month and per trip">📖 Year book</button><button class="btn primary" id="yr-play">▶ The year in 30 seconds</button></div>
+        <div class="row"><button class="btn" id="yr-story" title="The story of this year">✍ Story</button><button class="btn" id="yr-tell" title="Tell the story: a line or a voice note for each of the year's best photos">🎤 Tell</button><button class="btn" id="yr-book" title="A printable PDF: a page per month and per trip">📖 Year book</button><button class="btn primary" id="yr-play">▶ The year in 30 seconds</button></div>
       </div>
       <div class="yr" id="yr-stats"></div>
       <div id="yr-lines" class="small"></div>
@@ -944,11 +947,12 @@
 <div class="story share hidden" id="share">
   <div class="card">
     <div class="row" style="justify-content:space-between"><h2 style="margin:0">Share</h2><button class="btn" id="share-close">✕</button></div>
-    <p class="small muted">Makes a folder with a web page and copies of the photos at 1600 px with <b>all metadata removed</b> (no location, no camera, no dates inside the files). Private photos are never included. Zip the folder to send it, or copy it to any web host.</p>
+    <p class="small muted">Makes a web page with copies of the photos at 1600 px and <b>all metadata removed</b> (no location, no camera, no dates inside the files). Private photos are never included. You get one .zip file to send; the unzipped folder also works on any web host.</p>
     <label class="field"><span>Title</span><input type="text" id="share-title"></label>
     <div id="share-check" class="small"></div>
     <div id="share-flags"></div>
     <label class="check"><input type="checkbox" id="share-voice"><span>Include my voice notes (your voice goes with the photos)</span></label>
+    <label class="check"><input type="checkbox" id="share-zip" checked><span>One .zip file, downloaded when ready <small>Untick to get a folder instead (opens in Explorer).</small></span></label>
     <div class="row" style="margin-top:14px"><button class="btn primary" id="share-go">Export</button><span class="small muted" id="share-note"></span></div>
   </div>
 </div>
@@ -1111,6 +1115,29 @@
       <span class="small muted" id="story-note"></span>
     </div>
   </div>
+</div>
+
+<div class="lb hidden" id="tell">
+  <div class="stage" id="tell-stage">
+    <img id="tell-img" alt="">
+    <button class="nav prev" id="tell-prev" aria-label="Previous">‹</button>
+    <button class="nav next" id="tell-next" aria-label="Skip">›</button>
+    <button class="close" id="tell-close" aria-label="Close">✕</button>
+  </div>
+  <aside id="tell-side">
+    <div class="small muted" id="tell-count"></div>
+    <h2 id="tell-title" style="margin:6px 0 2px"></h2>
+    <div class="small muted" id="tell-meta"></div>
+    <p class="small muted" style="margin:14px 0 6px">What was this moment? One line is plenty. <kbd>Enter</kbd> saves and moves on, <kbd>→</kbd> skips, <kbd>R</kbd> records a voice note, <kbd>Esc</kbd> stops.</p>
+    <textarea id="tell-cap" rows="3" placeholder="e.g. First time Emma saw the sea"></textarea>
+    <div class="row" style="margin-top:10px">
+      <button class="btn primary" id="tell-save">Save &amp; next ⏎</button>
+      <button class="btn" id="tell-rec">● Record</button>
+      <button class="btn hidden" id="tell-stop">■ Stop</button>
+    </div>
+    <div class="small" id="tell-note" style="margin-top:10px"></div>
+    <div class="small muted" id="tell-done" style="margin-top:16px"></div>
+  </aside>
 </div>
 
 <div class="lb hidden" id="lb">
@@ -2445,6 +2472,8 @@ async function loadReview(year) {
   $("#yr-best").replaceChildren(...s.best.map((it, i) => tileFor(it, s.best, i)));
   $("#yr-play").onclick = () => openReplay({ year: s.year, best: 1 }, s.year + " in 30 seconds");
   $("#yr-book").onclick = () => downloadBook("year", s.year);
+  $("#yr-story").onclick = () => openStory("year", s.year, "The year " + s.year);
+  $("#yr-tell").onclick = () => openTell({ year: s.year }, "The year " + s.year);
 }
 $("#yr-year").onchange = e => loadReview(e.target.value);
 $("#tl-lifebook").onclick = () => downloadBook("life", "all");
@@ -3009,7 +3038,7 @@ async function openShare(filters, title, strict) {
       $("#share-flags").append(h);
       for (const f of r.flagged) {
         const row = document.createElement("label"); row.className = "flag";
-        row.innerHTML = `<input type="checkbox" data-id="${f.id}"><img alt=""><span><span class="cap"></span><br><span class="r"></span></span>`;
+        row.innerHTML = `<input type="checkbox" data-id="${f.id}" checked><img alt=""><span><span class="cap"></span><br><span class="r"></span></span>`;   // ticked = shared, as the label says
         row.querySelector("img").src = media("thumb", f.id);
         row.querySelector(".cap").textContent = f.caption || fmtDate(f.taken_at);
         row.querySelector(".r").textContent = "Flagged for: " + f.reasons.join(", ");
@@ -3023,10 +3052,18 @@ $("#share-close").onclick = () => $("#share").classList.add("hidden");
 $("#share-go").onclick = async () => {
   const exclude = [...$$("#share-flags input:not(:checked)")].map(i => +i.dataset.id);
   const f = shareState.filters;
-  const story_key = f.trip ? "trip:" + f.trip : f.chapter ? "chapter:" + f.chapter : null;
+  const story_key = f.trip ? "trip:" + f.trip : f.chapter ? "chapter:" + f.chapter : f.event ? "event:" + f.event : f.year && !f.month ? "year:" + f.year : null;
   $("#share-note").textContent = "Exporting…"; $("#share-go").disabled = true;
-  try { const r = await api("/api/share/export", { filters: f, title: $("#share-title").value, exclude, story_key, voice: $("#share-voice").checked, strict: shareState.strict }); $("#share-note").textContent = "Done: " + r.folder; }
-  catch (e) { $("#share-note").textContent = e.message; }
+  try {
+    const r = await api("/api/share/export", { filters: f, title: $("#share-title").value, exclude, story_key, voice: $("#share-voice").checked, strict: shareState.strict, zip: $("#share-zip").checked });
+    if (r.file) {
+      $("#share-note").textContent = "Downloading " + r.file + "…";
+      const res = await fetch(`/media/export/${encodeURIComponent(r.file)}`, { headers: { "X-Token": TOKEN } });
+      const blob = await res.blob(), url = URL.createObjectURL(blob);
+      const a = document.createElement("a"); a.href = url; a.download = r.file; a.click(); setTimeout(() => URL.revokeObjectURL(url), 60000);
+      $("#share-note").textContent = `Done: ${r.file} (${(blob.size / 1048576).toFixed(1)} MB). Also kept in the exports folder of your library.`;
+    } else $("#share-note").textContent = "Done: " + r.folder;
+  } catch (e) { $("#share-note").textContent = e.message; }
   $("#share-go").disabled = false;
 };
 
@@ -3204,7 +3241,9 @@ async function loadTrips() {
     bk.style.margin = "0 14px 12px"; bk.onclick = ev => { ev.stopPropagation(); downloadBook("trip", t.id); };
     const ed = document.createElement("button"); ed.className = "btn"; ed.textContent = "✎ Edit"; ed.title = "Rename, change dates, merge, split, cover, or not a trip";
     ed.style.margin = "0 14px 12px"; ed.onclick = ev => { ev.stopPropagation(); tripEditMenu(ed, t, list); };
-    const rowb = document.createElement("div"); rowb.className = "row"; rowb.append(play, st, more, bk, ed);
+    const tl = document.createElement("button"); tl.className = "btn"; tl.textContent = "🎤 Tell"; tl.title = "Tell the story: a line or a voice note for each of the best photos";
+    tl.style.margin = "0 14px 12px"; tl.onclick = ev => { ev.stopPropagation(); openTell({ trip: t.id }, t.title); };
+    const rowb = document.createElement("div"); rowb.className = "row"; rowb.append(play, st, tl, more, bk, ed);
     b.append(rowb);
     return b;
   }));
@@ -3289,12 +3328,95 @@ async function loadEvents() {
     vn.style.margin = "0 14px 12px"; vn.onclick = ev => { ev.stopPropagation(); openVoice("event", e.id, e.title); };
     const bk = document.createElement("button"); bk.className = "btn"; bk.textContent = "📖"; bk.title = "Printable PDF of this event";
     bk.style.margin = "0 14px 12px"; bk.onclick = ev => { ev.stopPropagation(); downloadBook("event", e.id); };
-    const rowb = document.createElement("div"); rowb.className = "row"; rowb.append(play, sh, vn, bk);
+    const st = document.createElement("button"); st.className = "btn"; st.textContent = "✍"; st.title = "The story of this event";
+    st.style.margin = "0 14px 12px"; st.onclick = ev => { ev.stopPropagation(); openStory("event", e.id, e.title); };
+    const tl = document.createElement("button"); tl.className = "btn"; tl.textContent = "🎤 Tell"; tl.title = "Tell the story: a line or a voice note for each of the best photos";
+    tl.style.margin = "0 14px 12px"; tl.onclick = ev => { ev.stopPropagation(); openTell({ event: e.id }, e.title); };
+    const rowb = document.createElement("div"); rowb.className = "row"; rowb.append(play, st, tl, sh, vn, bk);
     b.append(rowb);
     return b;
   }));
 }
 $("#events-year").onchange = loadEvents;
+
+// ---- tell the story: a keyboard pass through the best photos, one line or one voice note each
+const tell = { items: [], i: -1, title: "", saved: 0, notes: 0, rec: null, chunks: [], stream: null, t0: 0, cap0: "" };
+async function openTell(filters, title) {
+  const q = new URLSearchParams({ best: 1, n: 20 });
+  for (const k of ["trip", "event", "year", "album", "chapter", "person", "month"]) if (filters[k]) q.set(k, filters[k]);
+  let items;
+  try { items = (await api("/api/replay?" + q)).filter(it => it.kind === "photo"); } catch (e) { return toast(e.message); }
+  if (!items.length) return toast("No photos to tell about here.");
+  tell.items = items; tell.i = -1; tell.title = title || ""; tell.saved = 0; tell.notes = 0;
+  $("#tell").classList.remove("hidden"); $("#tell-done").textContent = "";
+  tellShow(0);
+}
+async function tellShow(i) {
+  if (i < 0) i = 0;
+  if (i >= tell.items.length) { return tellFinish(); }
+  tell.i = i; const it = tell.items[i];
+  $("#tell-count").textContent = `${i + 1} of ${tell.items.length} · ${tell.title}`;
+  $("#tell-img").src = media("view", it.id);
+  $("#tell-title").textContent = it.taken_at ? new Date(it.taken_at).toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric", year: "numeric" }) : "";
+  $("#tell-meta").textContent = [it.city, it.country].filter(Boolean).join(", ");
+  $("#tell-note").textContent = ""; $("#tell-cap").value = ""; tell.cap0 = "";
+  const d = await api(`/api/photo/${it.id}`).catch(() => null);
+  if (tell.i !== i) return;
+  if (d && d.description && d.description.caption) { tell.cap0 = d.description.caption; $("#tell-cap").value = d.description.caption; }
+  if (d && d.voice && d.voice.length) $("#tell-note").textContent = `${d.voice.length} voice note${d.voice.length > 1 ? "s" : ""} already.`;
+  $("#tell-cap").focus(); $("#tell-cap").select();
+}
+async function tellSave(next) {
+  const it = tell.items[tell.i]; if (!it) return;
+  const cap = $("#tell-cap").value.trim();
+  if (cap && cap !== tell.cap0) {
+    try { await api("/api/curate/caption", { id: it.id, caption: cap, keywords: [] }); tell.saved++; }
+    catch (e) { $("#tell-note").textContent = e.message; return; }
+  }
+  if (next) tellShow(tell.i + 1);
+}
+function tellFinish() {
+  $("#tell-img").removeAttribute("src"); $("#tell-count").textContent = tell.title; $("#tell-title").textContent = "That's the story.";
+  $("#tell-meta").textContent = ""; $("#tell-cap").value = "";
+  $("#tell-done").textContent = `${tell.saved} caption${tell.saved === 1 ? "" : "s"} and ${tell.notes} voice note${tell.notes === 1 ? "" : "s"} saved. They show in the viewer, in replays and books, and search finds them. Esc to close.`;
+  tell.i = tell.items.length;
+}
+function tellClose() { if (tell.rec && tell.rec.state === "recording") tell.rec.stop(); $("#tell").classList.add("hidden"); tell.items = []; tell.i = -1; }
+$("#tell-close").onclick = tellClose;
+$("#tell-save").onclick = () => tellSave(true);
+$("#tell-next").onclick = () => tellShow(tell.i + 1);
+$("#tell-prev").onclick = () => tellShow(tell.i - 1);
+$("#tell-cap").addEventListener("keydown", ev => { if (ev.key === "Enter" && !ev.shiftKey) { ev.preventDefault(); tellSave(true); } });
+document.addEventListener("keydown", ev => {
+  if ($("#tell").classList.contains("hidden")) return;
+  const typing = ev.target === $("#tell-cap");
+  if (ev.key === "Escape") { ev.preventDefault(); tellClose(); }
+  else if (ev.key === "ArrowRight" && !typing) tellShow(tell.i + 1);
+  else if (ev.key === "ArrowLeft" && !typing) tellShow(tell.i - 1);
+  else if ((ev.key === "r" || ev.key === "R") && !typing) { ev.preventDefault(); (tell.rec && tell.rec.state === "recording" ? $("#tell-stop") : $("#tell-rec")).click(); }
+});
+$("#tell-rec").onclick = async () => {
+  const it = tell.items[tell.i]; if (!it) return;
+  try { tell.stream = await navigator.mediaDevices.getUserMedia({ audio: true }); }
+  catch (e) { $("#tell-note").textContent = "Microphone not available: " + e.message; return; }
+  const mime = ["audio/webm;codecs=opus", "audio/webm", "audio/ogg", "audio/mp4"].find(m => MediaRecorder.isTypeSupported(m)) || "";
+  tell.rec = new MediaRecorder(tell.stream, mime ? { mimeType: mime } : {}); tell.chunks = []; tell.t0 = performance.now();
+  tell.rec.ondataavailable = e => { if (e.data.size) tell.chunks.push(e.data); };
+  tell.rec.onstop = async () => {
+    tell.stream.getTracks().forEach(t => t.stop());
+    const secs = (performance.now() - tell.t0) / 1000;
+    const blob = new Blob(tell.chunks, { type: (tell.rec.mimeType || mime || "audio/webm").split(";")[0] });
+    $("#tell-note").textContent = "Saving the voice note…";
+    try {
+      const res = await fetch(`/api/voice?kind=photo&id=${it.id}&seconds=${secs.toFixed(1)}`, { method: "POST", headers: { "X-Token": TOKEN, "Content-Type": blob.type }, body: blob });
+      const data = await res.json().catch(() => ({})); if (!res.ok) throw new Error(data.error || res.statusText);
+      tell.notes++; $("#tell-note").textContent = `Voice note saved (${Math.round(secs)} s).`;
+    } catch (e) { $("#tell-note").textContent = e.message; }
+  };
+  tell.rec.start(); $("#tell-rec").classList.add("hidden"); $("#tell-stop").classList.remove("hidden");
+  $("#tell-note").textContent = "Recording… press R or Stop when you're done.";
+};
+$("#tell-stop").onclick = () => { if (tell.rec) tell.rec.stop(); $("#tell-rec").classList.remove("hidden"); $("#tell-stop").classList.add("hidden"); };
 
 // ---- voice notes
 const voice = { kind: "photo", id: 0, rec: null, chunks: [], t0: 0, stream: null };

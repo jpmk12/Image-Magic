@@ -167,10 +167,13 @@ def event_book(conn: sqlite3.Connection, originals: Path, library: Path, event_i
     e = conn.execute("SELECT * FROM events WHERE id = ?", (event_id,)).fetchone()
     if not e:
         raise ValueError("Unknown event")
+    from . import ask
     photos = _best(conn, f"{VISIBLE} AND a.event_id = ?", [event_id], 18)
     sections = [(e["title"], photos[i:i + PER_PAGE]) for i in range(0, len(photos), PER_PAGE)]
     cover = _rows(conn, [e["cover_id"]])[0] if e["cover_id"] else None
-    return render(library, originals, f"{e['title'][:40]}-{e['start_at'][:10]}-event-book", e["title"], e["subtitle"] or "", cover, "", sections)
+    story = ask.get_story(conn, f"event:{event_id}")
+    return render(library, originals, f"{e['title'][:40]}-{e['start_at'][:10]}-event-book", e["title"], e["subtitle"] or "", cover,
+                  story["text"] if story else "", sections)
 
 
 def year_book(conn: sqlite3.Connection, originals: Path, library: Path, year: str) -> Path:
@@ -201,8 +204,10 @@ def year_book(conn: sqlite3.Connection, originals: Path, library: Path, year: st
         if photos:
             sections.append((f"Trip: {t['title']} · {_fmt(t['start_at'])} – {_fmt(t['end_at'])}", photos))
     cover = _rows(conn, [b["id"] for b in stats["best"][:1]])
+    from . import ask
+    story = ask.get_story(conn, f"year:{y}")
     return render(library, originals, f"{y}-year-book", y, "The year in pictures", cover[0] if cover else None,
-                  "\n".join(lines), sections)
+                  (story["text"] + "\n\n" if story else "") + "\n".join(lines), sections)
 
 
 def life_book(conn: sqlite3.Connection, originals: Path, library: Path) -> Path:
@@ -241,7 +246,13 @@ def life_book(conn: sqlite3.Connection, originals: Path, library: Path) -> Path:
         evs = conn.execute("SELECT id, title, start_at FROM events WHERE start_at >= ? AND start_at < date(?, '+1 day') AND trip_id IS NULL "
                            "ORDER BY photo_count DESC LIMIT 6", args).fetchall()
         for e in sorted(evs, key=lambda e: e["start_at"]):
-            sections.append((f"{e['title']} · {_fmt(e['start_at'])}", _best(conn, f"{VISIBLE} AND a.event_id = ?", [e["id"]])))
+            estory = ask.get_story(conn, f"event:{e['id']}")
+            sections.append((f"{e['title']} · {_fmt(e['start_at'])}", _best(conn, f"{VISIBLE} AND a.event_id = ?", [e["id"]]),
+                             estory["text"] if estory else ""))
+        for y in range(int(ch["start_at"][:4]), int(ch["end_at"][:4]) + 1):
+            ystory = ask.get_story(conn, f"year:{y}")
+            if ystory:
+                sections.append((f"The year {y}", _best(conn, f"{VISIBLE} AND substr(a.taken_at, 1, 4) = ?", [str(y)], 6), ystory["text"]))
     cover_ids = quality.best_of(conn, VISIBLE, [], 1)
     cover = _rows(conn, cover_ids)[0] if cover_ids else None
     return render(library, originals, f"life-book-{first[1][:4]}", "The story so far", f"{years} · {first[2]:,} photos", cover, "", sections)

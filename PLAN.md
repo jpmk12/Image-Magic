@@ -508,12 +508,14 @@ dropped from the list before approval.
    trip.gap_days, trip.min_photos, face.join, per-kind auto-apply thresholds and a per-kind
    calibration of the shown confidence, each within a safe range and only with evidence.
    Settings shows what changed and can forget it.
-5. **Stories for events and years**, carried into the life book.
-6. **Tell-the-story mode.** A keyboard-driven pass through the best photos of an event or
-   trip: one line of caption or a voice note each, then on to the next.
+5. **Stories for events and years** (built, v0.47.0). `ask.story_context` knows event and year;
+   the event, year and life books carry the stories.
+6. **Tell-the-story mode** (built, v0.47.0). A keyboard-driven pass through the best photos of a
+   trip, event or year: one line (Enter) or a voice note (R) each, → skips, Esc stops.
 7. **Map time-lapse** (built, v0.45.0). `browse.map_months` aggregates located photos by month
    into ~5 km cells; the Map tab's ▶ Time-lapse animates them, following the current filter.
-8. **Share as one file.** Zip the share folder automatically and offer a single download.
+8. **Share as one file** (built, v0.47.0). The share export zips the folder and the page
+   downloads it; the folder remains in the library's exports.
 9. **Google Photos / Android import.** Takeout folders carry JSON sidecars with dates and
    locations; read them like the iCloud sidecars so those photos land with full metadata.
 10. **Two iCloud accounts into one library.** A second Apple ID syncing into the same library,

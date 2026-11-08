@@ -118,8 +118,25 @@ def story_context(conn: sqlite3.Connection, kind: str, ident: int) -> dict:
         params = {"chapter": ident}
         head = {"what": "chapter of life", "title": row["title"], "start": row["start_at"], "end": row["end_at"],
                 "photos": row["photo_count"], "your_note": row["note"]}
+    elif kind == "event":
+        row = conn.execute("SELECT * FROM events WHERE id = ?", (ident,)).fetchone()
+        if not row:
+            raise ValueError("Unknown event")
+        params = {"event": ident}
+        head = {"what": "event (a few hours or days in one place)", "title": row["title"], "places": row["subtitle"],
+                "start": row["start_at"][:10], "end": row["end_at"][:10], "photos": row["photo_count"]}
+    elif kind == "year":
+        y = str(ident)[:4]
+        n = conn.execute("SELECT COUNT(*) FROM assets WHERE substr(taken_at, 1, 4) = ? AND missing = 0 AND kind = 'photo'", (y,)).fetchone()[0]
+        if not n:
+            raise ValueError("No photos in that year")
+        params = {"year": y}
+        trips = conn.execute("SELECT title, start_at, end_at, photo_count FROM trips WHERE substr(start_at, 1, 4) = ? ORDER BY start_at", (y,)).fetchall()
+        head = {"what": "year", "title": y, "start": f"{y}-01-01", "end": f"{y}-12-31", "photos": n,
+                "trips": [{"title": t["title"], "start": t["start_at"][:10], "end": t["end_at"][:10], "photos": t["photo_count"]} for t in trips],
+                "countries": [r[0] for r in conn.execute("SELECT DISTINCT country FROM assets WHERE substr(taken_at, 1, 4) = ? AND country IS NOT NULL AND missing = 0", (y,))]}
     else:
-        raise ValueError("kind must be trip or chapter")
+        raise ValueError("kind must be trip, chapter, event or year")
     items, total = _items(conn, {**params, "kind": "photo"}, limit=400)
     # Compress: day-by-day places, the people seen, and a sample of captions.
     days: dict[str, Counter] = {}
