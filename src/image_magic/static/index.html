@@ -1098,7 +1098,11 @@
           <div class="row" style="margin-top:8px"><button class="btn" id="loc-online" title="Street addresses are not in the offline list; this sends only the text you typed to OpenStreetMap">🌐 Look it up online</button><span class="small muted" id="loc-online-note"></span></div>
           <p class="small muted">Towns, "Town, ST", postal addresses (the town part is used) and coordinates are looked up on this computer from the bundled list of 145,000 places; nothing is sent anywhere. For an exact street address, <b>Look it up online</b> asks OpenStreetMap with just the text you typed.</p>
         </div>
-        <div id="loc-map" class="loc-pane hidden"><div id="loc-mapbox" style="height:300px;border-radius:12px;overflow:hidden;background:var(--soft)"></div><p class="small muted" id="loc-mapnote">Click the map to place the pin.</p></div>
+        <div id="loc-map" class="loc-pane hidden">
+          <div class="row" style="margin-bottom:8px"><input type="text" id="loc-paste" placeholder="Paste from Google Maps: coordinates (right-click a spot → click the numbers) or a share link" style="flex:1;min-width:0"><button class="btn" id="loc-paste-go" title="Place the pin at the pasted spot">Place pin</button></div>
+          <div id="loc-mapbox" style="height:300px;border-radius:12px;overflow:hidden;background:var(--soft)"></div>
+          <p class="small muted" id="loc-mapnote">Click the map to place the pin, or paste coordinates or a Google / Apple Maps link above. Short maps.app.goo.gl links are expanded online (one request, nothing else sent).</p>
+        </div>
         <div id="loc-copy" class="loc-pane hidden"><p class="small muted">Pick one photo that has the right location; the selection takes its place.</p><div id="loc-donors" class="mem-row"></div></div>
       </div>
       <div style="width:240px;flex:none;background:var(--soft);border-radius:12px;padding:12px">
@@ -2553,6 +2557,25 @@ function locMap() {
   }
   setTimeout(() => loc.map.invalidateSize(), 80);
 }
+function locPin(lat, lon, label) {
+  loc.target = { lat, lon }; loc.label = label || `the pin (${lat.toFixed(4)}, ${lon.toFixed(4)})`;
+  if (loc.map) { const ll = L.latLng(lat, lon); if (!loc.marker) loc.marker = L.marker(ll).addTo(loc.map); else loc.marker.setLatLng(ll); loc.map.setView(ll, Math.max(loc.map.getZoom(), 13)); }
+  locSummary();
+}
+async function locPaste() {
+  const q = $("#loc-paste").value.trim(); if (!q) return;
+  $("#loc-mapnote").textContent = "Reading…";
+  try {
+    let res = await api("/api/places/search?q=" + encodeURIComponent(q));
+    if (!res.length && /:\/\//.test(q)) res = await api("/api/places/geocode?q=" + encodeURIComponent(q));   // a short link: expand it online
+    if (!res.length) { $("#loc-mapnote").textContent = "No coordinates found in that. Copy the numbers Google Maps shows when you right-click a spot, or its Share link."; return; }
+    const p = res[0]; locPin(p.lat, p.lon, p.region ? `${p.name} (${p.region})` : p.name);
+    $("#loc-mapnote").textContent = `Pin placed at ${p.name}${p.region ? ", " + p.region : ""}.`;
+  } catch (e) { $("#loc-mapnote").textContent = e.message; }
+}
+$("#loc-paste-go").onclick = locPaste;
+$("#loc-paste").addEventListener("keydown", ev => { if (ev.key === "Enter") { ev.preventDefault(); locPaste(); } });
+$("#loc-paste").addEventListener("paste", () => setTimeout(locPaste, 50));
 async function locDonors() {
   const box = $("#loc-donors"); box.replaceChildren();
   const q = new URLSearchParams({ limit: 24 }); if (og.filters.year) q.set("year", og.filters.year); if (og.filters.month) q.set("month", og.filters.month);

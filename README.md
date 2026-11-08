@@ -323,7 +323,11 @@ program only. Your photos and settings are kept.
   or coordinates like "37.83, -92.18") from the offline list, pin it on the map, or copy it
   from a photo that has it right. For an exact street address, **Look it up online** asks
   OpenStreetMap with just the text you typed; that button is the only part that goes online
-  and it does nothing until you click it. Only photos without a place change unless you tick overwrite. A
+  and it does nothing until you click it. **Pin on the map** also takes anything copied from
+  Google Maps or Apple Maps: right-click a spot in Google Maps and click the coordinates at the
+  top of the menu, or use its Share link, then paste into the box above the map and the pin
+  lands there (the degrees-minutes form works too). Short maps.app.goo.gl links are expanded
+  with one online request. Only photos without a place change unless you tick overwrite. A
   location you set is marked "set by you", survives every rebuild, and anchors its neighbours.
 - **Pick a span on the Timeline:** **⇔ Pick a span**, then click a first and a last month; the
   bars light up and a bar shows how many photos that is, with **Make a trip**, **Add to album**,

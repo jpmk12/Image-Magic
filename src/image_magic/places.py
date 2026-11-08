@@ -80,6 +80,62 @@ _ABBREV = {"st": "saint", "st.": "saint", "ste": "sainte", "ste.": "sainte", "ft
 _STREET = re.compile(r"\b(\d+[a-z]?|hwy|highway|state|route|rt|rd|road|st(?:reet)?|ave(?:nue)?|blvd|boulevard|dr(?:ive)?|ln|lane|ct|court|pl|way|suite|ste|apt|unit|n|s|e|w|north|south|east|west)\b\.?", re.I)
 _ZIP = re.compile(r"\b\d{5}(?:-\d{4})?\b|\b[a-z]\d[a-z] ?\d[a-z]\d\b|\b[a-z]{1,2}\d{1,2}[a-z]? ?\d[a-z]{2}\b", re.I)
 _COORD = re.compile(r"^\s*([+-]?\d{1,2}(?:\.\d+)?)\s*[, ]\s*([+-]?\d{1,3}(?:\.\d+)?)\s*$")
+# 37°49'41.2"N 92°10'39.7"W  (what Google Maps shows when you click a spot), also 37 49 41.2 N
+_DMS = re.compile(r"""(\d{1,3})[°\s]\s*(\d{1,2})['′\s]\s*(\d{1,2}(?:\.\d+)?)?["″\s]*\s*([NSEW])""", re.I)
+_URL_PATTERNS = (
+    re.compile(r"/@(-?\d{1,2}\.\d+),(-?\d{1,3}\.\d+)"),                  # google.com/maps/.../@37.82,-92.17,15z
+    re.compile(r"!3d(-?\d{1,2}\.\d+)!4d(-?\d{1,3}\.\d+)"),                # the place marker inside a Google link
+    re.compile(r"[?&](?:q|ll|query|center|destination|daddr|saddr|sll)=(-?\d{1,2}\.\d+)\s*,\s*(-?\d{1,3}\.\d+)"),  # maps?q=.., Apple ?ll=..
+    re.compile(r"/place/(-?\d{1,2}\.\d+),(-?\d{1,3}\.\d+)"),
+    re.compile(r"/search/(-?\d{1,2}\.\d+),\s*(-?\d{1,3}\.\d+)"),
+)
+SHORT_LINK = re.compile(r"^https?://(maps\.app\.goo\.gl|goo\.gl/maps|g\.co/kgs|maps\.apple\.com/p)/", re.I)
+
+
+def parse_coords(text: str) -> tuple[float, float] | None:
+    """Coordinates out of anything someone can copy from a map: "37.8281, -92.1777", the degrees form
+    Google shows, or a Google Maps / Apple Maps link. None if there are none."""
+    t = (text or "").strip()
+    if not t:
+        return None
+    m = _COORD.match(t)
+    if m:
+        lat, lon = float(m.group(1)), float(m.group(2))
+        return (lat, lon) if abs(lat) <= 90 and abs(lon) <= 180 else None
+    parts = _DMS.findall(t)
+    if len(parts) >= 2:
+        vals = {}
+        for d, mi, s, hemi in parts[:2]:
+            v = float(d) + float(mi) / 60 + (float(s) if s else 0.0) / 3600
+            hemi = hemi.upper()
+            vals["lat" if hemi in "NS" else "lon"] = -v if hemi in "SW" else v
+        if "lat" in vals and "lon" in vals and abs(vals["lat"]) <= 90 and abs(vals["lon"]) <= 180:
+            return (round(vals["lat"], 6), round(vals["lon"], 6))
+    if "://" in t or t.lower().startswith(("maps.", "www.", "google.", "goo.gl")):
+        import urllib.parse
+        u = urllib.parse.unquote_plus(t)
+        for pat in _URL_PATTERNS:
+            m = pat.search(u)
+            if m:
+                lat, lon = float(m.group(1)), float(m.group(2))
+                if abs(lat) <= 90 and abs(lon) <= 180:
+                    return (lat, lon)
+    return None
+
+
+def expand_short_link(url: str, timeout: float = 10) -> str:
+    """Follow a maps.app.goo.gl / goo.gl/maps redirect to the full Google Maps URL (one request, nothing else sent)."""
+    import urllib.request
+    from . import net
+    req = urllib.request.Request(url.strip(), method="HEAD", headers={"User-Agent": "ImageMagic/1.0 (personal photo library; local app)"})
+    try:
+        with net.urlopen(req, timeout=timeout) as resp:
+            return resp.geturl()
+    except Exception:
+        req = urllib.request.Request(url.strip(), headers={"User-Agent": "ImageMagic/1.0 (personal photo library; local app)"})
+        with net.urlopen(req, timeout=timeout) as resp:
+            resp.read(1)
+            return resp.geturl()
 
 
 def _expand(words: str) -> str:
@@ -92,11 +148,11 @@ def parse_query(query: str) -> dict:
     "14400 State Hwy Z, St Robert, MO 65584, United States" -> name "saint robert", region "missouri", country "united states".
     """
     q = (query or "").strip()
-    m = _COORD.match(q)
-    if m:
-        lat, lon = float(m.group(1)), float(m.group(2))
-        if abs(lat) <= 90 and abs(lon) <= 180:
-            return {"lat": lat, "lon": lon}
+    c = parse_coords(q)
+    if c:
+        return {"lat": c[0], "lon": c[1]}
+    if "://" in q:
+        return {"names": [], "region": None, "country": None, "link": True}    # a map link with no coordinates in it: expand it online
     parts = [p.strip() for p in q.replace(";", ",").split(",") if p.strip()]
     cc = {v.lower(): k for k, v in countries().items()}
     cc["usa"] = cc["us"] = "US"; cc["uk"] = "GB"; cc["united states of america"] = "US"
@@ -175,6 +231,15 @@ def geocode_online(query: str, timeout: float = 10) -> list[dict]:
     q = (query or "").strip()
     if len(q) < 3:
         return []
+    if "://" in q:                                   # a short map link: follow it once and read the coordinates
+        full = expand_short_link(q, timeout) if SHORT_LINK.match(q) else q
+        c = parse_coords(full)
+        if not c:
+            return []
+        p = lookup(c[0], c[1])
+        near = f"near {p.city}, {p.country}" if p.city else (p.country or "")
+        return [{"lat": c[0], "lon": c[1], "name": f"{c[0]:.4f}, {c[1]:.4f}", "region": near, "country_code": p.country_code or "",
+                 "country": "", "online": True}]
     url = "https://nominatim.openstreetmap.org/search?format=jsonv2&limit=6&q=" + urllib.parse.quote(q)
     req = urllib.request.Request(url, headers={"User-Agent": "ImageMagic/1.0 (personal photo library; local app)"})
     with net.urlopen(req, timeout=timeout) as resp:

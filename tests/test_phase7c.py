@@ -16,7 +16,7 @@ def _takeout(folder, name, when: datetime, where=None, description="", people=()
     """A Takeout photo: a JPEG (with or without EXIF) and its json sidecar."""
     folder.mkdir(parents=True, exist_ok=True)
     if with_exif:
-        make_photo(folder / name, when, where=None, seed=hash(name) % 1000)
+        make_photo(folder / name, when, where=None, seed=500 + sum(map(ord, name)) % 400)
     else:
         Image.new("RGB", (600, 400), (10, 90, 200)).save(folder / name, "JPEG")
     data = {"title": name, "description": description, "photoTakenTime": {"timestamp": str(int(when.timestamp()))},

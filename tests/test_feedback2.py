@@ -121,3 +121,21 @@ def test_clutter_categories(tmp_path):
     if cards:
         night = conn.execute("SELECT id FROM assets WHERE path = '2019/night.jpg'").fetchone()[0]
         assert night not in cards[0]["ids"]
+
+
+def test_coordinates_and_map_links_place_the_pin():
+    want = (37.8281, -92.1777)
+    for text in ("37.8281, -92.1777", "37.8281 -92.1777",
+                 "https://www.google.com/maps/place/Saint+Robert,+MO/@37.8281,-92.1777,15z/data=!3m1!4b1!8m2!3d37.8281!4d-92.1777",
+                 "https://maps.google.com/?q=37.8281,-92.1777", "https://www.google.com/maps/search/37.8281,+-92.1777",
+                 "https://maps.apple.com/?ll=37.8281,-92.1777&q=Dropped%20Pin", "https://www.google.com/maps/dir/?api=1&destination=37.8281,-92.1777"):
+        got = places.parse_coords(text)
+        assert got and abs(got[0] - want[0]) < 1e-6 and abs(got[1] - want[1]) < 1e-6, text
+    dms = places.parse_coords("37°49'41.2\"N 92°10'39.7\"W")
+    assert dms and abs(dms[0] - 37.82811) < 1e-4 and abs(dms[1] + 92.17769) < 1e-4
+    assert places.parse_coords("Saint Robert") is None and places.parse_coords("95.0, 10.0") is None
+    assert places.parse_coords("https://maps.app.goo.gl/AbCdEf") is None          # a short link needs one online hop
+    assert places.SHORT_LINK.match("https://maps.app.goo.gl/AbCdEf") and not places.SHORT_LINK.match("https://www.google.com/maps/@1,2,3z")
+    r = places.search("https://maps.google.com/?q=37.8281,-92.1777")
+    assert len(r) == 1 and "Saint Robert" in r[0]["region"]
+    assert places.search("https://maps.app.goo.gl/AbCdEf") == []
