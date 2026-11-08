@@ -417,7 +417,8 @@ class JobRunner:
             s = plan.summary()
             self._finish("cancelled" if self._cancel.is_set() else "done",
                          f"Checked {s['new'] + s['exact'] + s['near']:,} photos and videos: {s['new']:,} new, "
-                         f"{s['exact']:,} already in the library, {s['near']:,} look-alikes.", s)
+                         f"{s['exact']:,} already in the library, {s['near']:,} look-alikes."
+                         + (f" Google Takeout: {s['sidecars']:,} new photos have a sidecar with dates and places." if s["sidecars"] else ""), s)
         except Exception as e:
             self._finish("failed", f"Could not check that folder: {e}")
 
@@ -434,7 +435,8 @@ class JobRunner:
                 self.state.message = "Copying files into the library..."
                 r = importer.run_import(conn, plan, settings.library, settings.originals,
                                         include_near=bool(self.payload.get("include_near")),
-                                        progress=self._progress("Copied"), cancelled=self._cancel.is_set)
+                                        progress=self._progress("Copied"), cancelled=self._cancel.is_set,
+                                        contributor=str(self.payload.get("contributor") or "").strip() or None)
                 self._quality(conn, settings)
             finally:
                 conn.close()
@@ -470,13 +472,28 @@ class JobRunner:
             self._finish("failed", f"Check failed: {e}")
 
     def _run_sync(self, mode: str) -> None:
+        """Download from every configured Apple ID in turn, then catalogue once."""
         try:
             settings = self._settings_provider()
             settings.originals.mkdir(parents=True, exist_ok=True)
-            cmd = sync.build_command(sync.find_icloudpd(), settings, mode=mode, webui=True)
+            accounts = settings.accounts or [(settings.apple_id, settings.originals, None)]
+            cmds = [sync.build_command(sync.find_icloudpd(), settings, mode=mode, webui=True, account=i + 1) for i in range(len(accounts))]
         except Exception as e:
             self._finish("failed", f"Could not start: {e}")
             return
+        downloaded = 0
+        for (apple_id, folder, who), cmd in zip(accounts, cmds):
+            folder.mkdir(parents=True, exist_ok=True)
+            if len(accounts) > 1:
+                self._add_log(f"— {who or 'your'} photos ({apple_id}) —")
+            code = self._download(settings, cmd, mode, apple_id)
+            if code is None:
+                return                      # already finished (stopped or failed)
+            downloaded = self.state.downloaded
+        self._after_download(settings, downloaded)
+
+    def _download(self, settings: Settings, cmd: list[str], mode: str, apple_id: str) -> int | None:
+        """Run one icloudpd process to completion. Returns its exit code, or None if the job already finished."""
 
         if sync.port_in_use():
             self._finish("failed", f"Another program on this computer is using port {sync.ICLOUDPD_PORT}, which the "
@@ -487,7 +504,7 @@ class JobRunner:
                           "'Block network access to the iCloud sign-in helper' ticked, or click Cancel if Windows Firewall asks.")
         self._helper_ok = False
         self.state.message = "Connecting to iCloud..."
-        self._add_log(f"Starting {mode} sync of {settings.apple_id}")
+        self._add_log(f"Starting {mode} sync of {apple_id}")
         extra: dict = {}
         if sys.platform == "win32":
             extra["creationflags"] = getattr(subprocess, "CREATE_NO_WINDOW", 0)
@@ -500,7 +517,7 @@ class JobRunner:
             )
         except Exception as e:
             self._finish("failed", f"Could not start icloudpd: {e}")
-            return
+            return None
 
         watcher = threading.Thread(target=self._watch_auth, daemon=True)
         watcher.start()
@@ -519,21 +536,29 @@ class JobRunner:
         code = self._proc.wait()
         self._proc = None
         self._helper_ok = False
-        downloaded = self.state.downloaded
-        downloaded = self.state.downloaded
 
         if self._cancel.is_set():
             self._finish("cancelled", "Sync stopped. Run it again any time; it picks up where it left off.")
-            return
+            return None
         if code != 0:
             self._finish("failed", _explain_icloudpd_failure(code, [line for _, line in list(self.log)[-80:]]))
-            return
+            return None
+        return code
+
+    def _after_download(self, settings: Settings, downloaded: int) -> None:
         conn = catalog.connect(settings.db)
         catalog.set_meta(conn, "last_sync", catalog.now_iso())
         conn.commit()
         conn.close()
         try:
             r = self._scan(settings, quick=True)     # only folders iCloud touched; "Catalog everything" does a full pass
+            for _, _, who in settings.accounts:
+                if who:
+                    conn = catalog.connect(settings.db)
+                    try:
+                        catalog.attribute_folder(conn, who, who)     # the second account's photos carry their owner's name
+                    finally:
+                        conn.close()
         except InterruptedError:
             self._finish("cancelled", f"Sync stopped after downloading {downloaded:,}; cataloging will finish next time.")
             return

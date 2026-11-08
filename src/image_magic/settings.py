@@ -8,6 +8,7 @@ Stored outside the photo library so the library folder itself can be changed:
 from __future__ import annotations
 
 import json
+import re
 import os
 import sys
 from dataclasses import asdict, dataclass, fields
@@ -60,6 +61,8 @@ class Settings:
     phone_access: bool = False         # also listen on the Wi-Fi address (HTTPS + pairing code)
     daily_memory: bool = True          # a Windows notification with the memory of the day while the app is open
     inbox_auto: bool = True            # after each sync, apply confident location and clutter suggestions by itself
+    apple_id_2: str = ""               # a second Apple ID (a spouse) syncing into the same library
+    contributor_2: str = ""            # whose photos those are; also the subfolder they download into
 
     def __post_init__(self) -> None:
         if not self.library_path:
@@ -114,7 +117,20 @@ class Settings:
         s.auto_sync_hours = max(0, min(s.auto_sync_hours, 24 * 7))
         if not s.library_path:
             s.library_path = default_library_path()
+        s.contributor_2 = re.sub(r"[^\w .'-]+", "", s.contributor_2, flags=re.U).strip()[:40]
+        if s.apple_id_2 and not s.contributor_2:
+            s.contributor_2 = s.apple_id_2.split("@")[0][:40]
         return s
+
+    @property
+    def accounts(self) -> list[tuple[str, Path, str | None]]:
+        """(apple_id, download folder, contributor) for every account that syncs into this library."""
+        out: list[tuple[str, Path, str | None]] = []
+        if self.apple_id:
+            out.append((self.apple_id, self.originals, None))
+        if self.apple_id_2 and self.apple_id_2 != self.apple_id:
+            out.append((self.apple_id_2, self.originals / self.contributor_2, self.contributor_2))
+        return out
 
     def to_dict(self) -> dict:
         return asdict(self)

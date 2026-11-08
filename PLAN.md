@@ -516,8 +516,10 @@ dropped from the list before approval.
    into ~5 km cells; the Map tab's ▶ Time-lapse animates them, following the current filter.
 8. **Share as one file** (built, v0.47.0). The share export zips the folder and the page
    downloads it; the folder remains in the library's exports.
-9. **Google Photos / Android import.** Takeout folders carry JSON sidecars with dates and
-   locations; read them like the iCloud sidecars so those photos land with full metadata.
-10. **Two iCloud accounts into one library.** A second Apple ID syncing into the same library,
-    each photo attributed through the existing contributor field.
+9. **Google Photos / Android import** (built, v0.48.0). `metadata.read_google_sidecar` finds the
+   Takeout json by name, by the `(1)` rename, or by its "title"; the import copies sidecars along
+   and `locations.read_sources` reads them (source "google"); the import names its contributor.
+10. **Two iCloud accounts into one library** (built, v0.48.0). `Settings.apple_id_2` and
+    `contributor_2`; the sync job runs icloudpd per account into `originals/<name>/` and the
+    scan attributes that folder to the person.
 11. **Phone layout polish** (deferred). A bottom tab bar, swipe in the viewer, bigger touch targets.

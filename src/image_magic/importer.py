@@ -20,7 +20,7 @@ from typing import Callable
 from PIL import Image, ImageOps
 
 from . import catalog, media
-from .metadata import media_kind, read_photo_meta
+from .metadata import google_sidecar_path, media_kind, read_photo_meta
 
 NEAR_BITS = 6          # Hamming distance at or below this counts as the same picture
 IMPORT_DIR = "imported"
@@ -89,10 +89,11 @@ class Plan:
     near: list[dict] = field(default_factory=list)      # {path, match_id, bits}
     skipped: int = 0                                     # not a photo/video
     errors: int = 0
+    sidecars: int = 0                                    # Google Takeout json files found next to new photos
 
     def summary(self) -> dict:
         return {"folder": self.folder, "new": len(self.new), "exact": len(self.exact), "near": len(self.near),
-                "skipped": self.skipped, "errors": self.errors,
+                "skipped": self.skipped, "errors": self.errors, "sidecars": self.sidecars,
                 "new_bytes": sum(f["size"] for f in self.new),
                 "near_examples": self.near[:40], "new_examples": [f["path"] for f in self.new[:20]]}
 
@@ -125,7 +126,8 @@ def check_folder(conn: sqlite3.Connection, folder: Path, library: Path, original
             progress(i, len(files))
         kind = media_kind(f)
         if kind is None:
-            plan.skipped += 1
+            if f.suffix.lower() != ".json":
+                plan.skipped += 1
             continue
         try:
             sha = catalog.sha256_file(f)
@@ -155,6 +157,8 @@ def check_folder(conn: sqlite3.Connection, folder: Path, library: Path, original
             except Exception:
                 pass
         plan.new.append({"path": rel, "size": f.stat().st_size, "kind": kind})
+        if google_sidecar_path(f) is not None:
+            plan.sidecars += 1
     return plan
 
 
@@ -180,11 +184,16 @@ def _dest_for(originals: Path, src: Path) -> Path:
 
 def run_import(conn: sqlite3.Connection, plan: Plan, library: Path, originals: Path, include_near: bool = False,
                progress: Callable[[int, int], None] | None = None,
-               cancelled: Callable[[], bool] = lambda: False) -> dict:
-    """Copy the planned files into the library (originals are left untouched), then catalogue them."""
+               cancelled: Callable[[], bool] = lambda: False, contributor: str | None = None) -> dict:
+    """Copy the planned files into the library (originals are left untouched), then catalogue them.
+
+    Google Takeout sidecars travel with their photos (renamed to <file>.json), so dates, locations,
+    favourites and descriptions are read when the files are catalogued. `contributor` names who
+    the photos came from (a spouse's Google account, an old Android phone)."""
     folder = Path(plan.folder)
     todo = list(plan.new) + (list(plan.near) if include_near else [])
     copied = failed = 0
+    placed: list[str] = []
     for i, item in enumerate(todo, 1):
         if cancelled():
             break
@@ -192,12 +201,18 @@ def run_import(conn: sqlite3.Connection, plan: Plan, library: Path, originals: P
         try:
             dest = _dest_for(originals, src)
             shutil.copy2(src, dest)          # keeps the file's dates
+            side = google_sidecar_path(src)
+            if side is not None:
+                shutil.copy2(side, dest.with_name(dest.name + ".json"))
         except Exception:
             failed += 1
             continue
         copied += 1
+        placed.append(dest.relative_to(originals).as_posix())
         if progress and i % 10 == 0:
             progress(i, len(todo))
     r = catalog.scan(conn, originals, cancelled=cancelled)
+    if contributor and placed:
+        catalog.attribute(conn, placed, contributor)
     fill_hashes(conn, library, originals, cancelled=cancelled)
-    return {"copied": copied, "failed": failed, "catalogued_new": r.new, "total": r.total}
+    return {"copied": copied, "failed": failed, "catalogued_new": r.new, "total": r.total, "sidecars": plan.sidecars}

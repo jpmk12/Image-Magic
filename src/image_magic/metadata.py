@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import os
 from datetime import datetime
 from pathlib import Path
 
@@ -193,6 +194,84 @@ def read_sidecar(path: Path) -> SidecarMeta | None:
     subj = next((e for e in root.iter(f"{{{_NS['dc']}}}subject")), None)
     if subj is not None:
         meta.keywords = [li.text.strip() for li in subj.iter(f"{{{_NS['rdf']}}}li") if li.text and li.text.strip()] or None
+    return meta
+
+
+# ---- Google Photos Takeout sidecars (<photo>.jpg.json, .supplemental-metadata.json, truncated names) ----
+
+import json as _json
+from functools import lru_cache as _lru_cache
+
+
+@_lru_cache(maxsize=256)
+def _google_index(folder: str) -> dict[str, str]:
+    """title -> json file name for every Takeout sidecar in a folder (Takeout truncates and renames the
+    json files, but each one names its photo in "title")."""
+    out: dict[str, str] = {}
+    try:
+        names = os.listdir(folder)
+    except OSError:
+        return out
+    for n in names:
+        if not n.lower().endswith(".json"):
+            continue
+        try:
+            with open(os.path.join(folder, n), "rb") as f:
+                head = f.read(200_000)
+            data = _json.loads(head)
+        except (OSError, ValueError):
+            continue
+        if isinstance(data, dict) and isinstance(data.get("title"), str) and "photoTakenTime" in data:
+            out.setdefault(data["title"], n)
+    return out
+
+
+def google_sidecar_path(path: Path) -> Path | None:
+    """The Takeout json that describes this file, if there is one. Never raises."""
+    for cand in (path.name + ".json", path.name + ".supplemental-metadata.json", path.with_suffix("").name + ".json"):
+        p = path.with_name(cand)
+        if p.is_file():
+            return p
+    m = _re.fullmatch(r"(.*)(\(\d+\))(\.[^.]+)", path.name)      # IMG(1).jpg -> IMG.jpg(1).json
+    if m:
+        p = path.with_name(f"{m.group(1)}{m.group(3)}{m.group(2)}.json")
+        if p.is_file():
+            return p
+    name = _google_index(str(path.parent)).get(path.name)
+    return path.with_name(name) if name else None
+
+
+def read_google_sidecar(path: Path) -> SidecarMeta | None:
+    """Dates, location, favourite, description and people from a Google Photos Takeout sidecar. Never raises."""
+    side = google_sidecar_path(path)
+    if side is None:
+        return None
+    try:
+        data = _json.loads(side.read_bytes()[:400_000])
+    except (OSError, ValueError):
+        return None
+    if not isinstance(data, dict):
+        return None
+    meta = SidecarMeta()
+    ts = (data.get("photoTakenTime") or {}).get("timestamp")
+    try:
+        if ts is not None and float(ts) > 0:
+            meta.taken_at = datetime.fromtimestamp(float(ts)).isoformat(timespec="seconds")
+    except (TypeError, ValueError, OSError, OverflowError):
+        pass
+    for key in ("geoData", "geoDataExif"):
+        g = data.get(key) or {}
+        try:
+            lat, lon = float(g.get("latitude", 0)), float(g.get("longitude", 0))
+        except (TypeError, ValueError):
+            continue
+        if (lat or lon) and abs(lat) <= 90 and abs(lon) <= 180:
+            meta.lat, meta.lon = round(lat, 7), round(lon, 7)
+            break
+    meta.favorite = bool(data.get("favorited"))
+    meta.title = _clean(data.get("description")) if isinstance(data.get("description"), str) else None
+    people = [p.get("name", "").strip() for p in data.get("people") or [] if isinstance(p, dict)]
+    meta.keywords = [p for p in people if p] or None
     return meta
 
 

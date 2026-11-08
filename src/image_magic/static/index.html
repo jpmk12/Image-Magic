@@ -539,11 +539,13 @@
 
     <div class="panel" id="importpanel">
       <h2>Import from a folder</h2>
-      <p class="small">Add photos you have elsewhere (your desktop, an old phone, a camera card). The app checks each
-        file against the library first: exact copies are skipped, and look-alikes (the same picture resized or re-saved)
-        are listed for you to decide. Originals are copied, never moved.</p>
+      <p class="small">Add photos you have elsewhere (your desktop, an old phone, a camera card, a <b>Google Photos
+        Takeout</b> folder). The app checks each file against the library first: exact copies are skipped, and
+        look-alikes (the same picture resized or re-saved) are listed for you to decide. Originals are copied, never
+        moved. Takeout's json sidecars come along, so dates, places, favourites and descriptions are kept.</p>
       <div class="row">
-        <input type="text" id="import-folder" placeholder="C:\Users\you\Desktop\Photos" style="max-width:420px">
+        <input type="text" id="import-folder" placeholder="C:\Users\you\Desktop\Photos  or  ...\Takeout\Google Photos" style="max-width:420px">
+        <input type="text" id="import-from" placeholder="From (optional): Sam's Android" style="max-width:220px" title="Whose photos these are; shows as a filter on the Home tab">
         <button class="btn primary" id="import-check">Check folder</button>
       </div>
       <div id="import-result" class="small" style="margin-top:10px"></div>
@@ -797,6 +799,17 @@
           <span>My iCloud uses Advanced Data Protection
           <small>Only tick this if it's on (iPhone: Settings → your name → iCloud → Advanced Data Protection). You'll approve a prompt on your iPhone.</small></span>
         </label>
+        <details style="margin-top:10px">
+          <summary class="small">A second Apple ID (a spouse's photos in the same library)</summary>
+          <label class="field"><span>Second Apple ID</span>
+            <input type="email" name="apple_id_2" placeholder="them@icloud.com">
+            <small>Every sync downloads both accounts, one after the other; you'll be asked for that account's password and code the first time. Nothing is ever deleted from either iCloud.</small>
+          </label>
+          <label class="field"><span>Whose photos</span>
+            <input type="text" name="contributor_2" placeholder="Sam">
+            <small>Their photos land in a folder with this name and show up under it on the Home tab's Family panel, in filters and in books.</small>
+          </label>
+        </details>
       </div>
 
       <div class="panel">
@@ -1727,7 +1740,8 @@ function renderImport(j) {
     const r = j.result; box.replaceChildren();
     const p = document.createElement("p");
     p.textContent = `${fmt(r.new)} new (${bytes(r.new_bytes)}), ${fmt(r.exact)} already in your library, ${fmt(r.near)} look-alikes` +
-      (r.skipped ? `, ${fmt(r.skipped)} other files ignored` : "") + ".";
+      (r.skipped ? `, ${fmt(r.skipped)} other files ignored` : "") + "." +
+      (r.sidecars ? ` Google Takeout detected: ${fmt(r.sidecars)} of the new photos have a sidecar with dates and places.` : "");
     box.append(p);
     if (r.near_examples.length) {
       const d = document.createElement("details"); const s = document.createElement("summary"); s.textContent = "Look-alikes (first " + r.near_examples.length + ")"; d.append(s);
@@ -1745,7 +1759,7 @@ function renderImport(j) {
       const b = document.createElement("button"); b.className = "btn primary"; b.textContent = `Import ${fmt(r.new)} new`;
       const lab = document.createElement("label"); lab.className = "small"; lab.style.display = r.near ? "" : "none";
       const cb = document.createElement("input"); cb.type = "checkbox"; lab.append(cb, document.createTextNode(` also import the ${fmt(r.near)} look-alikes`));
-      b.onclick = () => api("/api/import/run", { include_near: cb.checked }).then(j2 => { renderJob(j2); box.replaceChildren(); }).catch(e => toast(e.message));
+      b.onclick = () => api("/api/import/run", { include_near: cb.checked, contributor: $("#import-from").value.trim() }).then(j2 => { renderJob(j2); box.replaceChildren(); }).catch(e => toast(e.message));
       acts.append(b, lab); box.append(acts);
     }
   }

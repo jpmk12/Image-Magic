@@ -886,7 +886,8 @@ def make_handler(app: App):
                     app.jobs.start("archive", payload={"everything": bool(data.get("everything")), "voice": bool(data.get("voice"))})
                     return self._json(200, app.jobs.snapshot())
                 if path == "/api/import/run":
-                    app.jobs.start("import", payload={"include_near": bool(data.get("include_near"))})
+                    app.jobs.start("import", payload={"include_near": bool(data.get("include_near")),
+                                                      "contributor": str(data.get("contributor") or "")[:80]})
                     return self._json(200, app.jobs.snapshot())
                 if path.startswith("/api/curate/"):
                     from . import curate

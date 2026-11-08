@@ -48,7 +48,7 @@ def read_sources(conn: sqlite3.Connection, originals: Path, progress: Callable[[
     """Sidecars and video atoms for every asset not yet examined. Returns counts by source."""
     rows = conn.execute(
         "SELECT id, path, kind, lat, taken_at, width FROM assets WHERE missing = 0 AND location_source IS NULL").fetchall()
-    counts = {"exif": 0, "icloud": 0, "video": 0, "none": 0, "favorites": 0, "dates_fixed": 0}
+    counts = {"exif": 0, "icloud": 0, "google": 0, "video": 0, "none": 0, "favorites": 0, "dates_fixed": 0}
     for i, r in enumerate(rows, 1):
         if cancelled():
             break
@@ -58,10 +58,17 @@ def read_sources(conn: sqlite3.Connection, originals: Path, progress: Callable[[
         source = "exif" if r["lat"] is not None else None
         sets: dict = {}
         side = metadata.read_sidecar(path)
+        side_name = "icloud"
+        if side is None:
+            side = metadata.read_google_sidecar(path)       # a Google Photos Takeout import
+            side_name = "google"
+            if side and side.taken_at and r["kind"] == "photo" and not metadata.read_photo_meta(path).taken_at:
+                sets["taken_at"] = side.taken_at             # a photo Google had the date for but the file did not
+                counts["dates_fixed"] += 1
         if side:
             if source is None and side.lat is not None:
                 sets.update(lat=side.lat, lon=side.lon, place_km=None)
-                source = "icloud"
+                source = side_name
             if side.favorite:
                 sets["favorite"] = 1
                 counts["favorites"] += 1

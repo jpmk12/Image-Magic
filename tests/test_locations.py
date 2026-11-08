@@ -87,7 +87,7 @@ def test_scan_fills_locations_from_every_source(tmp_path):
     assert s["located"] == 4 and s["by_source"] == {"exif": 1, "icloud": 1, "nearby": 1, "video": 1, "none": 1} and s["favorites"] == 1
     assert [i["id"] for i in browse.photos(conn, {"favorite": "1"})["items"]]
     # a second scan examines nothing again, and inference stays stable
-    assert locations.read_sources(conn, orig) == {"exif": 0, "icloud": 0, "video": 0, "none": 0, "favorites": 0, "dates_fixed": 0}
+    assert locations.read_sources(conn, orig) == {"exif": 0, "icloud": 0, "google": 0, "video": 0, "none": 0, "favorites": 0, "dates_fixed": 0}
     assert locations.infer_nearby(conn) == 1
     # interpolation between two neighbours that agree; the closer one wins when they disagree
     make_photo(orig / "p1.jpg", datetime(2020, 1, 1, 12, 0), HOME)

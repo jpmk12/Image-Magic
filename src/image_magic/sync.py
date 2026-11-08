@@ -89,13 +89,20 @@ def build_command(
     webui: bool = False,       # ask for password / 2FA code via web page instead of console
     dry_run: bool = False,
     auth_only: bool = False,
+    account: int = 1,          # 1 = the main Apple ID, 2 = the second one (downloads into its own subfolder)
 ) -> list[str]:
-    if not settings.apple_id:
-        raise ValueError("Apple ID is not set")
+    if account == 2:
+        if not settings.apple_id_2:
+            raise ValueError("The second Apple ID is not set")
+        username, directory = settings.apple_id_2, settings.originals / settings.contributor_2
+    else:
+        if not settings.apple_id:
+            raise ValueError("Apple ID is not set")
+        username, directory = settings.apple_id, settings.originals
     cmd = [
         icloudpd,
-        "--username", settings.apple_id,
-        "--directory", str(settings.originals),
+        "--username", username,
+        "--directory", str(directory),
         "--folder-structure", FOLDER_STRUCTURES[settings.folder_structure],
         "--size", "original",
         "--keep-unicode-in-filenames",

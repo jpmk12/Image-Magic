@@ -193,7 +193,17 @@ program only. Your photos and settings are kept.
   export, a camera card) and click **Check folder**. Each file is compared with the library:
   exact copies are skipped, look-alikes (the same picture resized or re-saved) are listed with
   the library photo they match, and the rest are new. Click **Import** to copy the new ones into
-  `originals/imported/<year>/<month>/`. Your files are copied, never moved.
+  `originals/imported/<year>/<month>/`. Your files are copied, never moved. The optional
+  **From** box names whose photos they are (a spouse, an old Android phone); that name becomes a
+  filter on the Home tab's Family panel.
+- **Google Photos Takeout:** point the import at a `Takeout/Google Photos` folder. Google's json
+  sidecars (dates, places, favourites, descriptions, even the truncated and renamed ones) travel
+  with their photos, so a picture whose file carries no date or location still lands on the right
+  day and place, marked as located "from Google".
+- **Two iCloud accounts, one library:** Settings → Account → *A second Apple ID*. Every sync
+  downloads both accounts in turn (you sign in to the second one the first time); the second
+  account's photos live in their own folder and carry that person's name everywhere the
+  contributor shows: the Family panel, filters, books. Nothing is ever deleted from either iCloud.
 - **Stories for events and years:** the **✍** button on an event card and **✍ Story** on the
   year panel work like trip and chapter stories: Claude drafts a few paragraphs from the dates,
   places, people and captions (never the pixels), you edit them, and the event book, year book

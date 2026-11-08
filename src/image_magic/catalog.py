@@ -357,6 +357,31 @@ def scan(conn: sqlite3.Connection, originals: Path, progress=None, cancelled=lam
     return result
 
 
+def attribute(conn: sqlite3.Connection, rel_paths: list[str], contributor: str) -> int:
+    """Name who a set of catalogued files came from (only where nothing is recorded yet)."""
+    name = contributor.strip()[:80]
+    if not name:
+        return 0
+    n = 0
+    for i in range(0, len(rel_paths), 500):
+        chunk = rel_paths[i:i + 500]
+        n += conn.execute(f"UPDATE assets SET contributor = ? WHERE contributor IS NULL AND path IN ({','.join('?' * len(chunk))})",
+                          [name] + chunk).rowcount
+    conn.commit()
+    return n
+
+
+def attribute_folder(conn: sqlite3.Connection, prefix: str, contributor: str) -> int:
+    """Everything under originals/<prefix>/ belongs to `contributor` (a second iCloud account's folder)."""
+    name = contributor.strip()[:80]
+    if not name or not prefix:
+        return 0
+    n = conn.execute("UPDATE assets SET contributor = ? WHERE contributor IS NULL AND path LIKE ?",
+                     (name, prefix.strip("/") + "/%")).rowcount
+    conn.commit()
+    return n
+
+
 def add_file(conn: sqlite3.Connection, originals: Path, path: Path, contributor: str | None = None) -> int:
     """Catalog one new file right away (a family contribution); the next scan fills in trips and events."""
     rel = _rel(path, originals)
