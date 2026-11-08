@@ -471,6 +471,9 @@ def make_handler(app: App):
                     from . import events
                     return self._json(200, app.cached(f"events:{q.get('year')}:{q.get('trip')}", conn,
                                                       lambda: events.events(conn, q.get("year"), int(q["trip"]) if q.get("trip") else None), ttl=600))
+                if path == "/api/curate/stops":
+                    from . import curate
+                    return self._json(200, curate.stops(conn, int(q.get("trip") or 0)))
                 if path == "/api/curate/suggest":
                     from . import curate
                     return self._json(200, curate.suggest_for_trip(conn, str(settings.db), int(q.get("trip") or 0),

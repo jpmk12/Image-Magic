@@ -1025,6 +1025,14 @@
   </div>
 </div>
 
+<div class="story share hidden" id="stops">
+  <div class="card" style="width:min(1000px,100%)">
+    <div class="row" style="justify-content:space-between"><h2 id="stops-title" style="margin:0">Stops</h2><button class="btn" id="stops-close">✕</button></div>
+    <p class="small muted">The trip as a sequence of places, in order. Move a whole stop to another trip, make it a trip of its own, give it a location, or take it out of the trip. Click a photo to see it.</p>
+    <div id="stops-list" style="display:flex;flex-direction:column;gap:14px;max-height:65vh;overflow:auto"></div>
+    <div class="small" id="stops-note" style="margin-top:8px;min-height:18px"></div>
+  </div>
+</div>
 <div class="story share hidden" id="sugg">
   <div class="card">
     <div class="row" style="justify-content:space-between"><h2 id="sugg-title" style="margin:0">More photos from this trip?</h2><button class="btn" id="sugg-close">✕</button></div>
@@ -1559,6 +1567,7 @@ async function loadInbox() {
 }
 async function acceptCard(c, only, faces) {
   let name; if (c.action.do === "face_name") { name = prompt("Who is this?"); if (!name) return; }
+  if (c.action.do === "trip_create") { name = prompt("Where was this trip? A town or country (e.g. Petra, Jordan) names the trip and places its photos; leave blank to decide later.", (c.action.words || [])[0] || ""); if (name === null) return; }
   try {
     const r = await api("/api/inbox/accept", { key: c.key, name, ids: only || null, faces: faces || null });
     showDone(c, r.summary || "Done");
@@ -1586,7 +1595,7 @@ async function openReview(c, handlers) {
   $("#rev-title").textContent = c.title; $("#rev-why").textContent = `${c.why} ${Math.round(c.conf * 100)}% sure.`;
   $("#rev-accept").textContent = c.yes; $("#rev-dlg").classList.remove("hidden");
   const body = $("#rev-body"); body.replaceChildren();
-  const perPhoto = ["trip_add", "location", "trash"].includes(c.action.do);
+  const perPhoto = ["trip_add", "trip_create", "location", "trash"].includes(c.action.do);
   const perFace = !!(c.faces && ["face_merge", "face_name"].includes(c.action.do));
   if (perFace) rev.ticked = new Set(c.faces);                     // face cards tick by face, not by photo
   $("#rev-hint").textContent = perPhoto ? "These are exactly the photos this decision is about. Untick any that don't belong (Shift-click for a range); double-click to look closer."
@@ -1636,7 +1645,7 @@ async function openReview(c, handlers) {
   revCount();
 }
 function revCount() {
-  const c = rev.card; const perPhoto = ["trip_add", "location", "trash"].includes(c.action.do); const perFace = !!(c.faces && ["face_merge", "face_name"].includes(c.action.do));
+  const c = rev.card; const perPhoto = ["trip_add", "trip_create", "location", "trash"].includes(c.action.do); const perFace = !!(c.faces && ["face_merge", "face_name"].includes(c.action.do));
   $("#rev-count").textContent = perPhoto ? `${rev.ticked.size} of ${c.ids.length} ticked` : perFace ? `${rev.ticked.size} of ${c.faces.length} faces ticked` : `${c.ids.length} photos`;
   $("#rev-accept").disabled = (perPhoto || perFace) && !rev.ticked.size;
 }
@@ -1644,7 +1653,7 @@ $("#rev-close").onclick = () => $("#rev-dlg").classList.add("hidden");
 $("#rev-skip").onclick = async () => { const c = rev.card; $("#rev-dlg").classList.add("hidden"); if (rev.onSkip) return rev.onSkip(); await api("/api/inbox/skip", { key: c.key }).catch(e => toast(e.message)); showDone(c, "Skipped; it won't come back unless the facts change"); };
 $("#rev-accept").onclick = async () => {
   const c = rev.card; $("#rev-dlg").classList.add("hidden"); showTab("home"); if (rev.onAccept) return rev.onAccept();
-  const perPhoto = ["trip_add", "location", "trash"].includes(c.action.do); const perFace = !!(c.faces && ["face_merge", "face_name"].includes(c.action.do));
+  const perPhoto = ["trip_add", "trip_create", "location", "trash"].includes(c.action.do); const perFace = !!(c.faces && ["face_merge", "face_name"].includes(c.action.do));
   await acceptCard(c, perPhoto && rev.ticked.size < c.ids.length ? [...rev.ticked] : null, perFace && rev.ticked.size < c.faces.length ? [...rev.ticked] : null);
 };
 $("#inbox-high").onclick = async () => { try { const r = await api("/api/inbox/accept-high", {}); toast(`Applied ${r.applied} suggestions`); } catch (e) { toast(e.message); } loadInbox(); refresh(); };
@@ -3033,6 +3042,37 @@ async function personMenu(anchor, f, d) {
   showMenu(anchor, items);
 }
 let sugg = { trip: 0 };
+async function openStops(t, all) {
+  $("#stops-title").textContent = `${t.title}: stops`; $("#stops-note").textContent = ""; $("#stops").classList.remove("hidden");
+  const list = $("#stops-list"); list.replaceChildren(Object.assign(document.createElement("p"), { className: "muted", textContent: "Looking…" }));
+  let stops; try { stops = await api(`/api/curate/stops?trip=${t.id}`); } catch (e) { list.replaceChildren(Object.assign(document.createElement("p"), { className: "muted", textContent: e.message })); return; }
+  list.replaceChildren();
+  const act = async (path, body, msg) => { try { await api(path, body); $("#stops-note").textContent = msg; } catch (e) { $("#stops-note").textContent = e.message; return; } loadTrips(); openStops(t, all); };
+  for (const s of stops) {
+    const box = document.createElement("div"); box.style.cssText = "border:1px solid var(--line);border-radius:12px;padding:10px 12px";
+    const head = document.createElement("div"); head.className = "row"; head.style.justifyContent = "space-between";
+    const h = document.createElement("div"); const b = document.createElement("b"); b.textContent = `${s.index}. ${s.title}`;
+    const sub = document.createElement("span"); sub.className = "small muted"; sub.textContent = `  ${fmtDate(s.start)}${s.end.slice(0, 10) !== s.start.slice(0, 10) ? " – " + fmtDate(s.end) : ""} · ${fmt(s.count)} photos`;
+    h.append(b, sub);
+    const acts = document.createElement("div"); acts.className = "row";
+    const mv = document.createElement("button"); mv.className = "btn"; mv.textContent = "Move to…";
+    mv.onclick = () => { const items = [{ head: `Move ${s.count} photos to…` }];
+      for (const o of all.filter(x => x.id !== t.id).slice(0, 15)) items.push({ label: `${o.title} · ${new Date(o.start_at).toLocaleDateString(undefined, { month: "short", year: "numeric" })}`, run: () => act("/api/curate/trip", { ids: s.ids, trip: o.id }, `Moved to ${o.title}`) });
+      items.push("-", { label: "A new trip of its own…", run: () => { const n = prompt("Name for the new trip:", s.title); if (n && n.trim()) act("/api/curate/trip", { ids: s.ids, trip: { new: n.trim() } }, "Split off as " + n.trim()); } });
+      items.push({ label: "Not part of any trip", run: () => { if (confirm(`Take these ${s.count} photos out of ${t.title}?`)) act("/api/curate/trip", { ids: s.ids, trip: "none" }, "Taken out of the trip"); } });
+      showMenu(mv, items); };
+    const lc = document.createElement("button"); lc.className = "btn"; lc.textContent = s.lat == null ? "Set location" : "Change location";
+    lc.onclick = () => openLocation(s.ids, `${s.count} photos at ${s.title}`);
+    acts.append(mv, lc); head.append(h, acts);
+    const strip = document.createElement("div"); strip.className = "mem-row"; strip.style.marginTop = "8px";
+    const items = s.ids.map(id => ({ id, kind: "photo" }));
+    s.ids.slice(0, 10).forEach((id, i) => { const tile = tileFor(items[i], items, i); tile.style.width = "84px"; strip.append(tile); });
+    if (s.ids.length > 10) { const more = document.createElement("div"); more.className = "small muted"; more.style.alignSelf = "center"; more.textContent = `+${s.ids.length - 10} more`; strip.append(more); }
+    box.append(head, strip); list.append(box);
+  }
+  if (!stops.length) list.textContent = "This trip has no photos.";
+}
+$("#stops-close").onclick = () => $("#stops").classList.add("hidden");
 async function openSuggestions(tripId, title, seed) {
   sugg.trip = tripId;
   $("#sugg-title").textContent = `More photos from ${title}?`; $("#sugg-note").textContent = ""; $("#sugg-grid").replaceChildren();
@@ -3401,7 +3441,9 @@ async function loadTrips() {
     ed.style.margin = "0 14px 12px"; ed.onclick = ev => { ev.stopPropagation(); tripEditMenu(ed, t, list); };
     const tl = document.createElement("button"); tl.className = "btn"; tl.textContent = "🎤 Tell"; tl.title = "Tell the story: a line or a voice note for each of the best photos";
     tl.style.margin = "0 14px 12px"; tl.onclick = ev => { ev.stopPropagation(); openTell({ trip: t.id }, t.title); };
-    const rowb = document.createElement("div"); rowb.className = "row"; rowb.append(play, st, tl, more, bk, ed);
+    const sp = document.createElement("button"); sp.className = "btn"; sp.textContent = "📍 Stops"; sp.title = "The trip as a sequence of places: move, split or locate a whole stop at once";
+    sp.style.margin = "0 14px 12px"; sp.onclick = ev => { ev.stopPropagation(); openStops(t, list); };
+    const rowb = document.createElement("div"); rowb.className = "row"; rowb.append(play, st, tl, sp, more, bk, ed);
     b.append(rowb);
     return b;
   }));

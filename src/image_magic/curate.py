@@ -348,3 +348,133 @@ def suggest_for_trip(conn: sqlite3.Connection, db_key: str, trip_id: int, seed_i
         it["strong"] = sc >= 0.8
         out.append(it)
     return {"trip": dict(trip), "items": out}
+
+
+# ---- trips the GPS never saw ------------------------------------------------------
+
+NOGPS_MIN_DAYS = 3        # a run of unlocated photo-days at least this long
+NOGPS_MIN_PHOTOS = 12     # with at least this many photos
+NOGPS_PER_DAY = 3.0       # and this many a day on average
+
+
+def unlocated_trip_candidates(conn: sqlite3.Connection, limit: int = 5) -> list[dict]:
+    """Multi-day runs of photos with no location and no trip, dense enough to be a trip nobody recorded
+    (old cameras, imports, Takeout folders). Days that also have located photos are skipped: those are
+    either home or a trip the GPS already found."""
+    from collections import defaultdict
+    located_days = {r[0] for r in conn.execute(
+        f"SELECT DISTINCT substr(taken_at, 1, 10) FROM assets WHERE {VISIBLE} AND lat IS NOT NULL AND taken_at IS NOT NULL")}
+    trip_days: set[str] = set()
+    for t in conn.execute("SELECT start_at, end_at FROM trips"):
+        try:
+            a, b = _parse(t["start_at"]).date(), _parse(t["end_at"]).date()
+        except ValueError:
+            continue
+        d = a - timedelta(days=1)
+        while d <= b + timedelta(days=1):
+            trip_days.add(d.isoformat()); d += timedelta(days=1)
+    rejected = {r[0] for r in conn.execute("SELECT asset_id FROM trip_rejections WHERE trip_id = 0")} if _table(conn, "trip_rejections") else set()
+    by_day: dict[str, list[int]] = defaultdict(list)
+    for r in conn.execute(f"""SELECT id, substr(taken_at, 1, 10) AS d FROM assets WHERE {VISIBLE} AND kind = 'photo' AND lat IS NULL
+                              AND trip_id IS NULL AND trip_manual = 0 AND taken_at IS NOT NULL ORDER BY taken_at"""):
+        if r["d"] in located_days or r["d"] in trip_days or r["id"] in rejected:
+            continue
+        by_day[r["d"]].append(r["id"])
+    days = sorted(by_day)
+    runs: list[list[str]] = []
+    for d in days:
+        if runs and (datetime.fromisoformat(d).date() - datetime.fromisoformat(runs[-1][-1]).date()).days <= 1:
+            runs[-1].append(d)
+        else:
+            runs.append([d])
+    out = []
+    for run in runs:
+        ids = [i for d in run for i in by_day[d]]
+        if len(run) < NOGPS_MIN_DAYS or len(ids) < NOGPS_MIN_PHOTOS or len(ids) / len(run) < NOGPS_PER_DAY:
+            continue
+        a, b = datetime.fromisoformat(run[0]).date(), datetime.fromisoformat(run[-1]).date()
+        words = _place_words(conn, ids)
+        conf = 0.6 + min(0.2, (len(run) - NOGPS_MIN_DAYS) * 0.03) + min(0.1, len(ids) / 400)
+        span = f"{a:%b %-d}" + (f" – {b:%b %-d}" if b != a else "") + f", {a.year}" if a.year == b.year else f"{a:%b %-d, %Y} – {b:%b %-d, %Y}"
+        out.append({"ids": ids, "start": run[0], "end": run[-1], "days": len(run), "span": span, "words": words,
+                    "conf": round(conf, 2), "default_title": f"Trip, {span}"})
+    out.sort(key=lambda c: -len(c["ids"]))
+    return out[:limit]
+
+
+def _table(conn: sqlite3.Connection, name: str) -> bool:
+    return conn.execute("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?", (name,)).fetchone() is not None
+
+
+def _place_words(conn: sqlite3.Connection, ids: list[int], n: int = 4) -> list[str]:
+    """Capitalised words from the captions that are not sentence starts: likely place names."""
+    import re
+    words: Counter = Counter()
+    for i in range(0, len(ids), 500):
+        chunk = ids[i:i + 500]
+        for r in conn.execute(f"SELECT caption FROM descriptions WHERE status = 'ok' AND asset_id IN ({','.join('?' * len(chunk))})", chunk):
+            for sent in re.split(r"[.!?]\s+", r[0] or ""):
+                for w in re.findall(r"\b[A-Z][a-z]{2,}\b", sent)[1:] if sent[:1].isupper() else re.findall(r"\b[A-Z][a-z]{2,}\b", sent):
+                    words[w] += 1
+    return [w for w, c in words.most_common(n) if c >= 2]
+
+
+def create_trip(conn: sqlite3.Connection, ids: list[int], title: str | None, place: str | None = None) -> dict:
+    """A new trip from these photos; if a place name is given and the offline list knows it, the trip and its
+    photos get that location (marked set by you). Returns what undo needs."""
+    from . import locations, places
+    ids = [int(i) for i in ids]
+    ph = ",".join("?" * len(ids))
+    before = [[r[0], r[1], r[2]] for r in conn.execute(f"SELECT id, trip_id, trip_manual FROM assets WHERE id IN ({ph}) OR live_pair_id IN ({ph})", ids + ids)]
+    hit = None
+    if place and place.strip():
+        found = places.search(place.strip(), limit=1)
+        hit = found[0] if found else None
+    name = (title or "").strip() or (f"{hit['name']}" if hit else None)
+    if not name:
+        first = conn.execute(f"SELECT MIN(taken_at), MAX(taken_at) FROM assets WHERE id IN ({ph})", ids).fetchone()
+        name = f"Trip, {first[0][:10]}"
+    tid = set_trip(conn, ids, None, new_title=name)
+    located: list[int] = []
+    if hit:
+        conn.execute("UPDATE trips SET lat = ?, lon = ?, subtitle = ? WHERE id = ?",
+                     (hit["lat"], hit["lon"], ", ".join(x for x in (hit["name"], hit.get("region"), hit.get("country")) if x), tid))
+        for aid in ids:
+            if locations.set_manual(conn, [aid], hit["lat"], hit["lon"]):
+                located.append(aid)
+        conn.commit()
+    return {"trip": tid, "title": name, "place": hit, "before": before, "located": located}
+
+
+# ---- stops inside a trip --------------------------------------------------------------
+
+def stops(conn: sqlite3.Connection, trip_id: int) -> list[dict]:
+    """The trip as a sequence of stops: consecutive runs of photos in the same city (unlocated photos join
+    the stop around them). For moving a whole stop, giving it a location, or splitting it off."""
+    rows = conn.execute(f"""SELECT id, taken_at, city, country, lat, lon, kind FROM assets WHERE trip_id = ? AND missing = 0
+                            AND duplicate_of IS NULL AND kind != 'live_video' ORDER BY taken_at, id""", (trip_id,)).fetchall()
+    out: list[dict] = []
+    pending: list = []                  # unlocated photos waiting for the next located stop
+    for r in rows:
+        key = (r["country"], r["city"]) if r["city"] else ((round(r["lat"], 1), round(r["lon"], 1)) if r["lat"] is not None else None)
+        if key is None:
+            if out:
+                out[-1]["ids"].append(r["id"]); out[-1]["end"] = r["taken_at"]
+            else:
+                pending.append(r)
+            continue
+        if out and out[-1]["key"] == key:
+            out[-1]["ids"].append(r["id"]); out[-1]["end"] = r["taken_at"]
+        else:
+            title = r["city"] or (f"{r['lat']:.2f}, {r['lon']:.2f}")
+            if r["country"] and r["city"]:
+                title = f"{r['city']}, {r['country']}"
+            out.append({"key": key, "title": title, "start": pending[0]["taken_at"] if pending else r["taken_at"], "end": r["taken_at"],
+                        "ids": [p["id"] for p in pending] + [r["id"]], "lat": r["lat"], "lon": r["lon"]})
+            pending = []
+    if pending:
+        out.append({"key": None, "title": "No location", "start": pending[0]["taken_at"], "end": pending[-1]["taken_at"],
+                    "ids": [p["id"] for p in pending], "lat": None, "lon": None})
+    for i, s_ in enumerate(out, 1):
+        s_["index"] = i; s_["count"] = len(s_["ids"]); s_["cover"] = s_["ids"][len(s_["ids"]) // 2]; s_.pop("key", None)
+    return out

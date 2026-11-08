@@ -368,6 +368,12 @@ Service features (flying log, squadron yearbook) slot into S2 (log) and S9 (year
   pages for index/chapters/trips/events/albums (+ years with everything), stories and
   milestones inline, optional voice notes; `archive` job with progress; Home panel.
 - Phase 6 complete.
+- **GPS-less trips and stops** (v0.55.0): `curate.unlocated_trip_candidates` (runs of ≥3
+  unlocated days, ≥12 photos, no located photos those days, outside existing trips) as an
+  inbox `trip_create` card with a place prompt (`curate.create_trip` names the trip, sets its
+  lat/lon and the photos' manual location; undo reverses both); rejected photos go to
+  trip_rejections with trip 0. `curate.stops` groups a trip into consecutive city runs; the
+  Stops dialog moves, splits, removes or locates a stop. Items 4 and 6.
 - **Trip suggestion signals** (v0.54.0): shot-order bracketing (`curate.shot_number`, same
   camera prefix, within a year, gap ≤ 60), the trip's cast from named faces (shared people
   score up, strangers scale down), travel-day captions within two days. Items 1–3 of the

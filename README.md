@@ -216,6 +216,15 @@ program only. Your photos and settings are kept.
   with the year folders) and carry that person's name everywhere the contributor shows: the
   Family panel, filters, books. If the second account fails to sign in, the first account's
   new photos are still catalogued. Nothing is ever deleted from either iCloud.
+- **Trips the GPS never saw:** old cameras, imports and Takeout folders often carry no
+  location, so the trip builder cannot see them. The inbox now spots runs of several days of
+  unlocated photos with nothing from home on those days and offers them as a trip: "Jul 10 –
+  Jul 13, 2014: 20 photos look like a trip the GPS never saw". Accept, say where it was
+  ("Petra, Jordan"), and the trip is named and its photos placed there, marked set by you.
+  Leave the place blank to decide later. Unticked photos are remembered as not a trip.
+- **Stops:** **📍 Stops** on a trip card shows the trip as a sequence of places in order, with
+  the photos of each. Move a whole stop to another trip, split it off as a trip of its own,
+  take it out of the trip, or give it a location, in one go.
 - **Stories for events and years:** the **✍** button on an event card and **✍ Story** on the
   year panel work like trip and chapter stories: Claude drafts a few paragraphs from the dates,
   places, people and captions (never the pixels), you edit them, and the event book, year book

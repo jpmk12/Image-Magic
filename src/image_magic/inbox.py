@@ -94,6 +94,23 @@ def _trip_additions(conn, db_key) -> list[dict]:
     return out
 
 
+def _new_trips(conn) -> list[dict]:
+    from . import curate
+    out = []
+    try:
+        cands = curate.unlocated_trip_candidates(conn)
+    except Exception:
+        return out
+    for c in cands:
+        why = f"{len(c['ids'])} photos with no location over {c['days']} days, with nothing from home on those days."
+        if c["words"]:
+            why += " Captions mention " + ", ".join(c["words"]) + "."
+        out.append({"key": _key("newtrip", c["ids"]), "kind": "trip", "conf": c["conf"], "ids": c["ids"],
+                    "title": f"{c['span']}: {len(c['ids'])} photos look like a trip the GPS never saw", "why": why,
+                    "yes": "Make a trip…", "alt": "Pick which…", "action": {"do": "trip_create", "ids": c["ids"], "words": c["words"], "default_title": c["default_title"]}})
+    return out
+
+
 def _face_names(conn) -> list[dict]:
     out = []
     try:
@@ -195,7 +212,7 @@ def _clutter(conn, library, originals) -> list[dict]:
 def suggestions(conn, db_key: str, library, originals) -> list[dict]:
     ensure_schema(conn)
     decided = {r[0] for r in conn.execute("SELECT key FROM inbox_decisions")}
-    cards = _trip_additions(conn, db_key) + _face_names(conn) + _locations(conn) + _trip_merges(conn) + _clutter(conn, library, originals)
+    cards = _trip_additions(conn, db_key) + _new_trips(conn) + _face_names(conn) + _locations(conn) + _trip_merges(conn) + _clutter(conn, library, originals)
     from . import learning
     out = []
     for c in cards:
@@ -260,7 +277,8 @@ def summary_of(card: dict) -> str:
     """One line for the Done notice."""
     a = card.get("action") or {}
     n = len(a.get("ids") or a.get("points") or card.get("ids") or [])
-    return {"trip_add": f"{n} photos added to the trip", "face_merge": "Face group merged", "face_name": "Person named",
+    return {"trip_add": f"{n} photos added to the trip", "trip_create": f"New trip made with {n} photos" + (f": {card['made_title']}" if card.get("made_title") else ""),
+            "face_merge": "Face group merged", "face_name": "Person named",
             "location": f"{n} photos given a location", "trip_merge": "Trips merged", "trash": f"{n} photos moved to the trash"}.get(a.get("do"), "Done")
 
 
@@ -286,6 +304,14 @@ def apply(conn, library, originals, card: dict, decision: str = "accepted", name
         before = {r[0]: (r[1], r[2]) for r in conn.execute(f"SELECT id, trip_id, trip_manual FROM assets WHERE id IN ({ph}) OR live_pair_id IN ({ph})", ids + ids)}
         curate.set_trip(conn, ids, int(a["trip"]))
         undo = {"do": "trip_restore", "before": [[i, t, m] for i, (t, m) in before.items()]}
+    elif a.get("do") == "trip_create":
+        ids = [int(i) for i in a["ids"]]
+        left_out = [int(i) for i in (card.get("all_ids") or []) if int(i) not in set(ids)]
+        if left_out:
+            reject_for_trip(conn, 0, left_out)          # trip 0 = "not a trip at all": never proposed as a new trip again
+        r = curate.create_trip(conn, ids, None, place=name)
+        card["made_title"] = r["title"]
+        undo = {"do": "trip_uncreate", "before": r["before"], "trip": r["trip"], "located": r["located"]}
     elif a.get("do") == "face_merge":
         for fid in a.get("detach") or []:
             faces.move_face(conn, int(fid), None)       # "not this person": those faces leave the group first
@@ -333,6 +359,8 @@ def skip(conn, card: dict) -> None:
     a = card.get("action") or {}
     if a.get("do") == "trip_add":
         reject_for_trip(conn, int(a["trip"]), a.get("ids") or [])
+    if a.get("do") == "trip_create":
+        reject_for_trip(conn, 0, a.get("ids") or [])
     conn.execute("INSERT OR REPLACE INTO inbox_decisions (key, decision, undo, title, created) VALUES (?, 'skipped', NULL, ?, ?)",
                  (card["key"], card.get("title", ""), _now()))
     from . import learning
@@ -355,6 +383,12 @@ def undo_last(conn, library, originals) -> str:
         from . import curate
         for tid in {t for _, t, _ in u["before"] if t}:
             curate._recount(conn, tid)
+    elif u["do"] == "trip_uncreate":
+        for i, t, m in u["before"]:
+            conn.execute("UPDATE assets SET trip_id = ?, trip_manual = ? WHERE id = ?", (t, m, i))
+        conn.execute("DELETE FROM trips WHERE id = ?", (u["trip"],))
+        if u.get("located"):
+            locations.clear_manual(conn, u["located"])
     elif u["do"] == "face_unmerge":
         cur = conn.execute("INSERT INTO persons (name, created) VALUES (NULL, datetime('now'))")
         pid = cur.lastrowid
