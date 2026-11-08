@@ -178,6 +178,59 @@ def empty(conn: sqlite3.Connection, library: Path) -> dict:
     return {"deleted": n, "bytes": freed}
 
 
+def bursts(conn: sqlite3.Connection, limit: int = 40) -> list[dict]:
+    """Bursts not yet reviewed, newest first: every frame with its score and the current keeper."""
+    from . import confidence
+    confidence.ensure_schema(conn)
+    reviewed = {int(r[0].split(":")[1]) for r in conn.execute("SELECT key FROM reviews WHERE key LIKE 'burst:%'")}
+    rows = conn.execute(
+        f"""SELECT burst_id, COUNT(*) AS n, MIN(taken_at) AS first, MAX(taken_at) AS last FROM assets
+            WHERE {VISIBLE} AND burst_id IS NOT NULL GROUP BY burst_id HAVING n > 1 ORDER BY first DESC LIMIT ?""", (limit * 3,)).fetchall()
+    out = []
+    for r in rows:
+        if r["burst_id"] in reviewed:
+            continue
+        frames = [dict(f) for f in conn.execute(
+            f"SELECT id, quality_score AS score, burst_best AS keeper, city, country FROM assets WHERE {VISIBLE} AND burst_id = ? ORDER BY taken_at, id", (r["burst_id"],))]
+        if len(frames) < 2:
+            continue
+        try:
+            secs = (datetime.fromisoformat(r["last"]) - datetime.fromisoformat(r["first"])).total_seconds()
+        except ValueError:
+            secs = 0
+        best = max(f["score"] or 0 for f in frames)
+        for f in frames:
+            f["blur"] = (f["score"] or 0) < max(25, best - 35)
+            f["keeper"] = bool(f["keeper"])
+        out.append({"burst_id": r["burst_id"], "when": r["first"], "n": len(frames), "secs": round(secs),
+                    "place": ", ".join(x for x in [frames[0]["city"], frames[0]["country"]] if x), "frames": frames})
+        if len(out) >= limit:
+            break
+    return out
+
+
+def keep_frame(conn: sqlite3.Connection, library: Path, originals: Path, burst_id: int, keeper: int | None, trash_rest: bool) -> dict:
+    """Decide a burst: make `keeper` the burst's best, trash the other frames (or keep all), and mark it reviewed."""
+    from . import confidence
+    ids = [r[0] for r in conn.execute("SELECT id FROM assets WHERE burst_id = ? AND missing = 0", (burst_id,))]
+    if not ids:
+        raise ValueError("Unknown burst")
+    if keeper is not None:
+        if int(keeper) not in ids:
+            raise ValueError("That frame is not in this burst")
+        conn.execute("UPDATE assets SET burst_best = CASE WHEN id = ? THEN 1 ELSE 0 END WHERE burst_id = ?", (int(keeper), burst_id))
+    result = {"trashed": 0}
+    if trash_rest:
+        k = int(keeper) if keeper is not None else conn.execute("SELECT id FROM assets WHERE burst_id = ? AND burst_best = 1", (burst_id,)).fetchone()[0]
+        rest = [i for i in ids if i != k]
+        result = trash(conn, library, originals, rest)
+    confidence.ensure_schema(conn)
+    conn.execute("INSERT OR REPLACE INTO reviews (key, decision, created) VALUES (?, 'confirmed', ?)",
+                 (f"burst:{burst_id}", datetime.now(timezone.utc).isoformat(timespec="seconds")))
+    conn.commit()
+    return result
+
+
 def trash_summary(conn: sqlite3.Connection) -> dict:
     ensure_schema(conn)
     r = conn.execute("SELECT COUNT(*), COALESCE(SUM(size), 0) FROM assets WHERE trashed_at IS NOT NULL AND kind != 'live_video'").fetchone()

@@ -260,6 +260,12 @@ program only. Your photos and settings are kept.
   hours), search a place by name from the offline list, pin it on the map, or copy it from a
   photo that has it right. Only photos without a place change unless you tick overwrite. A
   location you set is marked "set by you", survives every rebuild, and anchors its neighbours.
+- **Pick a span on the Timeline:** **⇔ Pick a span**, then click a first and a last month; the
+  bars light up and a bar shows how many photos that is, with **Make a trip**, **Add to album**,
+  **Set location** and **Open in Organize** (where you can narrow it further).
+- **Review bursts:** on the Home tab's Clean up panel, **Review bursts** lists every burst with
+  its frames and scores. The app pre-picks the sharpest frame (★); click another to make it the
+  keeper, then **Keep ★, trash the rest** or **Keep all**. One button handles every burst at once.
 - **Select mode:** **☑ Select** on the Photos tab lets you tick many photos (or **Select all
   shown**) and then move them to a trip or a new trip, take them out of their trips, add them
   to an album, or move them to the trash in one go.

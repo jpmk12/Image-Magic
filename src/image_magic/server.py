@@ -345,7 +345,7 @@ def make_handler(app: App):
                     return self._json(200, app.jobs.log_since(since))
                 if path.startswith(("/api/photos", "/api/photo/", "/api/facets", "/api/trips", "/api/replay",
                                     "/api/map", "/api/people", "/api/timeline", "/api/story", "/api/memories",
-                                    "/api/shuffle", "/api/similar/", "/api/review", "/api/context/", "/api/curate/", "/api/events", "/api/home", "/api/voice/", "/api/compare/", "/api/flying", "/api/book", "/api/review-queue", "/api/family", "/api/cleanup", "/api/albums", "/api/places/", "/api/daily", "/api/ids", "/api/inbox", "/media/")):
+                                    "/api/shuffle", "/api/similar/", "/api/review", "/api/context/", "/api/curate/", "/api/events", "/api/home", "/api/voice/", "/api/compare/", "/api/flying", "/api/book", "/api/review-queue", "/api/family", "/api/cleanup", "/api/albums", "/api/places/", "/api/daily", "/api/ids", "/api/inbox", "/api/bursts", "/media/")):
                     return self._browse(path, self._query())
             except Exception as e:
                 return self._json(500, {"error": str(e)})
@@ -396,6 +396,9 @@ def make_handler(app: App):
                         n = max(5, min(int(q.get("n") or 30), 300))
                         return self._json(200, browse.replay_items(conn, quality.best_of(conn, where + " AND a.private = 0", args, n)))
                     return self._json(200, browse.replay(conn, q))
+                if path == "/api/bursts":
+                    from . import cleanup
+                    return self._json(200, cleanup.bursts(conn))
                 if path == "/api/inbox":
                     from . import inbox
                     return self._json(200, inbox.overview(conn, str(settings.db), settings.library, settings.originals))
@@ -904,7 +907,10 @@ def make_handler(app: App):
                     try:
                         action = path.rsplit("/", 1)[1]
                         ids = [int(i) for i in data.get("ids") or []]
-                        if action == "trash":
+                        if action == "keep":
+                            r = cleanup.keep_frame(conn, settings.library, settings.originals, int(data["burst"]),
+                                                   int(data["keeper"]) if data.get("keeper") else None, bool(data.get("trash_rest")))
+                        elif action == "trash":
                             r = cleanup.trash(conn, settings.library, settings.originals, ids)
                         elif action == "restore":
                             r = {"restored": cleanup.restore(conn, settings.library, settings.originals, ids or None)}
@@ -912,7 +918,7 @@ def make_handler(app: App):
                             r = cleanup.empty(conn, settings.library)
                         else:
                             return self._json(404, {"error": "not found"})
-                        if action in ("trash", "restore"):
+                        if action in ("trash", "restore", "keep"):
                             from . import chapters, events, places
                             places.refresh(conn); events.rebuild(conn); chapters.rebuild_milestones(conn)
                         return self._json(200, {**r, "trash": cleanup.trash_summary(conn)})

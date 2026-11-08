@@ -183,6 +183,7 @@
   .bars { display: grid; grid-template-columns: repeat(12, 1fr); gap: 4px; height: 44px; align-items: end; }
   .bars button { background: var(--accent); opacity: .7; border: 0; border-radius: 4px 4px 0 0; min-height: 2px; cursor: pointer; padding: 0; transition: opacity .15s; }
   .bars button:hover { opacity: 1; }
+  .bars button.inspan { background: var(--accent) !important; opacity: 1 !important; }
   .bars button.empty { background: var(--line); opacity: 1; cursor: default; }
   .tl-items { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
   .tl-items .it { display: inline-flex; gap: 7px; align-items: center; border: 1px solid var(--line); border-radius: 99px;
@@ -452,7 +453,7 @@
     <div class="panel" id="cleanpanel">
       <div class="row" style="justify-content:space-between">
         <h2 style="margin:0">Clean up</h2>
-        <div class="row"><button class="btn primary" id="clean-find">Find clutter</button></div>
+        <div class="row"><button class="btn" id="burst-open">Review bursts</button><button class="btn primary" id="clean-find">Find clutter</button></div>
       </div>
       <p class="small">Blurry shots, pocket shots, screenshots, exact copies and spare burst frames, for you to review and move to the
         app's trash. The trash keeps the files until you empty it, and <b>nothing is ever deleted from iCloud</b>: a trashed photo that
@@ -628,7 +629,8 @@
   <section id="tab-timeline" class="hidden">
     <div class="row" style="justify-content:space-between;margin-bottom:12px">
       <p class="muted small" style="margin:0">Your life in chapters, found from where you lived. Click a chapter title to rename it, a bar to see that month, a pin to open it.</p>
-      <div class="row"><button class="btn primary" id="tl-lifebook" title="One printable book of everything: chapters, trips, events, stories">📖 Life book</button>
+      <div class="row"><button class="btn" id="tl-span" title="Click a first and a last month, then act on everything in between">⇔ Pick a span</button>
+      <button class="btn primary" id="tl-lifebook" title="One printable book of everything: chapters, trips, events, stories">📖 Life book</button>
       <button class="btn" id="tl-rebuild" title="Recompute chapters and milestones from your photos">Rebuild</button></div>
     </div>
     <div class="panel" id="yr-panel">
@@ -639,6 +641,15 @@
       <div class="yr" id="yr-stats"></div>
       <div id="yr-lines" class="small"></div>
       <div class="yr-best" id="yr-best"></div>
+    </div>
+    <div class="og-bar hidden" id="span-bar" style="position:sticky;top:8px;margin:0 0 12px">
+      <b id="span-count">Click a first month</b><span class="small" id="span-range" style="color:#9fb0b7"></span>
+      <span style="margin-left:auto"></span>
+      <button class="btn primary" id="span-trip">Make a trip</button>
+      <button class="btn" id="span-album">Add to album ▾</button>
+      <button class="btn" id="span-loc">Set location…</button>
+      <button class="btn" id="span-organize">Open in Organize</button>
+      <button class="btn" id="span-done">Done</button>
     </div>
     <div id="timeline"></div>
     <p class="muted" id="tl-empty" style="display:none">Nothing here yet. Chapters appear once photos with dates and locations are downloaded.</p>
@@ -957,6 +968,15 @@
   </div>
 </div>
 
+<div class="story share hidden" id="burst-dlg">
+  <div class="card" style="width:min(1100px,100%)">
+    <div class="row" style="justify-content:space-between"><h2 style="margin:0">Bursts: keep one, let the rest go</h2><button class="btn" id="burst-close">✕</button></div>
+    <p class="small muted">The app pre-picks the sharpest, best-exposed frame (★). Click another frame to make it the keeper. Spare frames go to the app's trash, restorable; iCloud is untouched.</p>
+    <div class="row" style="justify-content:space-between;margin-bottom:8px"><span class="small muted" id="burst-sum"></span><button class="btn primary" id="burst-all">Trash all spare frames, keep the ★</button></div>
+    <div id="burst-list" style="display:flex;flex-direction:column;gap:10px;max-height:60vh;overflow:auto"></div>
+    <div class="small" id="burst-note" style="margin-top:8px;color:var(--accent);min-height:18px"></div>
+  </div>
+</div>
 <div class="story share hidden" id="loc-dlg">
   <div class="card" style="width:min(900px,100%)">
     <div class="row" style="justify-content:space-between"><h2 id="loc-title" style="margin:0">Set location</h2><button class="btn" id="loc-close">✕</button></div>
@@ -1959,6 +1979,81 @@ document.addEventListener("keydown", e => {
   if (e.key === "ArrowRight") $("#lb-next").click();
 });
 
+// ---- timeline span selection
+const span = { on: false, a: null, b: null, ids: [] };
+$("#tl-span").onclick = () => { span.on = !span.on; span.a = span.b = null; span.ids = []; $("#tl-span").classList.toggle("primary", span.on); $("#span-bar").classList.toggle("hidden", !span.on); spanRender(); };
+$("#span-done").onclick = () => { span.on = false; $("#tl-span").classList.remove("primary"); $("#span-bar").classList.add("hidden"); spanRender(); };
+function spanPick(key) {
+  if (span.a && !span.b && key !== span.a) { [span.a, span.b] = [span.a, key].sort(); }
+  else { span.a = key; span.b = null; }
+  spanRender(); spanCount();
+}
+function spanBounds() { if (!span.a) return null; const b = span.b || span.a; const [y, m] = b.split("-").map(Number); const last = new Date(y, m, 0).getDate(); return { from: span.a + "-01", to: `${b}-${String(last).padStart(2, "0")}` }; }
+function spanRender() {
+  const inSpan = k => span.on && span.a && k >= span.a && k <= (span.b || span.a);
+  $$("#timeline .bars button").forEach(b => b.classList.toggle("inspan", inSpan(b.dataset.month)));
+  const r = spanBounds();
+  $("#span-range").textContent = r ? (span.b ? `${span.a} → ${span.b}` : `${span.a} (click a last month, or act on this one)`) : "";
+  if (!r) $("#span-count").textContent = "Click a first month";
+  $$("#span-bar .btn").forEach(x => { if (x.id !== "span-done") x.disabled = !r; });
+}
+async function spanCount() {
+  const r = spanBounds(); if (!r) return;
+  const res = await api(`/api/ids?from=${r.from}&to=${r.to}`).catch(() => ({ ids: [], total: 0 }));
+  span.ids = res.ids; $("#span-count").textContent = `${fmt(res.total)} photos`;
+}
+$("#span-trip").onclick = async () => { const n = prompt("Name the trip:", span.a); if (!n || !n.trim()) return; try { await api("/api/curate/trip", { ids: span.ids, trip: { new: n.trim() } }); toast(`Trip "${n.trim()}" made from ${span.ids.length} photos`); loadTimeline(); } catch (e) { toast(e.message); } };
+$("#span-album").onclick = async ev => {
+  const anchor = ev.currentTarget; const list = (await api("/api/albums").catch(() => [])).filter(a => a.kind === "manual");
+  const items = [{ head: `Add ${span.ids.length} photos to…` }];
+  for (const a of list.slice(0, 12)) items.push({ label: a.title, run: async () => { await api("/api/albums/add", { id: a.id, ids: span.ids }).catch(e => toast(e.message)); toast("Added to " + a.title); } });
+  items.push("-", { label: "New album…", run: async () => { const n = prompt("Album name:"); if (n && n.trim()) { await api("/api/albums/create", { title: n.trim(), kind: "manual", ids: span.ids }).catch(e => toast(e.message)); toast("Album made"); } } });
+  showMenu(anchor, items);
+};
+$("#span-loc").onclick = () => openLocation(span.ids, `${span.ids.length} photos`);
+$("#span-organize").onclick = () => { const r = spanBounds(); showTab("organize"); og.filters = { from: r.from, to: r.to }; loadOrganize(); };
+
+// ---- burst picker
+const bp = { keeper: {} };
+async function openBursts() {
+  $("#burst-dlg").classList.remove("hidden"); $("#burst-note").textContent = ""; await loadBursts();
+}
+async function loadBursts() {
+  const list = await api("/api/bursts").catch(e => { toast(e.message); return []; });
+  const box = $("#burst-list"); box.replaceChildren();
+  const extras = list.reduce((s, b) => s + b.n - 1, 0);
+  $("#burst-sum").textContent = list.length ? `${list.length} bursts · ${extras} spare frames` : "All bursts reviewed.";
+  $("#burst-all").disabled = !list.length;
+  const el = (t, c, txt) => { const d = document.createElement(t); if (c) d.className = c; if (txt) d.textContent = txt; return d; };
+  for (const b of list) {
+    const row = el("div", "row"); row.style.alignItems = "center"; row.style.background = "var(--soft)"; row.style.borderRadius = "12px"; row.style.padding = "10px 12px";
+    const head = el("div"); head.style.width = "150px"; head.style.flex = "none"; head.append(el("div", "", new Date(b.when).toLocaleString(undefined, { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" })), el("div", "small muted", `${b.place || ""}${b.place ? " · " : ""}${b.n} frames in ${b.secs} s`));
+    const frames = el("div", "row"); frames.style.flex = "1"; frames.style.flexWrap = "wrap";
+    const keeperId = bp.keeper[b.burst_id] ?? (b.frames.find(f => f.keeper) || b.frames[0]).id;
+    for (const f of b.frames) {
+      const t = el("button", "tile"); t.style.width = "112px"; t.style.height = "84px"; t.style.aspectRatio = "auto"; t.style.border = "0"; t.style.padding = "0"; t.style.position = "relative";
+      const im = document.createElement("img"); im.src = media("thumb", f.id); im.alt = ""; im.loading = "lazy"; t.append(im);
+      if (f.id === keeperId) { t.style.outline = "3px solid var(--accent)"; t.style.outlineOffset = "-3px"; const k = el("span", "badge", "★ keep"); k.style.top = "6px"; k.style.bottom = "auto"; k.style.background = "var(--accent)"; t.append(k); } else t.style.opacity = ".75";
+      const sc = el("span", "badge", `${Math.round(f.score || 0)}/100`); t.append(sc);
+      if (f.blur) { const bl = el("span", "badge", "blur"); bl.style.left = "auto"; bl.style.right = "6px"; bl.style.background = "#b45309"; t.append(bl); }
+      t.onclick = () => { bp.keeper[b.burst_id] = f.id; loadBursts(); }; t.ondblclick = () => openLightbox(b.frames.indexOf(f), b.frames.map(x => ({ id: x.id, kind: "photo" })));
+      frames.append(t);
+    }
+    const acts = el("div"); acts.style.display = "flex"; acts.style.flexDirection = "column"; acts.style.gap = "6px"; acts.style.flex = "none";
+    const keep = el("button", "btn primary", `Keep ★, trash ${b.n - 1}`); keep.onclick = async () => { try { await api("/api/cleanup/keep", { burst: b.burst_id, keeper: keeperId, trash_rest: true }); $("#burst-note").textContent = `${b.n - 1} spare frames went to the trash.`; } catch (e) { toast(e.message); } loadBursts(); refresh(); };
+    const all = el("button", "btn", "Keep all"); all.onclick = async () => { try { await api("/api/cleanup/keep", { burst: b.burst_id, keeper: keeperId, trash_rest: false }); } catch (e) { toast(e.message); } loadBursts(); };
+    acts.append(keep, all); row.append(head, frames, acts); box.append(row);
+  }
+}
+$("#burst-open").onclick = openBursts;
+$("#burst-close").onclick = () => $("#burst-dlg").classList.add("hidden");
+$("#burst-all").onclick = async () => {
+  const list = await api("/api/bursts").catch(() => []); const extras = list.reduce((s, b) => s + b.n - 1, 0);
+  if (!list.length || !confirm(`Move ${extras} spare frames from ${list.length} bursts to the app's trash, keeping each ★? They stay in iCloud and can be restored.`)) return;
+  let n = 0; for (const b of list) { try { const r = await api("/api/cleanup/keep", { burst: b.burst_id, keeper: bp.keeper[b.burst_id] || null, trash_rest: true }); n += r.trashed || 0; } catch (e) {} }
+  $("#burst-note").textContent = `${n} spare frames went to the trash.`; loadBursts(); refresh();
+};
+
 // ---- organize
 const og = { filters: {}, items: [], offset: 0, total: 0, sel: new Set(), last: null, targets: [], loading: false };
 async function loadOrganize(reset) {
@@ -2214,7 +2309,8 @@ async function loadTimeline() {
         const n = inRange(key) ? (t.months[key] || 0) : 0;
         const b = document.createElement("button"); b.title = `${name} ${y}: ${fmt(n)} photos`;
         b.style.height = n ? Math.max(4, 44 * n / maxN) + "px" : "2px";
-        if (!n) b.classList.add("empty"); else b.onclick = () => goPhotos({ month: key, monthTitle: `${name} ${y}` });
+        b.dataset.month = key;
+        if (!n) b.classList.add("empty"); else b.onclick = () => span.on ? spanPick(key) : goPhotos({ month: key, monthTitle: `${name} ${y}` });
         bars.append(b);
       });
       const items = document.createElement("div"); items.className = "tl-items";

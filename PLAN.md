@@ -368,6 +368,10 @@ Service features (flying log, squadron yearbook) slot into S2 (log) and S9 (year
   pages for index/chapters/trips/events/albums (+ years with everything), stories and
   milestones inline, optional voice notes; `archive` job with progress; Home panel.
 - Phase 6 complete.
+- **Curation sprint: span + bursts** (v0.42.0): Timeline span mode (first/last month,
+  /api/ids over from/to, trip/album/location/Organize actions); cleanup.bursts and keep_frame
+  (keeper → burst_best, spare frames trashed, reviewed via the reviews table); burst dialog.
+  The curation mockups are all built.
 - **Curation sprint: Curator inbox** (v0.41.0): inbox.suggestions (trip additions from
   curate.suggest_for_trip's strong items, face groups near a named centre or large unnamed
   groups, unlocated photos with 2-hour neighbours grouped by place, adjacent same-area trips,
