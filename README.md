@@ -378,6 +378,19 @@ Place names are looked up **on your computer** from a bundled list of about 145,
   the face models to the CPU on the spot and carries on; the Activity log says so. Results are
   the same, it just takes longer. Smart search is unaffected.
 
+**Second review (v0.43.0).** Everything added since the first review (Phase 5, Phase 6 and the
+curation tools) had another independent security and bugs pass and a performance pass. Fixed:
+paired phones are now limited to an explicit allowlist (browse, replay, ask, voice notes, adding
+photos) and can no longer read the pairing code, the activity log or curation and export
+endpoints; events keep their identity when their first photo is trashed; the trash never hides a
+photo whose file could not be moved; exact-copy detection ignores copies whose original is gone;
+undo of a trip addition restores Live Photo clips too; leap-day winters, malformed video atoms
+and odd URL parameters no longer cause errors. Performance: clutter detection is a plain query
+over stored quality components, the inbox, review queue, clean-up, memory of the day, events,
+albums and flying log are cached per catalog change, the status poll no longer touches the
+backup drive, the Home tab reloads its panels only when the catalog changed, and the catalog's
+schema check runs once per launch instead of on every request.
+
 **Honest limits**
 - icloudpd is a popular open-source tool, but it isn't made by Apple, and Apple could change
   iCloud in a way that breaks it until it's updated.

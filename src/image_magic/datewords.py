@@ -60,7 +60,7 @@ def _years(conn: sqlite3.Connection) -> list[int]:
 def _season(name: str, year: int) -> tuple[date, date]:
     a, b = SEASONS[name]
     if name == "winter":
-        return date(year - 1, 12, 1), date(year, 2, 28)
+        return date(year - 1, 12, 1), date(year, 3, 1) - timedelta(days=1)
     end = date(year, b, 1) + timedelta(days=31)
     return date(year, a, 1), date(end.year, end.month, 1) - timedelta(days=1)
 

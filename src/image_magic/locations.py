@@ -47,7 +47,7 @@ def read_sources(conn: sqlite3.Connection, originals: Path, progress: Callable[[
                  cancelled=lambda: False) -> dict:
     """Sidecars and video atoms for every asset not yet examined. Returns counts by source."""
     rows = conn.execute(
-        "SELECT id, path, kind, lat, taken_at FROM assets WHERE missing = 0 AND location_source IS NULL").fetchall()
+        "SELECT id, path, kind, lat, taken_at, width FROM assets WHERE missing = 0 AND location_source IS NULL").fetchall()
     counts = {"exif": 0, "icloud": 0, "video": 0, "none": 0, "favorites": 0, "dates_fixed": 0}
     for i, r in enumerate(rows, 1):
         if cancelled():
@@ -80,7 +80,7 @@ def read_sources(conn: sqlite3.Connection, originals: Path, progress: Callable[[
             if v.taken_at and "taken_at" not in sets:
                 sets["taken_at"] = v.taken_at
                 counts["dates_fixed"] += 1
-            if v.width and not conn.execute("SELECT width FROM assets WHERE id = ?", (r["id"],)).fetchone()[0]:
+            if v.width and not r["width"]:
                 sets.update(width=v.width, height=v.height)
         sets["location_source"] = source or "none"
         counts[source or "none"] += 1
@@ -183,8 +183,15 @@ def nearby_suggestions(conn: sqlite3.Connection, ids: list[int], window_minutes:
     import bisect
     out = []
     window = window_minutes * 60
-    for i in ids:
-        r = conn.execute("SELECT id, taken_at, lat, location_source FROM assets WHERE id = ?", (int(i),)).fetchone()
+    wanted = [int(i) for i in ids]
+    rows_by_id: dict[int, sqlite3.Row] = {}
+    for k in range(0, len(wanted), 500):
+        chunk = wanted[k:k + 500]
+        for r in conn.execute(f"SELECT id, taken_at, lat, location_source FROM assets WHERE id IN ({','.join('?' * len(chunk))})", chunk):
+            rows_by_id[r["id"]] = r
+    place_cache: dict[tuple[float, float], str] = {}
+    for i in wanted:
+        r = rows_by_id.get(i)
         if not r or not r["taken_at"]:
             continue
         t = _ts(r["taken_at"])
@@ -196,9 +203,12 @@ def nearby_suggestions(conn: sqlite3.Connection, ids: list[int], window_minutes:
             out.append({"id": r["id"], "lat": None, "lon": None, "place": "", "minutes": None, "has": r["lat"] is not None})
             continue
         gap, n = min(cands, key=lambda c: c[0])
-        p = places.lookup(n["lat"], n["lon"])
+        pk = (round(n["lat"], 3), round(n["lon"], 3))
+        if pk not in place_cache:
+            p = places.lookup(n["lat"], n["lon"])
+            place_cache[pk] = ", ".join(x for x in [p.city, p.country] if x)
         out.append({"id": r["id"], "lat": n["lat"], "lon": n["lon"], "minutes": round(gap / 60), "has": r["lat"] is not None,
-                    "place": ", ".join(x for x in [p.city, p.country] if x)})
+                    "place": place_cache[pk]})
     return out
 
 

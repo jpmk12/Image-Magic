@@ -608,11 +608,12 @@ def merge_people(conn: sqlite3.Connection, src: int, dst: int) -> None:
 
 def move_face(conn: sqlite3.Connection, face_id: int, pid: int | None) -> None:
     """'Not this person': detach a face (pid None) or move it to another person."""
+    old = conn.execute("SELECT person_id FROM faces WHERE id = ?", (face_id,)).fetchone()
     conn.execute("UPDATE faces SET person_id = ?, locked = 1 WHERE id = ?", (pid, face_id))
     refresh_covers(conn)
     conn.commit()
     from . import confidence
-    confidence.refresh_face_centres(conn)
+    confidence.refresh_face_centres(conn, [p for p in {pid, old[0] if old else None} if p is not None])
 
 
 def faces_in_photo(conn: sqlite3.Connection, asset_id: int) -> list[dict]:

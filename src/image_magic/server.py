@@ -61,7 +61,7 @@ class App:
                     stats = catalog.stats(conn)
                     extra = {"search": self.search_counts_conn(conn), "people": self.people_counts_conn(conn),
                              "ai": self.ai_counts_conn(conn, s), "quality": self.quality_counts_conn(conn),
-                             "backup": self.backup_status_conn(conn, s)}
+                             "backup": self.backup_status_cached(conn, s)}
                 finally:
                     conn.close()
                 cached = {"stats": stats, **extra}
@@ -121,9 +121,34 @@ class App:
         from . import describe
         return describe.counts(conn, s.ai_model)
 
-    def backup_status_conn(self, conn, s):
+    _backup_cache: tuple[float, str, dict] = (0.0, "", {})
+    _backup_checking = False
+
+    def backup_status_cached(self, conn, s):
+        """Drive checks can block for a long time on an unplugged or network path, so they never run
+        in a request: a background thread refreshes the answer at most once a minute."""
         from . import backup
-        return backup.status(conn, s.library, s.backup)
+        t, k, v = self._backup_cache
+        key = f"{s.backup}|{self.jobs.state.finished}"
+        if k == key and time.time() - t < 60:
+            return v
+        if not self._backup_checking:
+            self._backup_checking = True
+
+            def check():
+                try:
+                    c2 = catalog.connect(s.db)
+                    try:
+                        val = backup.status(c2, s.library, s.backup)
+                    finally:
+                        c2.close()
+                    self._backup_cache = (time.time(), key, val)
+                except Exception:
+                    self._backup_cache = (time.time(), key, {"configured": bool(s.backup), "present": False, "last": None, "last_failed": 0})
+                finally:
+                    self._backup_checking = False
+            threading.Thread(target=check, daemon=True).start()
+        return v or {"configured": bool(s.backup), "present": None, "last": None, "last_failed": 0, "checking": True}
 
     def quality_counts_conn(self, conn):
         from . import quality
@@ -179,7 +204,10 @@ class App:
         if self.phone_server is not None:
             code, left = self.pairing.code()
             port = self.phone_server.server_address[1]
-            out.update({"code": code, "expires_in": left, "urls": [f"https://{ip}:{port}/pair" for ip in phone.lan_ips()]})
+            ips = phone.lan_ips()
+            self.phone_server.hosts |= set(ips)          # a new Wi-Fi address is accepted without a restart
+            out.update({"code": code, "expires_in": left, "urls": [f"https://{ip}:{port}/pair" for ip in ips],
+                        "cert_covers": all(ip in getattr(self.phone_server, "cert_ips", set()) for ip in ips)})
         return out
 
     def daily_tick(self) -> None:
@@ -260,6 +288,18 @@ def make_handler(app: App):
         def log_message(self, *args):  # keep the console quiet
             pass
 
+        def setup(self):
+            super().setup()
+            sock = self.request
+            if hasattr(sock, "do_handshake"):           # the phone listener: finish TLS here, in this connection's thread
+                try:
+                    sock.settimeout(10)
+                    sock.do_handshake()
+                    sock.settimeout(60)
+                except Exception:
+                    self.close_connection = True
+                    raise ConnectionAbortedError("TLS handshake failed")
+
         def _host_ok(self) -> bool:
             host = (self.headers.get("Host") or "").rsplit(":", 1)[0].strip("[]")
             if getattr(self.server, "phone", False):
@@ -300,7 +340,7 @@ def make_handler(app: App):
                 if not app.pairing.valid(token):
                     self._json(HTTPStatus.FORBIDDEN, {"error": "This phone is not paired. Open /pair on the phone."})
                     return False
-                if phone.laptop_only(self.path.split("?", 1)[0]):
+                if phone.laptop_only(self.path.split("?", 1)[0], self.command):
                     self._json(HTTPStatus.FORBIDDEN, {"error": "That can only be done on the laptop."})
                     return False
                 return True
@@ -345,7 +385,7 @@ def make_handler(app: App):
                     return self._json(200, app.jobs.log_since(since))
                 if path.startswith(("/api/photos", "/api/photo/", "/api/facets", "/api/trips", "/api/replay",
                                     "/api/map", "/api/people", "/api/timeline", "/api/story", "/api/memories",
-                                    "/api/shuffle", "/api/similar/", "/api/review", "/api/context/", "/api/curate/", "/api/events", "/api/home", "/api/voice/", "/api/compare/", "/api/flying", "/api/book", "/api/review-queue", "/api/family", "/api/cleanup", "/api/albums", "/api/places/", "/api/daily", "/api/ids", "/api/inbox", "/api/bursts", "/media/")):
+                                    "/api/shuffle", "/api/similar/", "/api/review", "/api/context/", "/api/curate/", "/api/events", "/api/home", "/api/voice/", "/api/compare/", "/api/flying", "/api/book", "/api/review-queue", "/api/family", "/api/cleanup", "/api/albums", "/api/places/", "/api/daily", "/api/ids", "/api/inbox", "/api/bursts", "/api/trash", "/media/")):
                     return self._browse(path, self._query())
             except Exception as e:
                 return self._json(500, {"error": str(e)})
@@ -401,7 +441,10 @@ def make_handler(app: App):
                     return self._json(200, cleanup.bursts(conn))
                 if path == "/api/inbox":
                     from . import inbox
-                    return self._json(200, inbox.overview(conn, str(settings.db), settings.library, settings.originals))
+                    return self._json(200, app.cached("inbox", conn, lambda: inbox.overview(conn, str(settings.db), settings.library, settings.originals), ttl=600))
+                if path == "/api/trash":
+                    from . import cleanup
+                    return self._json(200, cleanup.trash_summary(conn))
                 if path == "/api/ids":
                     ids_ = sorted(browse.ids(conn, q))[:5000]
                     return self._json(200, {"ids": ids_, "total": len(ids_)})
@@ -414,13 +457,14 @@ def make_handler(app: App):
                     return self._json(200, browse.trips(conn))
                 if path == "/api/home":
                     from . import home
-                    return self._json(200, home.story(conn, int(q.get("chapter") or 0)))
+                    return self._json(200, app.cached(f"home:{q.get('chapter')}", conn, lambda: home.story(conn, int(q.get("chapter") or 0)), ttl=600))
                 if path == "/api/albums":
                     from . import albums
-                    return self._json(200, albums.listing(conn))
+                    return self._json(200, app.cached("albums", conn, lambda: albums.listing(conn), ttl=600))
                 if path == "/api/events":
                     from . import events
-                    return self._json(200, events.events(conn, q.get("year"), int(q["trip"]) if q.get("trip") else None))
+                    return self._json(200, app.cached(f"events:{q.get('year')}:{q.get('trip')}", conn,
+                                                      lambda: events.events(conn, q.get("year"), int(q["trip"]) if q.get("trip") else None), ttl=600))
                 if path == "/api/curate/suggest":
                     from . import curate
                     return self._json(200, curate.suggest_for_trip(conn, str(settings.db), int(q.get("trip") or 0),
@@ -436,7 +480,8 @@ def make_handler(app: App):
                     return self._json(200, app.cached(f"review:{y}", conn, lambda: {"years": ys, "stats": review.year_stats(conn, y) if y else None}))
                 if path == "/api/daily":
                     from . import daily
-                    return self._json(200, {"memory": daily.memory_of_day(conn), "week": daily.week_ahead(conn)})
+                    return self._json(200, app.cached("daily:" + __import__("datetime").date.today().isoformat(), conn,
+                                                      lambda: {"memory": daily.memory_of_day(conn), "week": daily.week_ahead(conn)}, ttl=3600))
                 if path == "/api/memories":
                     from . import memories
                     return self._json(200, {"on_this_day": memories.on_this_day(conn),
@@ -466,20 +511,20 @@ def make_handler(app: App):
                     return self._json(200, browse.map_points(conn, q))
                 if path == "/api/review-queue":
                     from . import confidence
-                    return self._json(200, confidence.queue(conn))
+                    return self._json(200, app.cached("review-queue", conn, lambda: confidence.queue(conn), ttl=600))
                 if path == "/api/book":
                     from . import books
                     f = books.make(conn, settings.originals, settings.library, str(q.get("kind")), str(q.get("id") or ""))
                     return self._json(200, {"file": f.name})
                 if path == "/api/cleanup":
                     from . import cleanup
-                    return self._json(200, cleanup.candidates(conn, settings.library, settings.originals))
+                    return self._json(200, app.cached("cleanup", conn, lambda: cleanup.candidates(conn, settings.library, settings.originals), ttl=600))
                 if path == "/api/family":
                     from . import family
                     return self._json(200, {"contributors": family.contributors(conn), "phones": app.pairing.phones()})
                 if path == "/api/flying":
                     from . import flying
-                    return self._json(200, flying.log(conn))
+                    return self._json(200, app.cached("flying", conn, lambda: flying.log(conn), ttl=600))
                 if path == "/api/places/world":
                     from . import placestory
                     return self._json(200, app.cached("world", conn, lambda: placestory.world(conn)))
@@ -919,8 +964,8 @@ def make_handler(app: App):
                         else:
                             return self._json(404, {"error": "not found"})
                         if action in ("trash", "restore", "keep"):
-                            from . import chapters, events, places
-                            places.refresh(conn); events.rebuild(conn); chapters.rebuild_milestones(conn)
+                            from . import inbox
+                            inbox.rebuild_after(conn)
                         return self._json(200, {**r, "trash": cleanup.trash_summary(conn)})
                     finally:
                         conn.close()
@@ -931,12 +976,16 @@ def make_handler(app: App):
                         action = path.rsplit("/", 1)[1]
                         if action == "undo":
                             return self._json(200, {"undone": inbox.undo_last(conn, settings.library, settings.originals)})
-                        cards = {c["key"]: c for c in inbox.suggestions(conn, str(settings.db), settings.library, settings.originals)}
+                        # Reuse the card list the page is showing (same catalog state) instead of recomputing it.
+                        ov = app.cached("inbox", conn, lambda: inbox.overview(conn, str(settings.db), settings.library, settings.originals), ttl=600)
+                        cards = {c["key"]: c for c in ov["cards"]}
                         if action == "accept-high":
                             n = 0
                             for c in cards.values():
                                 if c["conf"] >= inbox.AUTO_MIN and c["action"]["do"] != "face_name":
-                                    inbox.apply(conn, settings.library, settings.originals, c); n += 1
+                                    inbox.apply(conn, settings.library, settings.originals, c, rebuild=False); n += 1
+                            if n:
+                                inbox.rebuild_after(conn)
                             return self._json(200, {"applied": n})
                         card = cards.get(str(data.get("key", "")))
                         if not card:
@@ -963,8 +1012,8 @@ def make_handler(app: App):
                         else:
                             lat, lon = float(data["lat"]), float(data["lon"])
                         n = locations.set_manual(conn, ids, lat, lon, bool(data.get("overwrite")))
-                        from . import chapters, events, places
-                        places.refresh(conn); events.rebuild(conn); chapters.rebuild_milestones(conn)
+                        from . import inbox
+                        inbox.rebuild_after(conn)
                         return self._json(200, {"changed": n})
                     finally:
                         conn.close()
@@ -980,8 +1029,8 @@ def make_handler(app: App):
                             for s_ in sugg:
                                 if s_["lat"] is not None and (not s_["has"] or data.get("overwrite")):
                                     n += locations.set_manual(conn, [s_["id"]], s_["lat"], s_["lon"], bool(data.get("overwrite")))
-                            from . import chapters, events, places
-                            places.refresh(conn); events.rebuild(conn); chapters.rebuild_milestones(conn)
+                            from . import inbox
+                            inbox.rebuild_after(conn)
                             return self._json(200, {"changed": n})
                         return self._json(200, {"suggestions": sugg})
                     finally:
@@ -1054,5 +1103,6 @@ def make_phone_server(app: App, port: int, host: str = "0.0.0.0") -> ThreadingHT
     ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
     ctx.minimum_version = ssl.TLSVersion.TLSv1_2
     ctx.load_cert_chain(str(cert), str(key))
-    server.socket = ctx.wrap_socket(server.socket, server_side=True)
+    server.socket = ctx.wrap_socket(server.socket, server_side=True, do_handshake_on_connect=False)
+    server.cert_ips = set(ips)                                            # type: ignore[attr-defined]
     return server

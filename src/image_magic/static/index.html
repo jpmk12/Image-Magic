@@ -1158,6 +1158,7 @@ function showTab(name) {
   if (name === "photos") ensurePhotos();
   if (name === "trips") { loadTrips(); loadEvents(); loadAlbums(); }
   if (name === "organize") loadOrganize();
+  if (name === "home") refresh.stamp = null;
   if (name === "people") loadPeople();
   if (name === "timeline") loadTimeline();
   if (name === "memories") { loadMemories(); cmpOptions(); loadFlying(); }
@@ -1256,7 +1257,9 @@ async function refresh() {
     renderAiPanel(st);
     renderQualityPanel(st);
     renderBackupPanel(st);
-    if (!refresh.queued || Date.now() - refresh.queued > 60000) { refresh.queued = Date.now(); loadReviewQueue(); loadFamily(); loadCleanTrash(); loadDaily(); loadInbox(); }
+    const stamp = `${st.stats && st.stats.last_scan}|${st.stats && st.stats.photos}|${st.job.finished}`;
+    const homeVisible = !$("#tab-home").classList.contains("hidden");
+    if (homeVisible && stamp !== refresh.stamp) { refresh.stamp = stamp; loadReviewQueue(); loadFamily(); loadCleanTrash(); loadDaily(); loadInbox(); }
     renderImport(st.job);
   } catch (e) { /* app may be quitting */ }
 }
@@ -1300,7 +1303,7 @@ function renderTrash(t) {
     box.append(r, e);
   } else box.append(document.createTextNode("Already emptied; the app keeps them out if iCloud sends them again."));
 }
-async function loadCleanTrash() { const c = await api("/api/cleanup").catch(() => null); if (c) renderTrash(c.trash); }
+async function loadCleanTrash() { const t = await api("/api/trash").catch(() => null); if (t) renderTrash(t); }
 $("#clean-find").onclick = async () => {
   $("#clean-dlg").classList.remove("hidden"); $("#clean-groups").replaceChildren(); $("#clean-sum").textContent = "Looking through your photos…"; $("#clean-note").textContent = "";
   let c; try { c = await api("/api/cleanup"); } catch (e) { $("#clean-sum").textContent = e.message; return; }
@@ -2178,9 +2181,15 @@ async function loadOrganize(reset) {
 }
 function ogPick(idx, ev) {
   const it = og.items[idx]; if (!it) return;
-  if (ev.shiftKey && og.last != null) { const [a, b] = [Math.min(og.last, idx), Math.max(og.last, idx)]; for (let k = a; k <= b; k++) og.sel.add(og.items[k].id); }
-  else if (og.sel.has(it.id)) og.sel.delete(it.id); else og.sel.add(it.id);
-  og.last = idx; ogRender();
+  if (ev.shiftKey && og.last != null) { const [a, b] = [Math.min(og.last, idx), Math.max(og.last, idx)]; for (let k = a; k <= b; k++) og.sel.add(og.items[k].id); og.last = idx; ogRender(); return; }
+  if (og.sel.has(it.id)) og.sel.delete(it.id); else og.sel.add(it.id);
+  og.last = idx;
+  const t = $(`#og-grid .tile[data-id="${it.id}"]`); if (t) t.classList.toggle("sel", og.sel.has(it.id));   // one tile, not the whole grid
+  ogCount();
+}
+function ogCount() {
+  $("#og-selcount").textContent = `${og.sel.size} selected`;
+  $("#og-hint").textContent = og.sel.size ? "Shift+click extends · Esc clears · drag onto a target" : "Tip: click the first photo, Shift+click the last.";
 }
 function ogRender() {
   $$("#og-grid .tile").forEach(t => t.classList.toggle("sel", og.sel.has(+t.dataset.id)));
@@ -2196,14 +2205,19 @@ $("#og-more").onclick = () => loadOrganize(false);
 // lasso on empty grid space
 (() => {
   const grid = $("#og-grid"), box = $("#og-lasso"); let start = null;
-  grid.addEventListener("mousedown", ev => { if (ev.target !== grid) return; const r = grid.getBoundingClientRect(); start = { x: ev.clientX - r.left, y: ev.clientY - r.top, add: ev.shiftKey }; box.style.display = "block"; ev.preventDefault(); });
+  grid.addEventListener("mousedown", ev => {
+    if (ev.target !== grid) return; const r = grid.getBoundingClientRect();
+    // Measure every tile once, at the start of the drag, instead of on every mouse move.
+    const rects = $$("#og-grid .tile").map(t => { const b = t.getBoundingClientRect(); return { el: t, id: +t.dataset.id, l: b.left - r.left, t: b.top - r.top, w: b.width, h: b.height }; });
+    start = { x: ev.clientX - r.left, y: ev.clientY - r.top, add: ev.shiftKey, rects, r }; box.style.display = "block"; ev.preventDefault();
+  });
   document.addEventListener("mousemove", ev => {
-    if (!start) return; const r = grid.getBoundingClientRect(); const x = ev.clientX - r.left, y = ev.clientY - r.top;
+    if (!start) return; const x = ev.clientX - start.r.left, y = ev.clientY - start.r.top;
     const L = Math.min(start.x, x), T = Math.min(start.y, y), W = Math.abs(x - start.x), H = Math.abs(y - start.y);
     Object.assign(box.style, { left: L + "px", top: T + "px", width: W + "px", height: H + "px" });
     if (!start.add) og.sel.clear();
-    $$("#og-grid .tile").forEach(t => { const b = t.getBoundingClientRect(); const tl = b.left - r.left, tt = b.top - r.top; if (tl < L + W && tl + b.width > L && tt < T + H && tt + b.height > T) og.sel.add(+t.dataset.id); });
-    ogRender();
+    for (const c of start.rects) { const hit = c.l < L + W && c.l + c.w > L && c.t < T + H && c.t + c.h > T; if (hit) og.sel.add(c.id); c.el.classList.toggle("sel", og.sel.has(c.id)); }
+    ogCount();
   });
   document.addEventListener("mouseup", () => { if (start) { start = null; box.style.display = "none"; } });
 })();

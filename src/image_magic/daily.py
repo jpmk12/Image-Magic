@@ -16,8 +16,8 @@ VISIBLE = "a.missing = 0 AND a.duplicate_of IS NULL AND a.kind = 'photo' AND a.p
 def memory_of_day(conn: sqlite3.Connection, today: date | None = None) -> dict | None:
     """The best photo from this date in a past year; otherwise a good random moment."""
     today = today or date.today()
-    md = today.strftime("-%m-%d")
-    ids = quality.best_of(conn, f"{VISIBLE} AND substr(a.taken_at, 5, 6) = ? AND substr(a.taken_at, 1, 4) != ?", [md, str(today.year)], 1)
+    md = today.strftime("%m-%d")
+    ids = quality.best_of(conn, f"{VISIBLE} AND substr(a.taken_at, 6, 5) = ? AND substr(a.taken_at, 1, 4) != ?", [md, str(today.year)], 1)
     if ids:
         d = browse.photo_detail(conn, ids[0])
         if d:
@@ -41,12 +41,12 @@ def week_ahead(conn: sqlite3.Connection, today: date | None = None) -> dict:
     days = []
     for i in range(7):
         d = today + timedelta(days=i)
-        md = d.strftime("-%m-%d")
+        md = d.strftime("%m-%d")
         rows = conn.execute(
-            f"""SELECT substr(a.taken_at, 1, 4) AS y, COUNT(*) AS n FROM assets a WHERE {VISIBLE} AND substr(a.taken_at, 5, 6) = ?
+            f"""SELECT substr(a.taken_at, 1, 4) AS y, COUNT(*) AS n FROM assets a WHERE {VISIBLE} AND substr(a.taken_at, 6, 5) = ?
                 AND substr(a.taken_at, 1, 4) != ? GROUP BY y ORDER BY y""", (md, str(today.year))).fetchall()
         if rows:
-            best = quality.best_of(conn, f"{VISIBLE} AND substr(a.taken_at, 5, 6) = ? AND substr(a.taken_at, 1, 4) != ?", [md, str(today.year)], 1)
+            best = quality.best_of(conn, f"{VISIBLE} AND substr(a.taken_at, 6, 5) = ? AND substr(a.taken_at, 1, 4) != ?", [md, str(today.year)], 1)
             days.append({"date": d.isoformat(), "years": [{"year": r["y"], "n": r["n"]} for r in rows], "cover_id": best[0] if best else None})
     birthdays = []
     try:

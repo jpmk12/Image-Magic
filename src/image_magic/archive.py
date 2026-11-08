@@ -57,12 +57,16 @@ class Site:
     def item(self, aid: int) -> dict | None:
         if aid in self.written:
             return self.written[aid]
-        a = self.conn.execute("SELECT path, taken_at, city, country, private FROM assets WHERE id = ? AND missing = 0", (aid,)).fetchone()
+        a = self.conn.execute("SELECT path, taken_at, city, country, private, sha256 FROM assets WHERE id = ? AND missing = 0", (aid,)).fetchone()
         if not a or a["private"]:
             return None
         name = f"images/{aid}.jpg"
         try:
-            w, h = share._export_image(self.originals / a["path"], self.folder / name)
+            src = self.originals / a["path"]
+            cached = self.originals.parent / "derived" / "view" / a["sha256"][:2] / f"{a['sha256']}.jpg" if a["sha256"] else None
+            if cached is not None and cached.is_file():
+                src = cached                 # already decoded and downscaled; the export strips its metadata again
+            w, h = share._export_image(src, self.folder / name)
         except Exception:
             return None
         d = describe.for_photo(self.conn, aid)

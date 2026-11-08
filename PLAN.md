@@ -368,6 +368,13 @@ Service features (flying log, squadron yearbook) slot into S2 (log) and S9 (year
   pages for index/chapters/trips/events/albums (+ years with everything), stories and
   milestones inline, optional voice notes; `archive` job with progress; Home panel.
 - Phase 6 complete.
+- **Second review round** (v0.43.0): 18 security/correctness findings and 23 performance
+  findings from two independent reviewers, all fixed except the items judged not worth the
+  change (best_of row scans, per-request connection reuse). Phone access is an allowlist
+  (phone.phone_allowed); events match rebuilt clusters by member overlap; cleanup.trash is
+  move-then-mark; quality components persisted (q_sharp/q_expo/q_contrast); App.cached on
+  inbox/review/cleanup/daily/home/flying/albums/events; backup status refreshed in a thread;
+  schema verification once per process via PRAGMA user_version; lasso measures tiles once.
 - **Inbox review view** (v0.42.1): cards open a full review of exactly the photos concerned
   (face crops, merge groups), per-photo untick with inbox.restrict, done notice with undo.
 - **Curation sprint: span + bursts** (v0.42.0): Timeline span mode (first/last month,

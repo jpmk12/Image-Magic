@@ -56,7 +56,7 @@ def check(conn: sqlite3.Connection, params: dict, strict: bool = False) -> dict:
     describe.ensure_schema(conn)
     if params.get("flying"):
         from . import flying
-        flying.refresh(conn)
+        flying.refresh_if_stale(conn)
         strict = True
     ids = _visible_ids(conn, params)
     flagged = []

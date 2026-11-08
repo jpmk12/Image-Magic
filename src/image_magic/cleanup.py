@@ -24,7 +24,6 @@ from . import media, quality
 BLUR_SHARPNESS = 0.08    # sharpness component (Laplacian): below this nothing is in focus
 DARK_EXPOSURE = 0.25     # exposure component: nearly black or blown out
 FLAT_CONTRAST = 0.15     # contrast component: a blank frame (the inside of a pocket, a wall)
-PREFILTER = 50           # a photo with no sharpness scores at most 45, so look only below this
 LIMIT_PER_GROUP = 400
 
 SCHEMA = """
@@ -62,24 +61,22 @@ def candidates(conn: sqlite3.Connection, library: Path, originals: Path) -> dict
             AND d.status = 'ok' AND d.setting IN ('screenshot', 'document'))) ORDER BY a.taken_at DESC LIMIT ?""", (LIMIT_PER_GROUP,)).fetchall()
     groups["screenshots"] = [_item(r, "a screenshot or document, not a photo") for r in shots]
     shot_ids = {i["id"] for i in groups["screenshots"]}
+    # Components were stored when the photo was rated, so this is a plain query (no thumbnails are opened here).
     low = conn.execute(
-        f"""SELECT id, path, sha256, taken_at, size, quality_score FROM assets WHERE {VISIBLE} AND duplicate_of IS NULL
-            AND quality_score IS NOT NULL AND quality_score < ? ORDER BY quality_score LIMIT ?""", (PREFILTER, 3000)).fetchall()
+        f"""SELECT id, taken_at, size, quality_score, q_sharp, q_expo, q_contrast FROM assets WHERE {VISIBLE} AND duplicate_of IS NULL
+            AND q_sharp IS NOT NULL AND (q_expo < ? OR q_contrast < ? OR q_sharp < ?) ORDER BY quality_score LIMIT ?""",
+        (DARK_EXPOSURE, FLAT_CONTRAST, BLUR_SHARPNESS, 3000)).fetchall()
     for r in low:
         if r["id"] in shot_ids:
             continue
-        try:
-            with Image.open(media.thumbnail(library, originals, r["path"], r["sha256"])) as im:
-                s = quality.score_image(im)
-        except Exception:
-            continue
-        if s["exposure"] < DARK_EXPOSURE or s["contrast"] < FLAT_CONTRAST:
-            groups["dark"].append(_item(r, "almost black, blown out or blank: a pocket or accidental shot", s["score"]))
-        elif s["sharpness"] < BLUR_SHARPNESS:
-            groups["blurry"].append(_item(r, "nothing in focus", s["score"]))
+        if r["q_expo"] < DARK_EXPOSURE or r["q_contrast"] < FLAT_CONTRAST:
+            groups["dark"].append(_item(r, "almost black, blown out or blank: a pocket or accidental shot"))
+        elif r["q_sharp"] < BLUR_SHARPNESS:
+            groups["blurry"].append(_item(r, "nothing in focus"))
     dups = conn.execute(
-        f"""SELECT id, taken_at, size, quality_score, duplicate_of FROM assets WHERE missing = 0 AND trashed_at IS NULL
-            AND duplicate_of IS NOT NULL ORDER BY taken_at DESC LIMIT ?""", (LIMIT_PER_GROUP,)).fetchall()
+        f"""SELECT a.id, a.taken_at, a.size, a.quality_score, a.duplicate_of FROM assets a JOIN assets o ON o.id = a.duplicate_of
+            WHERE a.missing = 0 AND a.trashed_at IS NULL AND o.missing = 0 AND o.trashed_at IS NULL
+            ORDER BY a.taken_at DESC LIMIT ?""", (LIMIT_PER_GROUP,)).fetchall()
     groups["duplicates"] = [{**_item(r, "byte-for-byte copy of another photo"), "of": r["duplicate_of"]} for r in dups]
     extras = conn.execute(
         f"""SELECT id, taken_at, size, quality_score, burst_id FROM assets WHERE {VISIBLE} AND duplicate_of IS NULL
@@ -111,20 +108,26 @@ def trash(conn: sqlite3.Connection, library: Path, originals: Path, ids: list[in
     moved, failed = 0, []
     for aid in ids:
         files = _files_for(conn, originals, int(aid))
-        if not files:
-            continue
+        if not files or not files[0][1].exists():
+            continue                      # nothing on disk to trash (already missing): leave the row alone
+        ok = True
         for kind, src, rel in files:
             dest = library / "trash" / rel
             try:
                 if src.exists():
                     dest.parent.mkdir(parents=True, exist_ok=True)
                     shutil.move(str(src), str(dest))
-                conn.execute("INSERT INTO trash_files (asset_id, rel_path, trash_path, kind, created) VALUES (?, ?, ?, ?, ?)",
-                             (int(aid), rel, rel, kind, stamp))
+                    conn.execute("INSERT INTO trash_files (asset_id, rel_path, trash_path, kind, created) VALUES (?, ?, ?, ?, ?)",
+                                 (int(aid), rel, rel, kind, stamp))
             except OSError as e:
                 failed.append(f"{rel}: {e.strerror or e}")
-        conn.execute("UPDATE assets SET missing = 1, trashed_at = ? WHERE id = ? OR (live_pair_id = ? AND kind = 'live_video')",
-                     (stamp, int(aid), int(aid)))
+                if kind == "file":
+                    ok = False
+        if not ok:
+            continue                      # the photo is still where it was: don't hide it
+        conn.execute("UPDATE assets SET missing = 1, trashed_at = ? WHERE id = ?", (stamp, int(aid)))
+        conn.execute("UPDATE assets SET missing = 1, trashed_at = ? WHERE live_pair_id = ? AND kind = 'live_video'", (stamp, int(aid)))
+        conn.execute("UPDATE assets SET duplicate_of = NULL WHERE duplicate_of = ?", (int(aid),))   # copies of it are originals now
         moved += 1
     conn.commit()
     return {"trashed": moved, "failed": failed}
@@ -137,13 +140,19 @@ def restore(conn: sqlite3.Connection, library: Path, originals: Path, ids: list[
     rows = conn.execute(f"SELECT id, asset_id, rel_path, trash_path FROM trash_files {where}", args).fetchall()
     n = 0
     done: set[int] = set()
+    failed: set[int] = set()
     for r in rows:
         src, dest = library / "trash" / r["trash_path"], originals / r["rel_path"]
-        if src.exists():
-            dest.parent.mkdir(parents=True, exist_ok=True)
-            shutil.move(str(src), str(dest))
+        try:
+            if src.exists():
+                dest.parent.mkdir(parents=True, exist_ok=True)
+                shutil.move(str(src), str(dest))
+        except OSError:
+            failed.add(r["asset_id"])
+            continue
         conn.execute("DELETE FROM trash_files WHERE id = ?", (r["id"],))
         done.add(r["asset_id"])
+    done -= failed
     for aid in done:
         conn.execute("UPDATE assets SET missing = 0, trashed_at = NULL WHERE id = ? OR (live_pair_id = ? AND kind = 'live_video')", (aid, aid))
         n += 1
@@ -221,7 +230,12 @@ def keep_frame(conn: sqlite3.Connection, library: Path, originals: Path, burst_i
         conn.execute("UPDATE assets SET burst_best = CASE WHEN id = ? THEN 1 ELSE 0 END WHERE burst_id = ?", (int(keeper), burst_id))
     result = {"trashed": 0}
     if trash_rest:
-        k = int(keeper) if keeper is not None else conn.execute("SELECT id FROM assets WHERE burst_id = ? AND burst_best = 1", (burst_id,)).fetchone()[0]
+        if keeper is not None:
+            k = int(keeper)
+        else:
+            row = conn.execute("SELECT id FROM assets WHERE burst_id = ? AND missing = 0 ORDER BY burst_best DESC, quality_score DESC LIMIT 1", (burst_id,)).fetchone()
+            k = row[0]
+            conn.execute("UPDATE assets SET burst_best = CASE WHEN id = ? THEN 1 ELSE 0 END WHERE burst_id = ?", (k, burst_id))
         rest = [i for i in ids if i != k]
         result = trash(conn, library, originals, rest)
     confidence.ensure_schema(conn)

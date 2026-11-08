@@ -220,7 +220,13 @@ def summary_of(card: dict) -> str:
             "location": f"{n} photos given a location", "trip_merge": "Trips merged", "trash": f"{n} photos moved to the trash"}.get(a.get("do"), "Done")
 
 
-def apply(conn, library, originals, card: dict, decision: str = "accepted", name: str | None = None) -> dict:
+def rebuild_after(conn) -> None:
+    """Trips, events and milestones catch up with what just changed (once per user action)."""
+    from . import chapters, events, places
+    places.refresh(conn); events.rebuild(conn); chapters.rebuild_milestones(conn)
+
+
+def apply(conn, library, originals, card: dict, decision: str = "accepted", name: str | None = None, rebuild: bool = True) -> dict:
     """Perform the card's action, remember it with what is needed to undo it."""
     from . import cleanup, curate, faces, locations
     ensure_schema(conn)
@@ -228,7 +234,8 @@ def apply(conn, library, originals, card: dict, decision: str = "accepted", name
     undo = None
     if a.get("do") == "trip_add":
         ids = [int(i) for i in a["ids"]]
-        before = {r[0]: (r[1], r[2]) for r in conn.execute(f"SELECT id, trip_id, trip_manual FROM assets WHERE id IN ({','.join('?' * len(ids))})", ids)}
+        ph = ",".join("?" * len(ids))
+        before = {r[0]: (r[1], r[2]) for r in conn.execute(f"SELECT id, trip_id, trip_manual FROM assets WHERE id IN ({ph}) OR live_pair_id IN ({ph})", ids + ids)}
         curate.set_trip(conn, ids, int(a["trip"]))
         undo = {"do": "trip_restore", "before": [[i, t, m] for i, (t, m) in before.items()]}
     elif a.get("do") == "face_merge":
@@ -258,8 +265,8 @@ def apply(conn, library, originals, card: dict, decision: str = "accepted", name
     conn.execute("INSERT OR REPLACE INTO inbox_decisions (key, decision, undo, title, created) VALUES (?, ?, ?, ?, ?)",
                  (card["key"], decision, json.dumps(undo) if undo else None, card.get("title", ""), _now()))
     conn.commit()
-    from . import chapters, events, places
-    places.refresh(conn); events.rebuild(conn); chapters.rebuild_milestones(conn)
+    if rebuild:
+        rebuild_after(conn)
     return {"ok": True, "undoable": bool(undo), "summary": summary_of(card)}
 
 
@@ -300,8 +307,7 @@ def undo_last(conn, library, originals) -> str:
         cleanup.restore(conn, library, originals, u["ids"])
     conn.execute("DELETE FROM inbox_decisions WHERE key = ?", (r["key"],))
     conn.commit()
-    from . import chapters, events, places
-    places.refresh(conn); events.rebuild(conn); chapters.rebuild_milestones(conn)
+    rebuild_after(conn)
     return r["title"] or r["key"]
 
 
@@ -317,9 +323,11 @@ def auto_apply(conn, db_key, library, originals, log=print) -> int:
                     continue
                 c = {**c, "key": c["key"] + ":auto", "title": f"{len(dupes)} exact copies went to the trash", "action": {"do": "trash", "ids": dupes}}
             try:
-                apply(conn, library, originals, c, decision="auto")
+                apply(conn, library, originals, c, decision="auto", rebuild=False)
                 log(f"Inbox, applied on its own: {c['title']}.")
                 n += 1
             except Exception as e:
                 log(f"Inbox could not apply '{c['title']}': {e}")
+    if n:
+        rebuild_after(conn)
     return n

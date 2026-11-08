@@ -62,8 +62,22 @@ def refresh(conn: sqlite3.Connection) -> int:
     return n
 
 
+def refresh_if_stale(conn: sqlite3.Connection) -> None:
+    """Rebuild the aircraft set only when the descriptions changed since the last build."""
+    from . import catalog
+    ensure_schema(conn)
+    try:
+        stamp = str(conn.execute("SELECT COUNT(*), MAX(created) FROM descriptions WHERE status = 'ok'").fetchone()[:])
+    except sqlite3.OperationalError:
+        stamp = "none"
+    if catalog.get_meta(conn, "flying_stamp") != stamp or not conn.execute("SELECT 1 FROM flying_photos LIMIT 1").fetchone():
+        refresh(conn)
+        catalog.set_meta(conn, "flying_stamp", stamp)
+        conn.commit()
+
+
 def log(conn: sqlite3.Connection) -> dict:
-    refresh(conn)
+    refresh_if_stale(conn)
     rows = conn.execute(
         f"""SELECT a.id, a.taken_at, a.city, a.country, a.event_id, f.tails, {quality.RANK} AS rank
             FROM flying_photos f JOIN assets a ON a.id = f.asset_id WHERE {VISIBLE} AND a.taken_at IS NOT NULL

@@ -68,6 +68,9 @@ MIGRATIONS = {
     "screenshot": "INTEGER NOT NULL DEFAULT 0",
     "title": "TEXT",                               # caption typed in Photos
     "trashed_at": "TEXT",                          # moved to <library>/trash by you (cleanup.py); stays out of iCloud's way
+    "q_sharp": "REAL",                             # quality components (quality.py), so clutter checks are a plain query
+    "q_expo": "REAL",
+    "q_contrast": "REAL",
 }
 TRIP_MIGRATIONS = {"manual": "INTEGER NOT NULL DEFAULT 0", "title_locked": "INTEGER NOT NULL DEFAULT 0"}
 
@@ -95,6 +98,10 @@ class LibraryUnavailable(RuntimeError):
     """The photo folder is missing or looks unplugged; nothing was changed."""
 
 
+SCHEMA_VERSION = 42          # bump when SCHEMA, any module SCHEMA, MIGRATIONS or the indexes change
+_verified: set[str] = set()  # db files whose schema this process has already brought up to date
+
+
 def connect(db_file: Path) -> sqlite3.Connection:
     db_file.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(db_file, timeout=30)
@@ -104,6 +111,9 @@ def connect(db_file: Path) -> sqlite3.Connection:
         conn.execute("PRAGMA synchronous=NORMAL")
     except sqlite3.OperationalError:
         pass
+    key = str(db_file.resolve())
+    if key in _verified and conn.execute("PRAGMA user_version").fetchone()[0] == SCHEMA_VERSION:
+        return conn                                  # ~45 DDL statements skipped on every later request
     run_script(conn, SCHEMA)
     # Every feature's tables exist from the start, so request handlers never run DDL.
     from . import albums, ask, chapters, cleanup, confidence, describe, events, faces, flying, inbox, notes, review, search
@@ -129,8 +139,11 @@ def connect(db_file: Path) -> sqlite3.Connection:
     conn.execute("CREATE INDEX IF NOT EXISTS idx_assets_md ON assets(substr(taken_at, 6, 5))")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_assets_quality ON assets(quality_score)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_assets_phash ON assets(phash)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_assets_live_pair ON assets(live_pair_id)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_assets_trip ON assets(trip_id)")
+    conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
     conn.commit()
+    _verified.add(key)
     return conn
 
 
@@ -196,7 +209,7 @@ class ScanResult:
         return self.new + self.updated + self.unchanged
 
 
-def scan(conn: sqlite3.Connection, originals: Path, progress=None, cancelled=lambda: False) -> ScanResult:
+def scan(conn: sqlite3.Connection, originals: Path, progress=None, cancelled=lambda: False, rebuild_events: bool = True) -> ScanResult:
     """Add new and changed files to the catalog; flag files that disappeared."""
     result = ScanResult()
     seen: set[str] = set()
@@ -293,7 +306,8 @@ def scan(conn: sqlite3.Connection, originals: Path, progress=None, cancelled=lam
     result.places_added, result.trips = places.refresh(conn)
     from . import chapters, events
     chapters.rebuild(conn)
-    events.rebuild(conn)
+    if rebuild_events:
+        events.rebuild(conn)      # the job runner passes False and rebuilds once after quality scoring
     set_meta(conn, "last_scan", now_iso())
     conn.commit()
     return result

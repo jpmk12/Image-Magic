@@ -69,7 +69,7 @@ def score_file(path: Path) -> dict:
 
 def pending(conn: sqlite3.Connection) -> list[sqlite3.Row]:
     return conn.execute(
-        "SELECT id, path, sha256 FROM assets WHERE kind = 'photo' AND missing = 0 AND quality_score IS NULL ORDER BY id"
+        "SELECT id, path, sha256 FROM assets WHERE kind = 'photo' AND missing = 0 AND (quality_score IS NULL OR q_sharp IS NULL) ORDER BY id"
     ).fetchall()
 
 
@@ -88,9 +88,9 @@ def score_pending(conn: sqlite3.Connection, library: Path, originals: Path,
                 s = score_image(im)
                 ph = importer.dhash(im)
         except Exception:
-            s, ph = {"score": 0.0}, None
-        conn.execute("UPDATE assets SET quality_score = ?, phash = COALESCE(phash, ?) WHERE id = ?",
-                     (s["score"], ph, r["id"]))
+            s, ph = {"score": 0.0, "sharpness": 0.0, "exposure": 0.0, "contrast": 0.0}, None
+        conn.execute("UPDATE assets SET quality_score = ?, q_sharp = ?, q_expo = ?, q_contrast = ?, phash = COALESCE(phash, ?) WHERE id = ?",
+                     (s["score"], s["sharpness"], s["exposure"], s["contrast"], ph, r["id"]))
         n += 1
         if n % 200 == 0:
             conn.commit()
@@ -119,12 +119,16 @@ def group_bursts(conn: sqlite3.Connection) -> int:
     conn.execute("UPDATE assets SET burst_id = NULL, burst_best = 1 WHERE burst_id IS NOT NULL OR burst_best = 0")
     bursts: list[list[sqlite3.Row]] = []
     cur: list[sqlite3.Row] = []
+    prev_t = None
     for r in rows:
+        t = _ts(r["taken_at"])
         if cur and r["phash"] is not None and cur[-1]["phash"] is not None \
-                and _ts(r["taken_at"]) - _ts(cur[-1]["taken_at"]) <= BURST_SECONDS \
+                and prev_t is not None and t - prev_t <= BURST_SECONDS \
                 and importer.hamming(r["phash"], cur[-1]["phash"]) <= BURST_BITS:
             cur.append(r)
+            prev_t = t
             continue
+        prev_t = t
         if len(cur) > 1:
             bursts.append(cur)
         cur = [r]
@@ -143,7 +147,7 @@ def group_bursts(conn: sqlite3.Connection) -> int:
 def counts(conn: sqlite3.Connection) -> dict:
     q = lambda sql: conn.execute(sql).fetchone()[0]  # noqa: E731
     return {"scored": q("SELECT COUNT(*) FROM assets WHERE quality_score IS NOT NULL"),
-            "pending": q("SELECT COUNT(*) FROM assets WHERE kind = 'photo' AND missing = 0 AND quality_score IS NULL"),
+            "pending": q("SELECT COUNT(*) FROM assets WHERE kind = 'photo' AND missing = 0 AND (quality_score IS NULL OR q_sharp IS NULL)"),
             "bursts": q("SELECT COUNT(DISTINCT burst_id) FROM assets WHERE burst_id IS NOT NULL"),
             "good": q(f"SELECT COUNT(*) FROM assets WHERE missing = 0 AND quality_score >= {GOOD} AND burst_best = 1")}
 

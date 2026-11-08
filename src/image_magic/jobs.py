@@ -194,7 +194,7 @@ class JobRunner:
         conn = catalog.connect(settings.db)
         try:
             r = catalog.scan(conn, settings.originals, progress=self._progress("Cataloged"),
-                             cancelled=self._cancel.is_set)
+                             cancelled=self._cancel.is_set, rebuild_events=False)
             self._quality(conn, settings)
             return r
         finally:

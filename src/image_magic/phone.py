@@ -26,8 +26,15 @@ from .settings import settings_dir
 
 CODE_TTL = 600
 MAX_TRIES = 5
-LAPTOP_ONLY = ("/api/settings", "/api/run", "/api/cancel", "/api/auth", "/api/quit", "/api/open-folder",
-               "/api/import/", "/api/share/export", "/api/phone/", "/api/cleanup", "/api/archive", "/api/inbox/")
+# What a paired phone may do: look, relive, ask, speak, and add its own photos. Everything else
+# (settings, syncs, curation, exports, the pairing code, the activity log) is the laptop's.
+PHONE_GET = ("/api/status", "/api/photos", "/api/photo/", "/api/facets", "/api/trips", "/api/events", "/api/albums",
+             "/api/replay", "/api/map", "/api/people", "/api/timeline", "/api/story", "/api/memories", "/api/shuffle",
+             "/api/similar/", "/api/review", "/api/context/", "/api/home", "/api/places/", "/api/daily", "/api/voice/",
+             "/api/compare/options", "/api/ids", "/api/family", "/api/flying",
+             "/media/thumb/", "/media/view/", "/media/face/", "/media/voice/", "/media/export/")
+PHONE_POST = ("/api/ask", "/api/voice", "/api/voice/delete", "/api/contribute", "/api/compare")
+PHONE_GET_EXACT_DENY = ("/api/people/book", "/api/people/gif", "/api/review-queue", "/api/phone", "/api/log", "/api/settings", "/api/book")
 
 
 def lan_ips() -> list[str]:
@@ -36,9 +43,11 @@ def lan_ips() -> list[str]:
     try:
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         s.connect(("10.255.255.255", 1))      # no packet is sent; picks the default route's address
-        found.append(s.getsockname()[0])
+        ip = s.getsockname()[0]
         s.close()
-    except OSError:
+        if ipaddress.ip_address(ip).is_private:
+            found.append(ip)
+    except (OSError, ValueError):
         pass
     try:
         for info in socket.getaddrinfo(socket.gethostname(), None, socket.AF_INET):
@@ -168,8 +177,19 @@ class Pairing:
             self._save()
 
 
-def laptop_only(path: str) -> bool:
-    return any(path.startswith(p) for p in LAPTOP_ONLY)
+def phone_allowed(path: str, method: str) -> bool:
+    """Allowlist: a route a phone may call. Anything not listed is laptop-only."""
+    if method == "GET":
+        if path in PHONE_GET_EXACT_DENY or path.startswith("/api/review-queue"):
+            return False
+        return any(path == p or path.startswith(p) for p in PHONE_GET)
+    if method == "POST":
+        return path in PHONE_POST
+    return False
+
+
+def laptop_only(path: str, method: str = "POST") -> bool:
+    return not phone_allowed(path, method)
 
 
 PAIR_PAGE = """<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">

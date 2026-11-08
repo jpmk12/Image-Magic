@@ -11,7 +11,7 @@ titles you edit are kept across rebuilds.
 from __future__ import annotations
 
 import sqlite3
-from collections import Counter
+from collections import Counter, defaultdict
 from datetime import datetime
 
 from .places import haversine_km
@@ -132,12 +132,31 @@ def rebuild(conn: sqlite3.Connection) -> int:
             keywords[r[0]] = json.loads(r[1] or "[]")
     except sqlite3.OperationalError:
         pass
-    locked = {r["key"]: r["title"] for r in conn.execute("SELECT key, title FROM events WHERE title_locked = 1")}
+    locked = {r["id"]: r["title"] for r in conn.execute("SELECT id, title FROM events WHERE title_locked = 1")}
     old_ids = {r["key"]: r["id"] for r in conn.execute("SELECT key, id FROM events")}
+    # Who belonged to which event before: a rebuilt cluster that shares most of its photos with an old
+    # event keeps that event's id (and so its title, story, voice notes and album filters).
+    old_members: dict[int, set[int]] = defaultdict(set)
+    for r in conn.execute("SELECT id, event_id FROM assets WHERE event_id IS NOT NULL"):
+        old_members[r["event_id"]].add(r["id"])
     conn.execute("UPDATE assets SET event_id = NULL WHERE event_id IS NOT NULL")
     keep: set[str] = set()
+    used: set[int] = set()
     for members in clusters:
         key = str(members[0]["id"])
+        mids = {m["id"] for m in members}
+        match = None
+        if key in old_ids and old_ids[key] not in used:
+            match = old_ids[key]
+        else:
+            best, best_ov = None, 0
+            for eid, olds in old_members.items():
+                if eid in used:
+                    continue
+                ov = len(mids & olds)
+                if ov > best_ov and ov >= max(2, min(len(mids), len(olds)) // 2):
+                    best, best_ov = eid, ov
+            match = best
         keep.add(key)
         kw = Counter()
         for m in members:
@@ -148,8 +167,8 @@ def rebuild(conn: sqlite3.Connection) -> int:
         top = kw.most_common(1)
         keyword = top[0][0] if top and top[0][1] >= max(2, len(members) // 4) else None
         title, sub = _title(conn, members, keyword)
-        if key in locked:
-            title = locked[key]
+        if match is not None and match in locked:
+            title = locked[match]
         cover = max(members, key=lambda m: m["q"])["id"]
         pts = [(m["lat"], m["lon"]) for m in members if m["lat"] is not None]
         lat = sum(p[0] for p in pts) / len(pts) if pts else None
@@ -160,10 +179,13 @@ def rebuild(conn: sqlite3.Connection) -> int:
         vals = dict(key=key, title=title, subtitle=sub, start_at=members[0]["taken_at"], end_at=members[-1]["taken_at"],
                     photo_count=len(members), cover_id=cover, lat=lat, lon=lon, city=city[0][0] if city else None,
                     country=country[0][0] if country else None, trip_id=trip[0][0] if trip else None)
-        if key in old_ids:
-            sets = ", ".join(f"{k} = :{k}" for k in vals if k != "key")
-            conn.execute(f"UPDATE events SET {sets} WHERE key = :key", vals)
-            eid = old_ids[key]
+        if match is not None:
+            sets = ", ".join(f"{k} = :{k}" for k in vals)
+            conn.execute(f"UPDATE events SET {sets} WHERE id = :id", {**vals, "id": match})
+            eid = match
+            used.add(eid)
+            if key not in old_ids:
+                keep.add(next((k for k, v in old_ids.items() if v == match), key))
         else:
             cols = ", ".join(vals)
             eid = conn.execute(f"INSERT INTO events ({cols}) VALUES ({', '.join(':' + k for k in vals)})", vals).lastrowid
@@ -171,10 +193,10 @@ def rebuild(conn: sqlite3.Connection) -> int:
         for i in range(0, len(ids), 500):
             chunk = ids[i:i + 500]
             conn.execute(f"UPDATE assets SET event_id = ? WHERE id IN ({','.join('?' * len(chunk))})", [eid, *chunk])
-    gone = [k for k in old_ids if k not in keep]
+    gone = [v for k, v in old_ids.items() if v not in used and k not in keep]
     for i in range(0, len(gone), 500):
         chunk = gone[i:i + 500]
-        conn.execute(f"DELETE FROM events WHERE key IN ({','.join('?' * len(chunk))})", chunk)
+        conn.execute(f"DELETE FROM events WHERE id IN ({','.join('?' * len(chunk))})", chunk)
     conn.commit()
     return len(clusters)
 

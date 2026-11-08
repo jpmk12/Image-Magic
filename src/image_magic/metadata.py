@@ -306,7 +306,10 @@ def read_video_meta(path: Path) -> VideoMeta:
                                     for t5, a5, b5 in _atoms(f, a4, b4):
                                         if t5 == b"data":
                                             f.seek(a5 + 8)
-                                            val = f.read(b5 - a5 - 8).decode("utf-8", "ignore")
+                                            n_ = b5 - a5 - 8
+                                            if n_ <= 0 or n_ > (1 << 20):
+                                                continue
+                                            val = f.read(n_).decode("utf-8", "ignore")
                                             k = keys[idx]
                                             if k.endswith("location.ISO6709") and meta.lat is None:
                                                 loc = _iso6709(val)

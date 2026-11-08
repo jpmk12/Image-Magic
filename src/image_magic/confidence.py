@@ -79,11 +79,21 @@ def trip_confidence(conn: sqlite3.Connection, asset_id: int) -> float | None:
 
 # ---- faces ----------------------------------------------------------------------
 
-def refresh_face_centres(conn: sqlite3.Connection) -> int:
+def refresh_face_centres(conn: sqlite3.Connection, persons: list[int] | None = None) -> int:
+    """Recompute the centre vector of every person, or only of the given ones."""
     ensure_schema(conn)
-    conn.execute("DELETE FROM face_centres")
+    if persons:
+        pids = [int(p) for p in persons if p is not None]
+        if not pids:
+            return 0
+        ph = ",".join("?" * len(pids))
+        conn.execute(f"DELETE FROM face_centres WHERE person_id IN ({ph})", pids)
+        rows = conn.execute(f"SELECT person_id, vec, locked FROM faces WHERE person_id IN ({ph}) AND vec IS NOT NULL", pids)
+    else:
+        conn.execute("DELETE FROM face_centres")
+        rows = conn.execute("SELECT person_id, vec, locked FROM faces WHERE person_id IS NOT NULL AND vec IS NOT NULL")
     sums: dict[int, np.ndarray] = {}
-    for r in conn.execute("SELECT person_id, vec, locked FROM faces WHERE person_id IS NOT NULL AND vec IS NOT NULL"):
+    for r in rows:
         v = np.frombuffer(r["vec"], dtype=np.float16).astype(np.float32) * (2.0 if r["locked"] else 1.0)
         sums[r["person_id"]] = sums.get(r["person_id"], 0) + v
     for pid, v in sums.items():
@@ -104,13 +114,20 @@ def face_confidences(conn: sqlite3.Connection, asset_id: int | None = None) -> d
     if not centres:
         return {}
     where, args = ("AND asset_id = ?", (asset_id,)) if asset_id else ("", ())
-    out = {}
-    for r in conn.execute(f"SELECT id, vec, person_id, locked FROM faces WHERE person_id IS NOT NULL {where}", args):
+    out: dict[int, float] = {}
+    rows = conn.execute(f"SELECT id, vec, person_id, locked FROM faces WHERE person_id IS NOT NULL {where}", args).fetchall()
+    # One matrix product per person instead of a Python dot product per face.
+    by_person: dict[int, list] = {}
+    for r in rows:
         if r["locked"]:
             out[r["id"]] = 1.0
         elif r["vec"] is not None and r["person_id"] in centres:
-            v = np.frombuffer(r["vec"], dtype=np.float16).astype(np.float32)
-            out[r["id"]] = _sim_to_conf(float(centres[r["person_id"]] @ v))
+            by_person.setdefault(r["person_id"], []).append(r)
+    for pid, rs in by_person.items():
+        mat = np.frombuffer(b"".join(r["vec"] for r in rs), dtype=np.float16).reshape(len(rs), -1).astype(np.float32)
+        sims = mat @ centres[pid]
+        for r, s_ in zip(rs, sims):
+            out[r["id"]] = _sim_to_conf(float(s_))
     return out
 
 
@@ -146,26 +163,17 @@ def queue(conn: sqlite3.Connection, n: int = QUEUE_SIZE) -> dict:
     for t in conn.execute("SELECT id, title FROM trips").fetchall():
         for aid, c in trip_confidences(conn, t["id"]).items():
             if c < 0.9 and f"trip:{aid}" not in done:
-                a = conn.execute("SELECT taken_at, city, country FROM assets WHERE id = ?", (aid,)).fetchone()
-                others = [r[0] for r in conn.execute("SELECT id FROM assets WHERE trip_id = ? AND id != ? AND lat IS NOT NULL ORDER BY ABS(julianday(taken_at) - julianday(?)) LIMIT 6",
-                                                     (t["id"], aid, a["taken_at"] if a else ""))]
-                items.append({"key": f"trip:{aid}", "kind": "trip", "confidence": round(c, 2), "asset_id": aid, "trip_id": t["id"],
+                items.append({"key": f"trip:{aid}", "kind": "trip", "confidence": round(c, 2), "asset_id": aid, "trip_id": t["id"], "trip_title": t["title"],
                               "title": f"Is this photo from the {t['title']} trip?",
-                              "detail": "It has no location, so it joined by date." if c == 0.5 else "It was taken far from the rest of the trip.",
-                              "context": [f"Taken {(a['taken_at'] or '')[:16].replace('T', ' ')}" + (f" in {', '.join(x for x in [a['city'], a['country']] if x)}" if a and a["city"] else " (no location)")] if a else [],
-                              "compare": others, "compare_label": f"Photos from {t['title']} taken around the same time:"})
+                              "detail": "It has no location, so it joined by date." if c == 0.5 else "It was taken far from the rest of the trip."})
     face_rows = {r["id"]: r for r in conn.execute(
         "SELECT f.id, f.asset_id, f.person_id, p.name FROM faces f JOIN persons p ON p.id = f.person_id WHERE p.hidden = 0")}
     for fid, c in face_confidences(conn).items():
         if c < 0.7 and f"face:{fid}" not in done and fid in face_rows:
             r = face_rows[fid]
-            sure = [x[0] for x in conn.execute("SELECT id FROM faces WHERE person_id = ? AND id != ? AND vec IS NOT NULL ORDER BY locked DESC, score * MIN(size_px, 160) DESC LIMIT 6",
-                                               (r["person_id"], fid))]
-            sure_assets = [conn.execute("SELECT asset_id FROM faces WHERE id = ?", (x,)).fetchone()[0] for x in sure]
             items.append({"key": f"face:{fid}", "kind": "face", "confidence": round(c, 2), "asset_id": r["asset_id"], "face_id": fid,
-                          "person_id": r["person_id"], "title": f"Is this {r['name'] or 'the same unnamed person'}?",
-                          "detail": "The face only loosely matches the group.",
-                          "compare": sure_assets, "compare_faces": sure, "compare_label": f"Faces the app is sure are {r['name'] or 'this person'}:"})
+                          "person_id": r["person_id"], "person_name": r["name"], "title": f"Is this {r['name'] or 'the same unnamed person'}?",
+                          "detail": "The face only loosely matches the group."})
     for ch in conn.execute("SELECT id, title, start_at, cover_id FROM chapters WHERE auto = 1").fetchall():
         c = chapter_confidence(conn, ch["id"])
         if c is not None and c < 0.8 and f"chapter:{ch['id']}" not in done:
@@ -177,8 +185,22 @@ def queue(conn: sqlite3.Connection, n: int = QUEUE_SIZE) -> dict:
             items.append({"key": f"milestone:{m['id']}", "kind": "milestone", "confidence": 0.6, "asset_id": m["asset_id"],
                           "milestone_id": m["id"], "title": f"Keep the milestone \"{m['title']}\" ({m['date']})?", "detail": "Found automatically."})
     items.sort(key=lambda i: (i["confidence"], i["key"]))
+    top = items[:n]
+    # Context and comparison photos only for the items actually shown.
+    for it in top:
+        if it["kind"] == "trip":
+            a = conn.execute("SELECT taken_at, city, country FROM assets WHERE id = ?", (it["asset_id"],)).fetchone()
+            others = [r[0] for r in conn.execute("SELECT id FROM assets WHERE trip_id = ? AND id != ? AND lat IS NOT NULL ORDER BY ABS(julianday(taken_at) - julianday(?)) LIMIT 6",
+                                                 (it["trip_id"], it["asset_id"], a["taken_at"] if a else ""))]
+            it["context"] = [f"Taken {(a['taken_at'] or '')[:16].replace('T', ' ')}" + (f" in {', '.join(x for x in [a['city'], a['country']] if x)}" if a and a["city"] else " (no location)")] if a else []
+            it["compare"], it["compare_label"] = others, f"Photos from {it['trip_title']} taken around the same time:"
+        elif it["kind"] == "face":
+            sure = conn.execute("SELECT id, asset_id FROM faces WHERE person_id = ? AND id != ? AND vec IS NOT NULL ORDER BY locked DESC, score * MIN(size_px, 160) DESC LIMIT 6",
+                                (it["person_id"], it["face_id"])).fetchall()
+            it["compare"], it["compare_faces"] = [s_["asset_id"] for s_ in sure], [s_["id"] for s_ in sure]
+            it["compare_label"] = f"Faces the app is sure are {it['person_name'] or 'this person'}:"
     reviewed = conn.execute("SELECT COUNT(*), SUM(created >= date('now', '-7 days')) FROM reviews").fetchone()
-    return {"items": items[:n], "pending": len(items), "reviewed": reviewed[0] or 0, "reviewed_week": reviewed[1] or 0}
+    return {"items": top, "pending": len(items), "reviewed": reviewed[0] or 0, "reviewed_week": reviewed[1] or 0}
 
 
 def decide(conn: sqlite3.Connection, key: str, decision: str) -> None:

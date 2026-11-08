@@ -30,7 +30,7 @@ def test_pairing_codes_rotate_and_lock_out():
     assert p.code()[0] != code2 or p._tries == 0           # too many wrong tries: a fresh code
     p.reset()
     assert not p.valid(tok)
-    assert phone.laptop_only("/api/settings") and phone.laptop_only("/api/run") and not phone.laptop_only("/api/photos")
+    assert phone.laptop_only("/api/settings") and phone.laptop_only("/api/run") and not phone.laptop_only("/api/photos", "GET")
 
 
 def test_certificate_is_made_once_for_the_lan_addresses(tmp_path, monkeypatch):
