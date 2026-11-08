@@ -185,7 +185,11 @@ program only. Your photos and settings are kept.
   group that is probably someone you named, photos with no location whose neighbours agree on a
   place, two trips that look like one, and clutter. Each card has three choices: accept (the
   action happens at once), adjust (opens the right tool with those photos selected) or skip
-  (the card stays gone until the facts change). **Accept all high-confidence** takes everything
+  (the card stays gone until the facts change). Click a card to open the **review view**: every
+  photo the decision is about and nothing else (face crops for a face question, both trips
+  labelled for a merge). Untick any photo that doesn't belong, double-click to look closer,
+  then accept or skip; you land back on the Home tab with a "✓ Done" notice and an Undo
+  button. **Accept all high-confidence** takes everything
   at 90 percent or above except naming people; **Undo last** reverses the most recent decision.
   With *Let the inbox apply safe suggestions by itself* on (Settings → Privacy, on by default),
   the app fills in confident locations and trashes byte-identical copies after each sync on its

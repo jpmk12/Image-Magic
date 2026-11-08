@@ -80,7 +80,9 @@ def _face_names(conn) -> list[dict]:
     except sqlite3.OperationalError:
         return out
     for u in unnamed:
-        ids = [r[0] for r in conn.execute("SELECT DISTINCT asset_id FROM faces WHERE person_id = ? ORDER BY asset_id LIMIT 400", (u["id"],))]
+        rows = conn.execute("SELECT id, asset_id FROM faces WHERE person_id = ? ORDER BY score * MIN(size_px, 160) DESC LIMIT 400", (u["id"],)).fetchall()
+        ids = sorted({r["asset_id"] for r in rows})
+        face_ids = [r["id"] for r in rows]
         best, sim = None, 0.0
         if u["id"] in centres:
             for pid, name in named.items():
@@ -90,11 +92,11 @@ def _face_names(conn) -> list[dict]:
                         best, sim = pid, s_
         if best is not None and sim >= 0.5:
             conf = round(min(0.95, 0.5 + (sim - 0.5) * 2.2), 2)
-            out.append({"key": _key("face", ids, f"{u['id']}->{best}"), "kind": "people", "conf": conf, "ids": ids, "person_id": u["id"],
+            out.append({"key": _key("face", ids, f"{u['id']}->{best}"), "kind": "people", "conf": conf, "ids": ids, "person_id": u["id"], "faces": face_ids, "into": best,
                         "title": f"This face group ({u['n']} photos) is probably {named[best]}", "why": f"Its signature is close to {named[best]}'s ({int(sim * 100)}%).",
                         "yes": f"It's {named[best]}", "alt": "Someone else…", "action": {"do": "face_merge", "from": u["id"], "into": best}})
         elif u["n"] >= 25:
-            out.append({"key": _key("face", ids, str(u["id"])), "kind": "people", "conf": 0.5, "ids": ids, "person_id": u["id"],
+            out.append({"key": _key("face", ids, str(u["id"])), "kind": "people", "conf": 0.5, "ids": ids, "person_id": u["id"], "faces": face_ids,
                         "title": f"An unnamed person appears in {u['n']} photos", "why": "Naming them unlocks their story, searches and milestones.",
                         "yes": "Name them…", "alt": "Hide this group", "action": {"do": "face_name", "person": u["id"]}})
     return out
@@ -139,8 +141,11 @@ def _trip_merges(conn) -> list[dict]:
         same_place = a["lat"] is not None and b["lat"] is not None and abs(a["lat"] - b["lat"]) < 2 and abs(a["lon"] - b["lon"]) < 2
         similar_title = a["title"].split(" (")[0].lower() == b["title"].split(" (")[0].lower()
         if 0 <= gap <= 3 and (same_place or similar_title):
-            ids = [r[0] for r in conn.execute("SELECT id FROM assets WHERE trip_id IN (?, ?) ORDER BY taken_at LIMIT 400", (a["id"], b["id"]))]
+            ga = [r[0] for r in conn.execute("SELECT id FROM assets WHERE trip_id = ? ORDER BY taken_at LIMIT 200", (a["id"],))]
+            gb = [r[0] for r in conn.execute("SELECT id FROM assets WHERE trip_id = ? ORDER BY taken_at LIMIT 200", (b["id"],))]
+            ids = ga + gb
             out.append({"key": _key("merge", [a["id"], b["id"]]), "kind": "trip", "conf": 0.8 if same_place and similar_title else 0.7, "ids": ids,
+                        "groups": [{"title": a["title"], "ids": ga}, {"title": b["title"], "ids": gb}],
                         "title": f"\"{a['title']}\" and \"{b['title']}\" look like one trip",
                         "why": f"{gap} day{'s' if gap != 1 else ''} apart" + (", same area" if same_place else "") + ". A quiet day without photos may have split them.",
                         "yes": "Merge", "alt": "Keep apart", "action": {"do": "trip_merge", "from": b["id"], "into": a["id"]}})
@@ -190,6 +195,31 @@ def overview(conn, db_key, library, originals) -> dict:
 
 # ---- acting -----------------------------------------------------------------------
 
+def restrict(card: dict, only: list[int] | None) -> dict:
+    """The same card limited to the photos you left ticked (where the action is per photo)."""
+    if not only:
+        return card
+    keep = {int(i) for i in only}
+    a = dict(card.get("action") or {})
+    if "ids" in a:
+        a["ids"] = [i for i in a["ids"] if int(i) in keep]
+    if "points" in a:
+        a["points"] = [p for p in a["points"] if int(p[0]) in keep]
+    if "auto_ids" in a:
+        a["auto_ids"] = [i for i in a["auto_ids"] if int(i) in keep]
+    if ("ids" in a and not a["ids"]) or ("points" in a and not a["points"]):
+        raise ValueError("No photos left ticked")
+    return {**card, "action": a, "ids": [i for i in card["ids"] if int(i) in keep] or card["ids"]}
+
+
+def summary_of(card: dict) -> str:
+    """One line for the Done notice."""
+    a = card.get("action") or {}
+    n = len(a.get("ids") or a.get("points") or card.get("ids") or [])
+    return {"trip_add": f"{n} photos added to the trip", "face_merge": "Face group merged", "face_name": "Person named",
+            "location": f"{n} photos given a location", "trip_merge": "Trips merged", "trash": f"{n} photos moved to the trash"}.get(a.get("do"), "Done")
+
+
 def apply(conn, library, originals, card: dict, decision: str = "accepted", name: str | None = None) -> dict:
     """Perform the card's action, remember it with what is needed to undo it."""
     from . import cleanup, curate, faces, locations
@@ -230,7 +260,7 @@ def apply(conn, library, originals, card: dict, decision: str = "accepted", name
     conn.commit()
     from . import chapters, events, places
     places.refresh(conn); events.rebuild(conn); chapters.rebuild_milestones(conn)
-    return {"ok": True, "undoable": bool(undo)}
+    return {"ok": True, "undoable": bool(undo), "summary": summary_of(card)}
 
 
 def skip(conn, card: dict) -> None:

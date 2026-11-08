@@ -368,6 +368,8 @@ Service features (flying log, squadron yearbook) slot into S2 (log) and S9 (year
   pages for index/chapters/trips/events/albums (+ years with everything), stories and
   milestones inline, optional voice notes; `archive` job with progress; Home panel.
 - Phase 6 complete.
+- **Inbox review view** (v0.42.1): cards open a full review of exactly the photos concerned
+  (face crops, merge groups), per-photo untick with inbox.restrict, done notice with undo.
 - **Curation sprint: span + bursts** (v0.42.0): Timeline span mode (first/last month,
   /api/ids over from/to, trip/album/location/Organize actions); cleanup.bursts and keep_frame
   (keeper → burst_best, spare frames trashed, reviewed via the reviews table); burst dialog.

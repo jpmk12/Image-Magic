@@ -146,6 +146,12 @@
   .grid.selecting .tile::after { content: ""; position: absolute; top: 8px; left: 8px; width: 22px; height: 22px; border-radius: 50%; border: 2px solid #fff; background: rgba(0,0,0,.35); }
   .grid.selecting .tile.sel::after { content: "✓"; background: var(--accent); color: #fff; font-weight: 700; display: grid; place-items: center; font-size: 14px; }
   .grid.selecting .tile.sel { outline: 3px solid var(--accent); }
+  .ib.done { background: color-mix(in srgb, var(--accent) 10%, var(--panel)); border-color: var(--accent); }
+  .rev-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 6px; }
+  .rev-grid .tile { cursor: pointer; }
+  .rev-grid .tile::after { content: ""; position: absolute; top: 6px; left: 6px; width: 20px; height: 20px; border-radius: 50%; border: 2px solid #fff; background: rgba(0,0,0,.35); }
+  .rev-grid .tile.sel::after { content: "✓"; background: var(--accent); color: #fff; font-weight: 700; display: grid; place-items: center; font-size: 13px; }
+  .rev-grid .tile:not(.sel) img { opacity: .35; }
   .ib { display: flex; gap: 14px; align-items: center; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; }
   .ib .thumbs { display: flex; gap: 4px; flex: none; } .ib .thumbs img, .ib .thumbs .more { width: 52px; height: 52px; border-radius: 8px; object-fit: cover; background: var(--soft); }
   .ib .thumbs .more { display: grid; place-items: center; font-weight: 600; color: var(--muted); font-size: 12px; }
@@ -968,6 +974,21 @@
   </div>
 </div>
 
+<div class="story share hidden" id="rev-dlg">
+  <div class="card" style="width:min(1100px,100%)">
+    <div class="row" style="justify-content:space-between;align-items:flex-start">
+      <div><div class="small" id="rev-kind" style="font-weight:700;letter-spacing:.04em;text-transform:uppercase"></div><h2 id="rev-title" style="margin:2px 0 0"></h2><p class="small muted" id="rev-why" style="margin:4px 0 0"></p></div>
+      <button class="btn" id="rev-close">✕</button>
+    </div>
+    <p class="small muted" id="rev-hint" style="margin:8px 0 6px">These are exactly the photos this decision is about. Untick any that don't belong; double-click to look closer.</p>
+    <div id="rev-body" style="max-height:58vh;overflow:auto"></div>
+    <div class="row" style="margin-top:12px;justify-content:flex-end">
+      <span class="small" id="rev-count" style="margin-right:auto"></span>
+      <button class="btn" id="rev-skip">Skip this suggestion</button>
+      <button class="btn primary" id="rev-accept">Accept</button>
+    </div>
+  </div>
+</div>
 <div class="story share hidden" id="burst-dlg">
   <div class="card" style="width:min(1100px,100%)">
     <div class="row" style="justify-content:space-between"><h2 style="margin:0">Bursts: keep one, let the rest go</h2><button class="btn" id="burst-close">✕</button></div>
@@ -1355,21 +1376,24 @@ async function loadInbox() {
   const box = $("#inbox-cards"); box.replaceChildren();
   for (const c of ib.cards.filter(c => !inboxState.filter || c.kind === inboxState.filter).slice(0, 8)) {
     const card = el("div", "ib");
-    const th = el("div", "thumbs"); for (const id of c.covers) { const im = document.createElement("img"); im.src = media("thumb", id); im.alt = ""; im.loading = "lazy"; im.onclick = () => goPhotos({ ids: c.ids.join(","), eventTitle: c.title }); th.append(im); }
-    if (c.count > c.covers.length) th.append(el("div", "more", "+" + (c.count - c.covers.length)));
+    const th = el("div", "thumbs"); th.style.cursor = "pointer"; th.title = "Show every photo this is about";
+    for (const id of (c.faces ? c.faces.slice(0, 3) : c.covers)) { const im = document.createElement("img"); im.src = media(c.faces ? "face" : "thumb", id); im.alt = ""; im.loading = "lazy"; th.append(im); }
+    if (c.count > 3) th.append(el("div", "more", "+" + (c.count - 3)));
+    th.onclick = () => openReview(c);
+    card.dataset.key = c.key;
     const body = el("div"); body.style.flex = "1"; body.style.minWidth = "0";
     const head = el("div"); const k = el("span", "kind", KIND_LABELS[c.kind] || c.kind); k.style.color = KIND_COLORS[c.kind] || "var(--muted)";
     const pct = el("span", "small muted", ` ${Math.round(c.conf * 100)}% sure `); const bar = el("span", "bar"); const fill = document.createElement("i"); fill.style.width = Math.round(c.conf * 100) + "%"; fill.style.background = c.conf >= 0.9 ? "var(--accent)" : c.conf >= 0.8 ? "#d97706" : "#9ca3af"; bar.append(fill);
     head.append(k, pct, bar); body.append(head, el("div", "t", c.title), el("div", "why", c.why));
     const acts = el("div", "row"); acts.style.flex = "none";
     const yes = el("button", "btn primary", c.yes), alt = el("button", "btn", c.alt), skip = el("button", "btn", "✕"); skip.title = "Skip";
-    yes.onclick = async () => { let name; if (c.action.do === "face_name") { name = prompt("Who is this?"); if (!name) return; } try { await api("/api/inbox/accept", { key: c.key, name }); toast("Done"); } catch (e) { toast(e.message); } loadInbox(); refresh(); };
+    yes.onclick = () => acceptCard(c);
+    body.style.cursor = "pointer"; body.onclick = () => openReview(c);
     alt.onclick = async () => {
-      if (c.action.do === "trip_add") { showTab("organize"); og.filters = { ids: c.ids.join(",") }; await loadOrganize(); c.ids.forEach(i => og.sel.add(i)); ogRender(); }
+      if (c.action.do === "trip_add" || c.action.do === "trash") { openReview(c); }
       else if (c.action.do === "location") openLocation(c.ids, `${c.count} photos`);
       else if (c.action.do === "face_merge") { const n = prompt("Who is this?"); if (n) { await api("/api/people/rename", { id: c.person_id, name: n }).catch(e => toast(e.message)); await api("/api/inbox/skip", { key: c.key }).catch(() => {}); loadInbox(); } }
       else if (c.action.do === "face_name") { await api("/api/people/hide", { id: c.person_id, hidden: true }).catch(e => toast(e.message)); await api("/api/inbox/skip", { key: c.key }).catch(() => {}); loadInbox(); }
-      else if (c.action.do === "trash") $("#clean-find").click();
       else if (c.action.do === "trip_merge") { await api("/api/inbox/skip", { key: c.key }).catch(() => {}); loadInbox(); }
     };
     skip.onclick = async () => { await api("/api/inbox/skip", { key: c.key }).catch(e => toast(e.message)); loadInbox(); };
@@ -1380,6 +1404,59 @@ async function loadInbox() {
   if (ib.last) foot.push(`last: ${ib.last.decision} · ${ib.last.title}`);
   $("#inbox-foot").textContent = foot.join(" · ");
 }
+async function acceptCard(c, only) {
+  let name; if (c.action.do === "face_name") { name = prompt("Who is this?"); if (!name) return; }
+  try {
+    const r = await api("/api/inbox/accept", { key: c.key, name, ids: only || null });
+    showDone(c, r.summary || "Done");
+  } catch (e) { toast(e.message); }
+  refresh();
+}
+function showDone(c, summary) {
+  // Replace the card with a clear "done" notice for a moment, then refresh the list.
+  const card = $(`#inbox-cards .ib[data-key="${CSS.escape(c.key)}"]`);
+  if (card) {
+    card.classList.add("done"); card.replaceChildren();
+    const t = document.createElement("div"); t.style.flex = "1"; t.innerHTML = "<b>✓ Done</b> · <span></span>"; t.querySelector("span").textContent = summary;
+    const u = document.createElement("button"); u.className = "btn"; u.textContent = "Undo"; u.onclick = async () => { try { await api("/api/inbox/undo", {}); toast("Undone"); } catch (e) { toast(e.message); } loadInbox(); refresh(); };
+    card.append(t, u);
+    setTimeout(loadInbox, 6000);
+  } else loadInbox();
+  toast("✓ " + summary);
+}
+// ---- the review view: exactly the photos a decision is about
+const rev = { card: null, ticked: new Set() };
+async function openReview(c) {
+  rev.card = c; rev.ticked = new Set(c.ids);
+  $("#rev-kind").textContent = KIND_LABELS[c.kind] || c.kind; $("#rev-kind").style.color = KIND_COLORS[c.kind] || "var(--muted)";
+  $("#rev-title").textContent = c.title; $("#rev-why").textContent = `${c.why} ${Math.round(c.conf * 100)}% sure.`;
+  $("#rev-accept").textContent = c.yes; $("#rev-dlg").classList.remove("hidden");
+  const body = $("#rev-body"); body.replaceChildren();
+  const perPhoto = ["trip_add", "location", "trash"].includes(c.action.do);
+  $("#rev-hint").textContent = perPhoto ? "These are exactly the photos this decision is about. Untick any that don't belong; double-click to look closer."
+    : c.faces ? "Every face in this group. Double-click a face to see its photo." : "The photos on both sides. Double-click to look closer.";
+  const mkGrid = (ids, faceIds) => {
+    const g = document.createElement("div"); g.className = "rev-grid";
+    const items = ids.map(id => ({ id, kind: "photo" }));
+    ids.forEach((id, i) => {
+      const t = document.createElement("button"); t.className = "tile" + (rev.ticked.has(id) ? " sel" : "");
+      const im = document.createElement("img"); im.loading = "lazy"; im.alt = ""; im.src = faceIds ? media("face", faceIds[i]) : media("thumb", id); t.append(im);
+      if (perPhoto) t.onclick = () => { if (rev.ticked.has(id)) rev.ticked.delete(id); else rev.ticked.add(id); t.classList.toggle("sel", rev.ticked.has(id)); revCount(); };
+      else { t.classList.add("sel"); t.onclick = () => openLightbox(i, items); }
+      t.ondblclick = () => openLightbox(i, items);
+      g.append(t);
+    });
+    return g;
+  };
+  if (c.groups) { for (const gr of c.groups) { const h = document.createElement("h3"); h.textContent = `${gr.title} · ${gr.ids.length} photos`; body.append(h, mkGrid(gr.ids)); } }
+  else if (c.faces) body.append(mkGrid(c.faces.map((_, i) => c.ids[i] ?? c.ids[0]).slice(0, c.faces.length), c.faces));
+  else body.append(mkGrid(c.ids));
+  revCount();
+}
+function revCount() { const c = rev.card; const perPhoto = ["trip_add", "location", "trash"].includes(c.action.do); $("#rev-count").textContent = perPhoto ? `${rev.ticked.size} of ${c.ids.length} ticked` : `${c.ids.length} photos`; $("#rev-accept").disabled = perPhoto && !rev.ticked.size; }
+$("#rev-close").onclick = () => $("#rev-dlg").classList.add("hidden");
+$("#rev-skip").onclick = async () => { const c = rev.card; $("#rev-dlg").classList.add("hidden"); await api("/api/inbox/skip", { key: c.key }).catch(e => toast(e.message)); showDone(c, "Skipped; it won't come back unless the facts change"); };
+$("#rev-accept").onclick = async () => { const c = rev.card; const perPhoto = ["trip_add", "location", "trash"].includes(c.action.do); $("#rev-dlg").classList.add("hidden"); showTab("home"); await acceptCard(c, perPhoto && rev.ticked.size < c.ids.length ? [...rev.ticked] : null); };
 $("#inbox-high").onclick = async () => { try { const r = await api("/api/inbox/accept-high", {}); toast(`Applied ${r.applied} suggestions`); } catch (e) { toast(e.message); } loadInbox(); refresh(); };
 $("#inbox-undo").onclick = async () => { try { const r = await api("/api/inbox/undo", {}); toast("Undone: " + r.undone); } catch (e) { toast(e.message); } loadInbox(); refresh(); };
 async function loadDaily() {

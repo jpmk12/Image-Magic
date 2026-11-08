@@ -942,7 +942,8 @@ def make_handler(app: App):
                         if not card:
                             raise ValueError("That suggestion is no longer current; the list has been refreshed.")
                         if action == "accept":
-                            return self._json(200, inbox.apply(conn, settings.library, settings.originals, card, name=data.get("name")))
+                            only = [int(i) for i in data.get("ids") or []] or None
+                            return self._json(200, inbox.apply(conn, settings.library, settings.originals, inbox.restrict(card, only), name=data.get("name")))
                         if action == "skip":
                             inbox.skip(conn, card)
                             return self._json(200, {"ok": True})

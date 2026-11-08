@@ -74,3 +74,18 @@ def test_auto_apply_only_safe_kinds(tmp_path):
     assert not any(c["kind"] == "location" for c in left)
     ov = inbox.overview(conn, str(lib / "library.db"), lib, orig)
     assert ov["auto_recent"] and ov["last"]["decision"] == "auto"
+
+
+def test_partial_acceptance_and_card_detail(tmp_path):
+    conn, lib, orig = _lib(tmp_path)
+    cards = inbox.suggestions(conn, str(lib / "library.db"), lib, orig)
+    trip = next(c for c in cards if c["kind"] == "trip" and c["action"]["do"] == "trip_add")
+    keep = trip["ids"][:2]
+    r = inbox.apply(conn, lib, orig, inbox.restrict(trip, keep))
+    assert r["summary"] == "2 photos added to the trip"
+    assert conn.execute("SELECT COUNT(*) FROM assets WHERE path LIKE 'nogps%' AND trip_id IS NOT NULL").fetchone()[0] == 2
+    import pytest
+    with pytest.raises(ValueError):
+        inbox.restrict(trip, [-1])
+    clutter = next(c for c in cards if c["kind"] == "clutter")
+    assert inbox.summary_of(clutter).endswith("moved to the trash")
