@@ -31,7 +31,7 @@ MAX_TRIES = 5
 PHONE_GET = ("/api/status", "/api/photos", "/api/photo/", "/api/facets", "/api/trips", "/api/events", "/api/albums",
              "/api/replay", "/api/map", "/api/people", "/api/timeline", "/api/story", "/api/memories", "/api/shuffle",
              "/api/similar/", "/api/review", "/api/context/", "/api/home", "/api/places/", "/api/daily", "/api/voice/",
-             "/api/compare/options", "/api/ids", "/api/family", "/api/flying",
+             "/api/compare/options", "/api/ids", "/api/family", "/api/flying", "/api/holidays",
              "/media/thumb/", "/media/view/", "/media/face/", "/media/voice/", "/media/export/")
 PHONE_POST = ("/api/ask", "/api/voice", "/api/voice/delete", "/api/contribute", "/api/compare", "/api/poster")
 PHONE_GET_EXACT_DENY = ("/api/people/book", "/api/people/gif", "/api/review-queue", "/api/phone", "/api/log", "/api/settings", "/api/book")

@@ -134,6 +134,17 @@ program only. Your photos and settings are kept.
 - **Video posters:** videos show a real frame instead of a grey ▶. The first time a video
   appears in a grid, the page decodes its first half-second and hands the frame to the app,
   which keeps it as that video's thumbnail; books and the archive use it too.
+- **Through the years (Memories tab):** every Christmas, New Year, Valentine's, Easter, Fourth
+  of July, Halloween and Thanksgiving side by side, one cover per year, plus each person's
+  birthday once they have one. **▶ Replay** plays the best photos year after year, **📖 Book**
+  makes a PDF with a page per year, and a year's tile opens those days in Organize.
+- **Map time-lapse:** **▶ Time-lapse** on the Map tab animates where photos were taken month by
+  month; the newest month glows and earlier ones fade into a trail. It follows the current map
+  filter, so a single trip or year can be replayed too.
+- **Quick cataloging:** after each sync the app only looks at folders iCloud changed, so the
+  catalog step on a 19,000-item library takes seconds. **Catalog new files** on the Home tab does
+  the same by hand; **Catalog everything** re-reads every file (use it after editing or moving
+  files outside the app).
 - **Memory of the day:** the Home tab opens with the best photo from this date in a past year
   (or a good random moment), and **This week** lists what the coming seven days held in past
   years: photo-days, birthdays, trips that started, milestones. While the app is open it also

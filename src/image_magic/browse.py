@@ -10,7 +10,13 @@ VISIBLE = "missing = 0 AND duplicate_of IS NULL AND kind != 'live_video'"
 
 
 def expand(conn: sqlite3.Connection, params: dict) -> dict:
-    """Resolve an `album` filter into concrete filters (smart album) or a membership filter (manual)."""
+    """Resolve an `album` filter into concrete filters (smart album) or a membership filter (manual),
+    and a `holiday` key (christmas, birthday:<person>) into its date span in every year."""
+    if params.get("holiday"):
+        from . import holidays
+        spans = holidays.spans(conn, str(params["holiday"]))
+        params = {k: v for k, v in params.items() if k != "holiday"}
+        params["days"] = [(a.isoformat(), b.isoformat()) for a, b in spans] or [("0001-01-01", "0001-01-01")]
     if not params.get("album"):
         return params
     from . import albums
@@ -222,6 +228,21 @@ def trips(conn: sqlite3.Connection) -> list[dict]:
         "FROM trips ORDER BY start_at DESC"
     ).fetchall()
     return [dict(r) for r in rows]
+
+
+def map_months(conn: sqlite3.Connection, params: dict, cell: float = 0.05) -> list[dict]:
+    """For the map time-lapse: per month, where photos were taken, aggregated into ~5 km cells with a count."""
+    where, args = _filters(expand(conn, params))
+    rows = conn.execute(
+        f"""SELECT substr(taken_at, 1, 7) AS m, round(lat / ?) * ? AS la, round(lon / ?) * ? AS lo, COUNT(*) AS n
+            FROM assets WHERE {where} AND lat IS NOT NULL AND taken_at IS NOT NULL
+            GROUP BY m, la, lo ORDER BY m""", [cell, cell, cell, cell] + args).fetchall()
+    out: list[dict] = []
+    for r in rows:
+        if not out or out[-1]["m"] != r["m"]:
+            out.append({"m": r["m"], "pts": []})
+        out[-1]["pts"].append([round(r["la"], 4), round(r["lo"], 4), r["n"]])
+    return out
 
 
 def map_points(conn: sqlite3.Connection, params: dict) -> list[list]:

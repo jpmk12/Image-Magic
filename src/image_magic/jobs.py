@@ -175,10 +175,10 @@ class JobRunner:
             self.state.message = f"{label} {done:,} of {total:,}"
         return report
 
-    def _run_scan(self, _mode: str) -> None:
+    def _run_scan(self, mode: str) -> None:
         try:
             settings = self._settings_provider()
-            r = self._scan(settings)
+            r = self._scan(settings, quick=(mode == "quick"))
             self._finish("done", f"Catalog updated: {r.new:,} new, {r.total:,} total, {r.missing:,} missing, "
                                  f"{r.trips:,} trips." + (f" {r.retrashed} re-downloaded photos went back to the trash." if r.retrashed else ""),
                          {"new": r.new, "total": r.total, "missing": r.missing})
@@ -189,12 +189,12 @@ class JobRunner:
         except Exception as e:  # report, never crash the app
             self._finish("failed", f"Cataloging failed: {e}")
 
-    def _scan(self, settings: Settings):
-        self.state.message = "Cataloging files..."
+    def _scan(self, settings: Settings, quick: bool = False):
+        self.state.message = "Cataloging new files..." if quick else "Cataloging files..."
         conn = catalog.connect(settings.db)
         try:
             r = catalog.scan(conn, settings.originals, progress=self._progress("Cataloged"),
-                             cancelled=self._cancel.is_set, rebuild_events=False)
+                             cancelled=self._cancel.is_set, rebuild_events=False, quick=quick)
             self._quality(conn, settings)
             return r
         finally:
@@ -531,7 +531,7 @@ class JobRunner:
         conn.commit()
         conn.close()
         try:
-            r = self._scan(settings)
+            r = self._scan(settings, quick=True)     # only folders iCloud touched; "Catalog everything" does a full pass
         except InterruptedError:
             self._finish("cancelled", f"Sync stopped after downloading {downloaded:,}; cataloging will finish next time.")
             return

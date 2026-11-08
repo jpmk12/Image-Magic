@@ -34,6 +34,11 @@ CREATE TABLE IF NOT EXISTS assets (
 CREATE INDEX IF NOT EXISTS idx_assets_sha ON assets(sha256);
 CREATE INDEX IF NOT EXISTS idx_assets_taken ON assets(taken_at);
 CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT);
+CREATE TABLE IF NOT EXISTS dir_stamps (      -- folder mtime + entry count at the last scan; a quick scan skips unchanged folders
+    path    TEXT PRIMARY KEY,
+    mtime   REAL NOT NULL,
+    entries INTEGER NOT NULL
+);
 CREATE TABLE IF NOT EXISTS trips (
     id            INTEGER PRIMARY KEY,
     title         TEXT NOT NULL,      -- "Jordan", "Jordan & Israel"
@@ -98,7 +103,7 @@ class LibraryUnavailable(RuntimeError):
     """The photo folder is missing or looks unplugged; nothing was changed."""
 
 
-SCHEMA_VERSION = 42          # bump when SCHEMA, any module SCHEMA, MIGRATIONS or the indexes change
+SCHEMA_VERSION = 43          # bump when SCHEMA, any module SCHEMA, MIGRATIONS or the indexes change
 _verified: set[str] = set()  # db files whose schema this process has already brought up to date
 
 
@@ -209,8 +214,40 @@ class ScanResult:
         return self.new + self.updated + self.unchanged
 
 
-def scan(conn: sqlite3.Connection, originals: Path, progress=None, cancelled=lambda: False, rebuild_events: bool = True) -> ScanResult:
-    """Add new and changed files to the catalog; flag files that disappeared."""
+def _walk(originals: Path, stamps: dict[str, tuple[float, int]]) -> tuple[list[Path], dict[str, tuple[float, int]], set[str]]:
+    """Every file under `originals`, plus the folder stamps seen now and the folders whose stamp is unchanged.
+
+    `stamps` is empty for a full scan, so nothing is skipped. iCloud only ever adds and removes files, which changes
+    the folder's mtime and entry count, so an unchanged folder's files are the ones already in the catalog.
+    """
+    import os
+    files: list[Path] = []
+    now: dict[str, tuple[float, int]] = {}
+    same: set[str] = set()
+    for dirpath, dirnames, filenames in os.walk(originals):
+        dirnames[:] = sorted(d for d in dirnames if not d.startswith("."))
+        rel = _rel(Path(dirpath), originals) if Path(dirpath) != originals else "."
+        try:
+            st = os.stat(dirpath)
+        except OSError:
+            continue
+        stamp = (st.st_mtime, len(filenames) + len(dirnames))
+        now[rel] = stamp
+        if rel in stamps and abs(stamps[rel][0] - stamp[0]) < 1e-6 and stamps[rel][1] == stamp[1]:
+            same.add(rel)
+            continue
+        files += (Path(dirpath) / f for f in filenames)
+    return sorted(files), now, same
+
+
+def scan(conn: sqlite3.Connection, originals: Path, progress=None, cancelled=lambda: False, rebuild_events: bool = True,
+         quick: bool = False) -> ScanResult:
+    """Add new and changed files to the catalog; flag files that disappeared.
+
+    `quick` skips folders whose modification time and entry count have not changed since the last scan (what runs
+    after every sync). A full scan looks at every file and is what "Catalog everything" in Settings runs.
+    """
+    import posixpath
     result = ScanResult()
     seen: set[str] = set()
     existing = {
@@ -220,9 +257,14 @@ def scan(conn: sqlite3.Connection, originals: Path, progress=None, cancelled=lam
     retrash: list[int] = []
     if not originals.exists():
         raise LibraryUnavailable(f"The photo folder {originals} is not there. Is the drive plugged in?")
-    files = sorted(p for p in originals.rglob("*") if p.is_file())
+    stamps = {r["path"]: (r["mtime"], r["entries"]) for r in conn.execute("SELECT path, mtime, entries FROM dir_stamps")} if quick else {}
+    files, new_stamps, same_dirs = _walk(originals, stamps)
+    for rel, row in existing.items():            # files in unchanged folders: known, present, not looked at again
+        if same_dirs and not row["trashed_at"] and not row["missing"] and (posixpath.dirname(rel) or ".") in same_dirs:
+            seen.add(rel)
+            result.unchanged += 1
     known = sum(1 for r in existing.values() if not r["missing"])
-    if known >= 20 and len(files) < known / 2:
+    if known >= 20 and len(files) + result.unchanged < known / 2:
         raise LibraryUnavailable(
             f"Only {len(files):,} files were found where {known:,} are expected. The catalog was left alone; "
             "check that the photo folder is complete (drive plugged in, not renamed) and try again.")
@@ -295,6 +337,8 @@ def scan(conn: sqlite3.Connection, originals: Path, progress=None, cancelled=lam
 
     _link_live_photos(conn)
     _mark_duplicates(conn)
+    conn.execute("DELETE FROM dir_stamps")
+    conn.executemany("INSERT INTO dir_stamps (path, mtime, entries) VALUES (?, ?, ?)", [(k, v[0], v[1]) for k, v in new_stamps.items()])
     conn.commit()
     if retrash:
         from . import cleanup

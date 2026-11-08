@@ -276,6 +276,10 @@
   /* ---- memories */
   .mem-row { display: flex; gap: 6px; flex-wrap: wrap; }
   .mem-row .tile { width: 120px; flex: none; }
+  .hol { padding: 10px 0; border-top: 1px solid var(--line); }
+  .hol:first-child { border-top: 0; padding-top: 0; }
+  .hol-year { width: 120px; flex: none; text-align: center; }
+  .hol-year .tile { cursor: pointer; }
   .shuffle { display: grid; grid-template-columns: 1fr 300px; gap: 18px; align-items: start; }
   .shuffle img { width: 100%; max-height: 420px; object-fit: contain; background: #000; border-radius: 12px; cursor: pointer; }
   .shuffle .cap { font-size: 17px; line-height: 1.5; }
@@ -381,6 +385,8 @@
         <button class="btn primary" data-run="sync" data-mode="quick" title="Fast: stops once it reaches photos you already have">Get new photos</button>
         <button class="btn" data-run="sync" data-mode="full" title="Goes through the whole iCloud library. Safe to stop and resume.">Download everything</button>
         <button class="btn" data-run="sync" data-mode="test">Test with 20 photos</button>
+        <button class="btn" data-run="scan" data-mode="quick" title="Looks only at folders that changed since the last catalog">Catalog new files</button>
+        <button class="btn" data-run="scan" data-mode="full" title="Looks at every file again (use after moving or editing files)">Catalog everything</button>
         <button class="btn" data-run="verify" title="Re-reads every file and checks it is undamaged">Check backup</button>
         <button class="btn" id="open-folder">Open folder</button>
       </div>
@@ -686,6 +692,11 @@
       <h2>On this day</h2>
       <div id="mem-otd"><p class="muted">No photos from this day in past years.</p></div>
     </div>
+    <div class="panel">
+      <h2>Through the years</h2>
+      <p class="small muted" style="margin-top:0">Every Christmas, Halloween, Thanksgiving and birthday side by side. Birthdays appear once a person has one on the People tab.</p>
+      <div id="mem-hol"><p class="muted">Nothing yet.</p></div>
+    </div>
     <div class="panel" id="fly-panel">
       <div class="row" style="justify-content:space-between">
         <h2 style="margin:0">Flying log</h2>
@@ -760,6 +771,7 @@
   <!-- MAP -->
   <section id="tab-map" class="hidden">
     <div class="row" style="margin-bottom:8px"><button class="btn" id="map-thisday" title="One pin per year: where you were on today's date">📅 This day, every year</button>
+      <button class="btn" id="map-lapse" title="Watch your photos appear on the map month by month">▶ Time-lapse</button>
       <button class="btn" id="map-all" title="Show every photo again">All photos</button><span class="small muted" id="map-thisday-note"></span></div>
     <div id="map"></div>
     <div class="panel" style="margin-top:12px">
@@ -1706,7 +1718,7 @@ $("#import-check").onclick = () => api("/api/import/check", { folder: $("#import
 
 // ---- actions
 $$("[data-run]").forEach(b => b.onclick = async () => {
-  if (b.dataset.mode === "full" && !confirm(
+  if (b.dataset.run === "sync" && b.dataset.mode === "full" && !confirm(
       "Download your entire iCloud library? The first time this takes a few hours. You can stop and resume any time.")) return;
   try { renderJob(await api("/api/run", { kind: b.dataset.run, mode: b.dataset.mode || "full" })); }
   catch (e) { toast(e.message); }
@@ -2505,7 +2517,7 @@ const rp = { items: [], i: -1, timer: null, playing: false, map: null, line: nul
 $("#f-replay").onclick = () => openReplay(grid.filters, $("#f-trip").textContent.replace("✕", ""));
 async function openReplay(filters, title) {
   const q = new URLSearchParams();
-  for (const k of ["trip", "day", "month", "person", "chapter", "year", "country", "city", "best", "event", "n", "home", "flying", "album", "favorite", "contributor", "days_md"]) if (filters[k]) q.set(k, filters[k]);
+  for (const k of ["trip", "day", "month", "person", "chapter", "year", "country", "city", "best", "event", "n", "home", "flying", "album", "favorite", "contributor", "days_md", "holiday"]) if (filters[k]) q.set(k, filters[k]);
   let items;
   try { items = await api("/api/replay?" + q); } catch (e) { return toast(e.message); }
   if (!items.length) return toast("Nothing to replay here.");
@@ -2621,7 +2633,34 @@ function renderShuffle(d) {
   if (d.trip_id) { const t = document.createElement("button"); t.className = "btn"; t.textContent = "See the trip"; t.onclick = () => goPhotos({ trip: d.trip_id, tripTitle: d.trip_title }); acts.append(t); }
   side.append(cap, meta, acts); box.append(img, side);
 }
+async function loadHolidays() {
+  const box = $("#mem-hol");
+  const rows = await api("/api/holidays").catch(() => []);
+  if (!rows.length) { box.replaceChildren(Object.assign(document.createElement("p"), { className: "muted", textContent: "No holiday photos yet." })); return; }
+  box.replaceChildren(...rows.map(h => {
+    const sec = document.createElement("div"); sec.className = "hol";
+    const head = document.createElement("div"); head.className = "row"; head.style.justifyContent = "space-between";
+    const t = document.createElement("div"); t.className = "month";
+    t.textContent = `${h.title} · ${h.years.length} year${h.years.length > 1 ? "s" : ""}, ${h.total} photo${h.total > 1 ? "s" : ""}`;
+    const acts = document.createElement("div"); acts.className = "row";
+    const play = document.createElement("button"); play.className = "btn"; play.textContent = "▶ Replay"; play.onclick = () => openReplay({ holiday: h.key }, h.title + " through the years");
+    const book = document.createElement("button"); book.className = "btn"; book.textContent = "📖 Book"; book.onclick = () => downloadBook("holiday", h.key);
+    acts.append(play, book); head.append(t, acts);
+    const row = document.createElement("div"); row.className = "mem-row hol-years";
+    for (const y of h.years) {
+      const cell = document.createElement("div"); cell.className = "hol-year";
+      const tile = document.createElement("div"); tile.className = "tile";
+      if (y.cover) { const img = document.createElement("img"); img.loading = "lazy"; img.src = media("thumb", y.cover); img.alt = ""; tile.append(img); }
+      tile.onclick = () => { showTab("organize"); og.filters = { from: y.from, to: y.to }; loadOrganize(); };
+      tile.title = `Open ${h.title} ${y.year} in Organize`;
+      const lab = document.createElement("div"); lab.className = "small muted"; lab.textContent = `${y.year} · ${y.count}`;
+      cell.append(tile, lab); row.append(cell);
+    }
+    sec.append(head, row); return sec;
+  }));
+}
 async function loadMemories() {
+  loadHolidays();
   const m = await api("/api/memories").catch(e => { toast(e.message); return null; });
   if (!m) return;
   renderShuffle(m.shuffle);
@@ -3282,6 +3321,7 @@ let map = null, cluster = null;
 let mapFilters = {};
 async function loadMap(filters) {
   if (filters) mapFilters = filters;
+  stopLapse();
   loadWorld();
   if (typeof L === "undefined") {
     $("#map").replaceChildren(Object.assign(document.createElement("p"),
@@ -3352,7 +3392,44 @@ async function openPlace(code, city) {
     for (const c of p.cities) { const b = el("button", "btn", `${c.name} · ${fmt(c.n)}`); b.onclick = () => openPlace(code, c.name); r.append(b); } body.append(r); }
 }
 $("#place-close").onclick = () => $("#place-dlg").classList.add("hidden");
-$("#map-all").onclick = () => loadMap({});
+$("#map-all").onclick = () => { stopLapse(); loadMap({}); };
+// ---- map time-lapse: one frame per month; the newest month glows, earlier ones fade to a trail
+const lapse = { layer: null, timer: null, months: [], i: 0 };
+function stopLapse() {
+  if (!lapse.layer) return;
+  clearTimeout(lapse.timer); map.removeLayer(lapse.layer); lapse.layer = null; lapse.months = [];
+  $("#map-lapse").textContent = "▶ Time-lapse"; $("#map-thisday-note").textContent = "";
+  if (cluster) map.addLayer(cluster);
+}
+$("#map-lapse").onclick = async () => {
+  if (!map) return;
+  if (lapse.layer) return stopLapse();
+  const mq = new URLSearchParams(Object.entries(mapFilters).filter(([, v]) => v));
+  const months = await api("/api/map/months" + (mq.toString() ? "?" + mq : "")).catch(e => { toast(e.message); return []; });
+  if (!months.length) return toast("No located photos to animate.");
+  if (thisDay) { map.removeLayer(thisDay); thisDay = null; }
+  if (cluster) map.removeLayer(cluster);
+  lapse.layer = L.layerGroup().addTo(map); lapse.months = months; lapse.i = 0;
+  $("#map-lapse").textContent = "⏹ Stop";
+  const all = months.flatMap(m => m.pts.map(p => [p[0], p[1]]));
+  map.fitBounds(L.latLngBounds(all), { padding: [40, 40], maxZoom: 6 });
+  const trail = [];
+  const step = () => {
+    if (!lapse.layer) return;
+    const m = months[lapse.i];
+    trail.forEach(c => c.setStyle({ fillOpacity: Math.max(0.08, c.options.fillOpacity * 0.6), opacity: 0 }));
+    for (const [la, lo, n] of m.pts) {
+      const c = L.circleMarker([la, lo], { radius: Math.min(18, 5 + Math.sqrt(n) * 2), color: "#0f766e", weight: 1, fillColor: "#0f766e", fillOpacity: 0.85 });
+      c.bindTooltip(`${n} photo${n > 1 ? "s" : ""}`); lapse.layer.addLayer(c); trail.push(c);
+    }
+    const [y, mo] = m.m.split("-");
+    $("#map-thisday-note").textContent = `${new Date(+y, +mo - 1, 1).toLocaleDateString(undefined, { month: "long", year: "numeric" })} · ${fmt(m.pts.reduce((s, p) => s + p[2], 0))} photo${m.pts.reduce((s, p) => s + p[2], 0) === 1 ? "" : "s"}`;
+    lapse.i++;
+    if (lapse.i < months.length) lapse.timer = setTimeout(step, 450);
+    else { $("#map-thisday-note").textContent += " · done. Click Stop for all photos."; }
+  };
+  step();
+};
 let thisDay = null;
 $("#map-thisday").onclick = async () => {
   if (!map) return;

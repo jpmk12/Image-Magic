@@ -385,7 +385,7 @@ def make_handler(app: App):
                     return self._json(200, app.jobs.log_since(since))
                 if path.startswith(("/api/photos", "/api/photo/", "/api/facets", "/api/trips", "/api/replay",
                                     "/api/map", "/api/people", "/api/timeline", "/api/story", "/api/memories",
-                                    "/api/shuffle", "/api/similar/", "/api/review", "/api/context/", "/api/curate/", "/api/events", "/api/home", "/api/voice/", "/api/compare/", "/api/flying", "/api/book", "/api/review-queue", "/api/family", "/api/cleanup", "/api/albums", "/api/places/", "/api/daily", "/api/ids", "/api/inbox", "/api/bursts", "/api/trash", "/media/")):
+                                    "/api/shuffle", "/api/similar/", "/api/review", "/api/context/", "/api/curate/", "/api/events", "/api/home", "/api/voice/", "/api/compare/", "/api/flying", "/api/book", "/api/review-queue", "/api/family", "/api/cleanup", "/api/albums", "/api/places/", "/api/daily", "/api/ids", "/api/inbox", "/api/bursts", "/api/trash", "/api/holidays", "/media/")):
                     return self._browse(path, self._query())
             except Exception as e:
                 return self._json(500, {"error": str(e)})
@@ -430,6 +430,9 @@ def make_handler(app: App):
                     if q.get("home") and q.get("chapter"):
                         from . import home
                         return self._json(200, browse.replay_items(conn, home.replay_ids(conn, int(q["chapter"]), q.get("year"))))
+                    if q.get("holiday") and not q.get("all"):
+                        from . import holidays
+                        return self._json(200, browse.replay_items(conn, holidays.best_ids(conn, str(q["holiday"]))))
                     if q.get("best"):
                         from . import quality
                         where, args = browse._filters(browse.expand(conn, {k: v for k, v in q.items() if k != "best"}), alias="a.")
@@ -509,6 +512,11 @@ def make_handler(app: App):
                     return self._json(200, {"file": f.name})
                 if path == "/api/map":
                     return self._json(200, browse.map_points(conn, q))
+                if path == "/api/map/months":
+                    return self._json(200, app.cached("map_months:" + json.dumps(q, sort_keys=True), conn, lambda: browse.map_months(conn, q)))
+                if path == "/api/holidays":
+                    from . import holidays
+                    return self._json(200, app.cached("holidays", conn, lambda: holidays.overview(conn), ttl=120))
                 if path == "/api/review-queue":
                     from . import confidence
                     return self._json(200, app.cached("review-queue", conn, lambda: confidence.queue(conn), ttl=600))

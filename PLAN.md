@@ -489,36 +489,30 @@ stories, Ask, memories, year review, books and share cover the "relive" side.
 
 ---
 
-## Phase 7: proposed enhancements (not yet built)
+## Phase 7: enhancements (approved: items 1–10; 11 deferred)
 
-From a tab-by-tab review of v0.42, ordered by value for effort.
+From a tab-by-tab review of v0.42, in the order presented and agreed. School-year albums were
+dropped from the list before approval.
 
-1. **Video posters** (built, v0.44.0). Videos show as a grey ▶ tile everywhere. Decode the first frame in the
-   browser on first sight and cache it as the thumbnail (no ffmpeg needed), so grids, replays,
-   books and the archive show real frames. Biggest visible gap today.
-2. **Holidays through the years.** The search already knows Christmas, Thanksgiving, Easter,
-   Halloween, the Fourth. Make each a standing view: the same holiday across every year side by
-   side, with a replay and a book. Birthdays the same way per person.
-3. **School years.** From a birthday, auto-albums per school year ("Emma, 2nd grade,
-   2024–25") and a "first day of school" detector (early September, a child, a backpack).
+1. **Video posters** (built, v0.44.0). The first frame, decoded in the browser on first sight
+   and kept as the video's thumbnail; grids, replays, books and the archive show real frames.
+2. **Holidays through the years** (built, v0.45.0). `holidays.py`: every holiday the date parser
+   knows, and each person's birthday, as one row per year with a cover; replay of the best
+   photos per year; a holiday book; `holiday=` as a gallery filter.
+3. **Incremental catalog update** (built, v0.45.0). A `dir_stamps` table keeps each folder's
+   mtime and entry count; a quick scan (what runs after every sync, and "Catalog new files")
+   skips unchanged folders and marks their files present without touching them. "Catalog
+   everything" is the full pass and also catches files replaced in place.
 4. **Learning from your decisions.** Use the inbox and review-queue history to tune the trip
-   radius, gap and face thresholds per library, and to calibrate the confidence numbers, so the
-   suggestions get sharper the more you use them.
-5. **Stories for events and years.** Stories exist for trips and chapters; events and years
-   deserve the same button, and the life book would carry them.
+   radius, gap and face thresholds per library, and to calibrate the confidence numbers.
+5. **Stories for events and years**, carried into the life book.
 6. **Tell-the-story mode.** A keyboard-driven pass through the best photos of an event or
-   trip: one line of caption or a voice note each, then on to the next. Feeds books, stories and
-   search. Ten minutes per trip instead of hunting through the viewer.
-7. **Google Photos / Android import.** Takeout folders carry JSON sidecars with dates and
-   locations; read them like the iCloud sidecars so a spouse's or an old Android phone's photos
-   land with full metadata and attribution.
-8. **Two iCloud accounts into one library.** For a couple: a second Apple ID syncing into the
-   same library with each photo attributed, using the existing contributor field.
-9. **Map time-lapse.** A year slider or play button on the Map tab that animates where life
-   happened, month by month, using the replay map that already exists.
-10. **Share as one file.** Zip the share folder automatically and offer a single download, with
-    an optional expiry note in the page. Today you zip it yourself.
-11. **Phone layout polish.** A bottom tab bar, swipe between photos in the viewer, and bigger
-    touch targets for the paired-phone view.
-12. **Incremental catalog update.** Walk only folders whose modification time changed, so a
-    19k-item update takes seconds instead of a full re-walk after each sync.
+   trip: one line of caption or a voice note each, then on to the next.
+7. **Map time-lapse** (built, v0.45.0). `browse.map_months` aggregates located photos by month
+   into ~5 km cells; the Map tab's ▶ Time-lapse animates them, following the current filter.
+8. **Share as one file.** Zip the share folder automatically and offer a single download.
+9. **Google Photos / Android import.** Takeout folders carry JSON sidecars with dates and
+   locations; read them like the iCloud sidecars so those photos land with full metadata.
+10. **Two iCloud accounts into one library.** A second Apple ID syncing into the same library,
+    each photo attributed through the existing contributor field.
+11. **Phone layout polish** (deferred). A bottom tab bar, swipe in the viewer, bigger touch targets.

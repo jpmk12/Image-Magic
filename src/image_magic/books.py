@@ -263,7 +263,28 @@ def album_book(conn: sqlite3.Connection, originals: Path, library: Path, album_i
     return render(library, originals, f"{a['title'][:40]}-album-book", a["title"], f"{len(ids)} photos", cover, "", sections)
 
 
+def holiday_book(conn: sqlite3.Connection, originals: Path, library: Path, key: str) -> Path:
+    """One occasion through the years: a page per year with its best photos."""
+    from . import holidays
+    title = holidays.title_of(conn, key)
+    sections = []
+    for span in holidays.spans(conn, key):
+        where = f"{VISIBLE} AND substr(a.taken_at, 1, 10) BETWEEN ? AND ?"
+        args = [span[0].isoformat(), span[1].isoformat()]
+        photos = _best(conn, where, args)
+        if photos:
+            n = conn.execute(f"SELECT COUNT(*) FROM assets a WHERE {where}", args).fetchone()[0]
+            sections.append((f"{title} {holidays._label(key, span)}", photos, f"{n} photo{'s' if n != 1 else ''}."))
+    if not sections:
+        raise ValueError(f"No photos from {title} yet.")
+    cover = sections[-1][1][0]
+    years = f"{sections[0][0].rsplit(' ', 1)[1]} – {sections[-1][0].rsplit(' ', 1)[1]}" if len(sections) > 1 else sections[0][0].rsplit(" ", 1)[1]
+    return render(library, originals, f"{_safe(title)}-through-the-years", f"{title} through the years", years, cover, "", sections)
+
+
 def make(conn: sqlite3.Connection, originals: Path, library: Path, kind: str, ident: str) -> Path:
+    if kind == "holiday":
+        return holiday_book(conn, originals, library, ident)
     if kind == "album":
         return album_book(conn, originals, library, int(ident))
     if kind == "life":
