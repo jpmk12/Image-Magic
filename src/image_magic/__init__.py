@@ -1,3 +1,3 @@
 """Image Magic: back up and catalog an iCloud photo library."""
 
-__version__ = "0.57.1"
+__version__ = "0.58.0"

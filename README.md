@@ -345,7 +345,10 @@ program only. Your photos and settings are kept.
   take the place of photos taken nearby in time (choose how far to look, 20 minutes to 12
   hours), search a place (a town, "Town, ST", a full postal address, whose town part is used,
   or coordinates like "37.83, -92.18") from the offline list, pin it on the map, or copy it
-  from a photo that has it right. For an exact street address, **Look it up online** asks
+  from a photo that has it right. Military installations are in the offline list too: about
+  200 bases, airfields and posts worldwide by name, nickname or ICAO code ("Ramstein", "the
+  Deid", "OTBH", "Dover AFB", "Fort Leonard Wood", "Diego Garcia"), and they rank ahead of the
+  town of the same name. For an exact street address, **Look it up online** asks
   OpenStreetMap with just the text you typed; that button is the only part that goes online
   and it does nothing until you click it. **Pin on the map** also takes anything copied from
   Google Maps or Apple Maps: right-click a spot in Google Maps and click the coordinates at the

@@ -1,0 +1,240 @@
+# name	lat	lon	country	aliases (| separated: short names, ICAO codes, old names)
+Dover Air Force Base	39.1295	-75.4660	US	Dover AFB|KDOV|Dover
+Travis Air Force Base	38.2627	-121.9275	US	Travis AFB|KSUU|Travis
+Joint Base Lewis-McChord	47.1377	-122.4765	US	McChord AFB|McChord Field|JBLM|KTCM|Fort Lewis
+Joint Base Charleston	32.8986	-80.0405	US	Charleston AFB|KCHS|Charleston
+Joint Base McGuire-Dix-Lakehurst	40.0156	-74.5917	US	McGuire AFB|JB MDL|KWRI|McGuire|Fort Dix
+Scott Air Force Base	38.5452	-89.8352	US	Scott AFB|KBLV|Scott
+Altus Air Force Base	34.6671	-99.2667	US	Altus AFB|KLTS|Altus
+Little Rock Air Force Base	34.9167	-92.1497	US	Little Rock AFB|KLRF
+Dyess Air Force Base	32.4208	-99.8546	US	Dyess AFB|KDYS|Dyess
+Fairchild Air Force Base	47.6151	-117.6557	US	Fairchild AFB|KSKA|Fairchild
+MacDill Air Force Base	27.8493	-82.5212	US	MacDill AFB|KMCF|MacDill
+Grand Forks Air Force Base	47.9611	-97.4012	US	Grand Forks AFB|KRDR
+Pope Army Airfield	35.1709	-79.0145	US	Pope Field|Pope AFB|KPOB|Fort Liberty|Fort Bragg
+Wright-Patterson Air Force Base	39.8261	-84.0483	US	Wright-Patterson AFB|Wright-Pat|KFFO
+Tinker Air Force Base	35.4147	-97.3866	US	Tinker AFB|KTIK|Tinker
+Robins Air Force Base	32.6401	-83.5919	US	Robins AFB|KWRB|Robins
+Hill Air Force Base	41.1240	-111.9731	US	Hill AFB|KHIF
+Nellis Air Force Base	36.2362	-115.0343	US	Nellis AFB|KLSV|Nellis
+Edwards Air Force Base	34.9054	-117.8839	US	Edwards AFB|KEDW|Edwards
+Luke Air Force Base	33.5350	-112.3830	US	Luke AFB|KLUF
+Davis-Monthan Air Force Base	32.1665	-110.8830	US	Davis-Monthan AFB|DM|KDMA|Boneyard
+Joint Base San Antonio-Lackland	29.3842	-98.5811	US	Lackland AFB|Kelly Field|KSKF|Lackland
+Joint Base San Antonio-Randolph	29.5297	-98.2789	US	Randolph AFB|KRND|Randolph
+Joint Base San Antonio-Fort Sam Houston	29.4592	-98.4387	US	Fort Sam Houston|Fort Sam
+Sheppard Air Force Base	33.9888	-98.4919	US	Sheppard AFB|KSPS|Sheppard
+Vance Air Force Base	36.3393	-97.9166	US	Vance AFB|KEND|Vance
+Laughlin Air Force Base	29.3595	-100.7780	US	Laughlin AFB|KDLF|Laughlin
+Columbus Air Force Base	33.6438	-88.4438	US	Columbus AFB|KCBM
+Maxwell Air Force Base	32.3829	-86.3658	US	Maxwell AFB|KMXF|Maxwell|Gunter Annex
+Keesler Air Force Base	30.4106	-88.9244	US	Keesler AFB|KBIX|Keesler
+Eglin Air Force Base	30.4832	-86.5254	US	Eglin AFB|KVPS|Eglin
+Hurlburt Field	30.4278	-86.6893	US	Hurlburt|KHRT
+Tyndall Air Force Base	30.0696	-85.5755	US	Tyndall AFB|KPAM|Tyndall
+Moody Air Force Base	30.9678	-83.1930	US	Moody AFB|KVAD|Moody
+Shaw Air Force Base	33.9727	-80.4706	US	Shaw AFB|KSSC|Shaw
+Seymour Johnson Air Force Base	35.3394	-77.9606	US	Seymour Johnson AFB|KGSB|Seymour Johnson
+Joint Base Langley-Eustis	37.0829	-76.3605	US	Langley AFB|KLFI|Langley|Fort Eustis
+Joint Base Andrews	38.8108	-76.8670	US	Andrews AFB|KADW|Andrews
+Joint Base Anacostia-Bolling	38.8428	-77.0161	US	Bolling AFB|Bolling|Anacostia
+Hanscom Air Force Base	42.4700	-71.2890	US	Hanscom AFB|KBED|Hanscom
+Westover Air Reserve Base	42.1940	-72.5348	US	Westover ARB|KCEF|Westover
+Offutt Air Force Base	41.1183	-95.9125	US	Offutt AFB|KOFF|Offutt
+Whiteman Air Force Base	38.7303	-93.5479	US	Whiteman AFB|KSZL|Whiteman
+McConnell Air Force Base	37.6219	-97.2682	US	McConnell AFB|KIAB|McConnell
+Minot Air Force Base	48.4156	-101.3577	US	Minot AFB|KMIB|Minot
+Malmstrom Air Force Base	47.5050	-111.1872	US	Malmstrom AFB|KGFA|Malmstrom
+F. E. Warren Air Force Base	41.1333	-104.8667	US	Warren AFB|F.E. Warren|KFEW
+Ellsworth Air Force Base	44.1450	-103.1035	US	Ellsworth AFB|KRCA|Ellsworth
+Mountain Home Air Force Base	43.0436	-115.8725	US	Mountain Home AFB|KMUO
+Holloman Air Force Base	32.8525	-106.1067	US	Holloman AFB|KHMN|Holloman
+Cannon Air Force Base	34.3828	-103.3222	US	Cannon AFB|KCVS|Cannon
+Kirtland Air Force Base	35.0400	-106.6094	US	Kirtland AFB|KABQ|Kirtland
+Beale Air Force Base	39.1361	-121.4366	US	Beale AFB|KBAB|Beale
+Vandenberg Space Force Base	34.7373	-120.5843	US	Vandenberg AFB|Vandenberg SFB|KVBG|Vandenberg
+Los Angeles Air Force Base	33.9177	-118.3800	US	Los Angeles AFB|LA AFB
+March Air Reserve Base	33.8806	-117.2594	US	March ARB|March AFB|KRIV
+Peterson Space Force Base	38.8239	-104.7003	US	Peterson AFB|Peterson SFB|KCOS|Peterson
+Schriever Space Force Base	38.8030	-104.5290	US	Schriever AFB|Schriever SFB|Schriever
+United States Air Force Academy	38.9983	-104.8614	US	USAFA|Air Force Academy|KAFF
+Buckley Space Force Base	39.7017	-104.7517	US	Buckley AFB|Buckley SFB|KBKF|Buckley
+Patrick Space Force Base	28.2349	-80.6101	US	Patrick AFB|Patrick SFB|KCOF|Patrick
+Cape Canaveral Space Force Station	28.4889	-80.5778	US	Cape Canaveral|CCSFS|the Cape
+Homestead Air Reserve Base	25.4886	-80.3836	US	Homestead ARB|KHST|Homestead
+Joint Base Elmendorf-Richardson	61.2510	-149.8064	US	JBER|Elmendorf AFB|PAED|Elmendorf|Fort Richardson
+Eielson Air Force Base	64.6657	-147.1016	US	Eielson AFB|PAEI|Eielson
+Joint Base Pearl Harbor-Hickam	21.3187	-157.9224	US	Hickam AFB|Hickam Field|PHIK|Hickam|Pearl Harbor
+Andersen Air Force Base	13.5840	144.9305	GU	Andersen AFB|PGUA|Andersen|Guam
+Fort Leonard Wood	37.7434	-92.1358	US	FLW|Forney Army Airfield|Fort Lost in the Woods|KTBN
+Fort Campbell	36.6682	-87.4963	US	Campbell Army Airfield|KHOP
+Fort Cavazos	31.0671	-97.8289	US	Fort Hood|Robert Gray Army Airfield|KGRK
+Fort Bliss	31.8496	-106.3800	US	Biggs Army Airfield|KBIF
+Fort Stewart	32.0106	-81.1463	US	Hunter Army Airfield|KSVN
+Fort Drum	44.0558	-75.7195	US	Wheeler-Sack Army Airfield|KGTB
+Fort Carson	38.7375	-104.7889	US	Butts Army Airfield|KFCS
+Fort Riley	39.0527	-96.7645	US	Marshall Army Airfield|KFRI
+Fort Moore	32.3543	-84.9683	US	Fort Benning|Lawson Army Airfield|KLSF
+Fort Novosel	31.3463	-85.7135	US	Fort Rucker|Cairns Army Airfield
+Fort Johnson	31.0444	-93.1915	US	Fort Polk|Polk Army Airfield|JRTC
+Fort Irwin	35.2625	-116.6847	US	NTC|National Training Center
+Fort Knox	37.9079	-85.9597	US	Godman Army Airfield|KFTK
+Fort Meade	39.1081	-76.7431	US	Fort George G. Meade
+Fort Belvoir	38.7119	-77.1457	US	Davison Army Airfield
+Fort Leavenworth	39.3508	-94.9256	US	Leavenworth
+Fort Huachuca	31.5880	-110.3443	US	Libby Army Airfield
+Fort Wainwright	64.8318	-147.6148	US	Ladd Army Airfield|PAFB
+Schofield Barracks	21.4989	-158.0633	US	Wheeler Army Airfield|PHHI
+Naval Station Norfolk	36.9465	-76.3128	US	NS Norfolk|Chambers Field|KNGU|Norfolk Naval Base
+Naval Air Station Oceana	36.8207	-76.0333	US	NAS Oceana|KNTU|Oceana
+Naval Air Station Jacksonville	30.2358	-81.6806	US	NAS Jax|NAS Jacksonville|KNIP
+Naval Air Station Pensacola	30.3527	-87.3186	US	NAS Pensacola|KNPA|Pensacola
+Naval Air Station Lemoore	36.3330	-119.9521	US	NAS Lemoore|KNLC|Lemoore
+Naval Air Station Whidbey Island	48.3518	-122.6558	US	NAS Whidbey|KNUW|Whidbey Island
+Naval Air Station Fallon	39.4165	-118.7011	US	NAS Fallon|KNFL|Fallon|Top Gun
+Naval Air Station North Island	32.6992	-117.2153	US	NAS North Island|KNZY|Coronado
+Naval Air Station Patuxent River	38.2860	-76.4118	US	NAS Pax River|Pax River|KNHK
+Naval Station Mayport	30.3900	-81.4200	US	NS Mayport|Mayport
+Naval Base San Diego	32.6840	-117.1292	US	32nd Street|NB San Diego
+Naval Base Kitsap	47.5650	-122.6490	US	Bremerton|Bangor
+Marine Corps Base Camp Pendleton	33.3850	-117.5660	US	Camp Pendleton|Pendleton|KNFG
+Marine Corps Air Station Miramar	32.8683	-117.1425	US	MCAS Miramar|KNKX|Miramar
+Marine Corps Air Station Cherry Point	34.9008	-76.8808	US	MCAS Cherry Point|KNKT|Cherry Point
+Marine Corps Base Camp Lejeune	34.6693	-77.3457	US	Camp Lejeune|Lejeune|New River
+Marine Corps Base Quantico	38.5223	-77.3054	US	Quantico|KNYG
+Marine Corps Air Ground Combat Center Twentynine Palms	34.2962	-116.1620	US	Twentynine Palms|29 Palms
+Ramstein Air Base	49.4369	7.6003	DE	Ramstein AB|ETAR|Ramstein|K-Town|Kaiserslautern Military Community|KMC
+Spangdahlem Air Base	49.9727	6.6925	DE	Spangdahlem AB|ETAD|Spangdahlem|Spang
+Landstuhl Regional Medical Center	49.4063	7.5632	DE	Landstuhl|LRMC
+Grafenwoehr Training Area	49.6983	11.9405	DE	Grafenwöhr|Grafenwoehr|Graf|Tower Barracks
+Hohenfels Training Area	49.2184	11.8364	DE	Hohenfels|JMRC
+Vilseck	49.6312	11.7990	DE	Rose Barracks
+Wiesbaden Army Airfield	50.0498	8.3254	DE	Clay Kaserne|Wiesbaden|ETOU
+Stuttgart Army Airfield	48.6899	9.2220	DE	Patch Barracks|Panzer Kaserne|Stuttgart|EUCOM|AFRICOM
+Ansbach	49.3043	10.6395	DE	Katterbach|Ansbach Army Airfield|ETEB
+NATO Air Base Geilenkirchen	50.9608	6.0424	DE	Geilenkirchen|ETNG|AWACS
+RAF Mildenhall	52.3619	0.4864	GB	Mildenhall|EGUN
+RAF Lakenheath	52.4093	0.5610	GB	Lakenheath|EGUL
+RAF Fairford	51.6822	-1.7900	GB	Fairford|EGVA
+RAF Croughton	51.9880	-1.1850	GB	Croughton
+RAF Alconbury	52.3728	-0.2230	GB	Alconbury|EGWZ
+RAF Menwith Hill	54.0082	-1.6895	GB	Menwith Hill
+RAF Brize Norton	51.7500	-1.5836	GB	Brize Norton|EGVN|Brize
+Aviano Air Base	46.0319	12.5965	IT	Aviano AB|LIPA|Aviano
+Naval Air Station Sigonella	37.4017	14.9224	IT	NAS Sigonella|LICZ|Sigonella|Sig
+Naval Support Activity Naples	40.8800	14.2900	IT	NSA Naples|Naples|Capodichino|Gricignano
+Caserma Ederle	45.5363	11.5715	IT	Vicenza|Camp Ederle|Del Din
+Camp Darby	43.6350	10.3650	IT	Livorno|Darby
+Naval Station Rota	36.6452	-6.3494	ES	NS Rota|LERT|Rota
+Morón Air Base	37.1749	-5.6159	ES	Moron AB|Morón AB|LEMO|Moron
+Lajes Field	38.7618	-27.0908	PT	Lajes|LPLA|Azores|Terceira
+Incirlik Air Base	37.0021	35.4259	TR	Incirlik AB|LTAG|Incirlik|Adana
+Naval Support Activity Souda Bay	35.5317	24.1497	GR	Souda Bay|LGSA|Souda|Chania
+Camp Bondsteel	42.3700	21.2500	XK	Bondsteel|Kosovo|KFOR
+Pituffik Space Base	76.5312	-68.7032	GL	Thule Air Base|Thule AB|Thule|BGTL|Pituffik
+Keflavik Air Base	63.9850	-22.6056	IS	Keflavik|NAS Keflavik|BIKF|Iceland
+Chièvres Air Base	50.5758	3.8310	BE	Chievres AB|Chièvres|EBCV|SHAPE|Mons
+Kleine Brogel Air Base	51.1683	5.4700	BE	Kleine Brogel|EBBL
+Volkel Air Base	51.6563	5.7086	NL	Volkel|EHVK
+Papa Air Base	47.3636	17.5008	HU	Pápa|Papa|LHPA|SAC|Heavy Airlift Wing
+Mihail Kogălniceanu Air Base	44.3622	28.4883	RO	MK Air Base|MK|LRCK|Constanța
+Powidz Air Base	52.3794	17.8539	PL	Powidz|EPPW
+Łask Air Base	51.5517	19.1791	PL	Lask|Łask|EPLK
+Ämari Air Base	59.2603	24.2085	EE	Amari|Ämari|EEEI
+Šiauliai Air Base	55.8939	23.3950	LT	Siauliai|Šiauliai|EYSA
+Al Udeid Air Base	25.1173	51.3150	QA	Al Udeid AB|OTBH|Udeid|The Deid|AUAB|Doha
+Al Dhafra Air Base	24.2482	54.5477	AE	Al Dhafra AB|OMAM|Dhafra|ADAB
+Ali Al Salem Air Base	29.3467	47.5208	KW	Ali Al Salem AB|OKAS|Al Salem|The Rock
+Camp Arifjan	28.8800	48.1500	KW	Arifjan
+Camp Buehring	29.6900	47.6300	KW	Buehring|Udairi
+Prince Sultan Air Base	24.0627	47.5805	SA	Prince Sultan AB|PSAB|OEPS|Al Kharj
+Muwaffaq Salti Air Base	31.8256	36.7842	JO	Azraq|OJMS|Muwaffaq Salti
+Naval Support Activity Bahrain	26.2300	50.5900	BH	NSA Bahrain|Bahrain|Manama|NAVCENT
+Isa Air Base	25.9184	50.5906	BH	Shaikh Isa AB|Isa AB|OBBS
+Thumrait Air Base	17.6660	54.0246	OM	Thumrait|OOTH
+Masirah Air Base	20.6754	58.8904	OM	Masirah|OOMA
+Al Asad Air Base	33.7856	42.4412	IQ	Al Asad AB|ORAA|Al Asad|Ain al-Asad
+Erbil Air Base	36.2376	43.9632	IQ	Erbil|ORER
+Joint Base Balad	33.9402	44.3616	IQ	Balad|ORBD|LSA Anaconda|Camp Anaconda
+Baghdad Diplomatic Support Center	33.2625	44.2346	IQ	Sather Air Base|Sather AB|BIAP|ORBI|Camp Victory|Baghdad
+Camp Taji	33.5230	44.2560	IQ	Taji
+Bagram Airfield	34.9461	69.2650	AF	Bagram AF|Bagram|OAIX|BAF
+Kandahar Airfield	31.5058	65.8478	AF	Kandahar AF|Kandahar|OAKN|KAF
+Camp Lemonnier	11.5472	43.1594	DJ	Lemonnier|Djibouti|HDAM|CLDJ
+Naval Support Facility Diego Garcia	-7.3133	72.4111	IO	Diego Garcia|FJDG|DG|NSF Diego Garcia
+Transit Center at Manas	43.0613	74.4776	KG	Manas|Manas AB|UCFM|Bishkek
+Kadena Air Base	26.3556	127.7678	JP	Kadena AB|RODN|Kadena|Okinawa
+Marine Corps Air Station Futenma	26.2743	127.7558	JP	MCAS Futenma|Futenma|ROTM
+Camp Foster	26.3000	127.7700	JP	Camp Foster|Camp Butler
+Yokota Air Base	35.7485	139.3485	JP	Yokota AB|RJTY|Yokota|Fussa
+Misawa Air Base	40.7032	141.3686	JP	Misawa AB|RJSM|Misawa
+Marine Corps Air Station Iwakuni	34.1439	132.2356	JP	MCAS Iwakuni|RJOI|Iwakuni
+Naval Air Facility Atsugi	35.4546	139.4500	JP	NAF Atsugi|RJTA|Atsugi
+Fleet Activities Yokosuka	35.2906	139.6625	JP	Yokosuka|CFAY
+Fleet Activities Sasebo	33.1600	129.7200	JP	Sasebo
+Camp Zama	35.5119	139.3942	JP	Zama
+Osan Air Base	37.0906	127.0296	KR	Osan AB|RKSO|Osan|Songtan
+Kunsan Air Base	35.9038	126.6158	KR	Kunsan AB|RKJK|Kunsan|The Kun
+Camp Humphreys	36.9620	127.0310	KR	Humphreys|Desiderio Army Airfield|RKSG|Pyeongtaek
+Yongsan Garrison	37.5300	126.9700	KR	Yongsan|Seoul
+Camp Casey	37.9170	127.0560	KR	Casey|Dongducheon
+Clark Air Base	15.1859	120.5600	PH	Clark AB|RPLC|Clark|Angeles City
+Subic Bay	14.7944	120.2711	PH	NS Subic Bay|Subic|RPLB|Cubi Point
+U-Tapao Royal Thai Navy Airfield	12.6799	100.9880	TH	U-Tapao|Utapao|VTBU
+Paya Lebar Air Base	1.3604	103.9094	SG	Paya Lebar|WSAP|Singapore
+Royal Australian Air Force Base Darwin	-12.4147	130.8769	AU	RAAF Darwin|Darwin|YPDN
+Royal Australian Air Force Base Amberley	-27.6406	152.7119	AU	RAAF Amberley|Amberley|YAMB
+Royal Australian Air Force Base Richmond	-33.6006	150.7811	AU	RAAF Richmond|YSRI
+Royal Australian Air Force Base Tindal	-14.5211	132.3781	AU	RAAF Tindal|Tindal|YPTN|Katherine
+Christchurch International Airport	-43.4894	172.5320	NZ	Christchurch|NZCH|Operation Deep Freeze|Harewood
+McMurdo Station	-77.8463	166.6683	AQ	McMurdo|NZIR|Pegasus Field|Phoenix Airfield|Williams Field|Antarctica
+Wake Island Airfield	19.2821	166.6365	UM	Wake Island|Wake|PWAK
+Bucholz Army Airfield	8.7201	167.7318	MH	Kwajalein|Kwaj|PKWA|Roi-Namur
+Johnston Atoll	16.7286	-169.5336	UM	Johnston Island|PJON
+Midway Atoll	28.2017	-177.3809	UM	Midway|Henderson Field|PMDY
+Soto Cano Air Base	14.3824	-87.6212	HN	Soto Cano AB|Palmerola|MHSC|JTF-Bravo
+Naval Station Guantanamo Bay	19.9065	-75.2071	CU	Guantanamo Bay|Gitmo|GTMO|MUGM
+Naval Station Roosevelt Roads	18.2450	-65.6434	PR	Roosevelt Roads|Rosey Roads|Ceiba
+Muñiz Air National Guard Base	18.4394	-66.0018	PR	Muniz ANGB|San Juan|TJSJ
+Fort Buchanan	18.4100	-66.1200	PR	Buchanan
+Comalapa Air Base	13.4409	-89.0558	SV	Comalapa|MSLP|San Salvador
+Ascension Island Auxiliary Airfield	-7.9696	-14.3937	SH	Ascension Island|Ascension|Wideawake|FHAW
+Dakar	14.7397	-17.4902	SN	Dakar|GOOY|Léopold Sédar Senghor|Blaise Diagne|GOBD
+Agadez Air Base 201	16.9470	7.9830	NE	Agadez|Air Base 201|AB 201|Niger
+Chabelley Airfield	11.5150	43.0620	DJ	Chabelley|HDCH
+Entebbe	0.0424	32.4435	UG	Entebbe|HUEN
+Nairobi Moi Air Base	-1.2833	36.8667	KE	Moi Air Base|Eastleigh|Nairobi
+Mombasa Moi International Airport	-4.0348	39.5942	KE	Mombasa|HKMO
+Tel Aviv Ben Gurion	32.0114	34.8867	IL	Ben Gurion|LLBG|Nevatim|Tel Aviv
+Cairo West Air Base	30.1164	30.9153	EG	Cairo West|HECW
+Shannon Airport	52.7020	-8.9248	IE	Shannon|EINN
+Bangor International Airport	44.8074	-68.8281	US	Bangor|KBGR|Bangor Maine
+Gander International Airport	48.9369	-54.5681	CA	Gander|CYQX
+Goose Bay	53.3192	-60.4258	CA	CFB Goose Bay|Goose Bay|CYYR
+Canadian Forces Base Trenton	44.1189	-77.5281	CA	CFB Trenton|Trenton|CYTR
+Naval Air Station Joint Reserve Base Fort Worth	32.7692	-97.4414	US	NAS JRB Fort Worth|Carswell|KNFW|Fort Worth
+Joint Base Lewis-McChord Gray Army Airfield	47.0792	-122.5806	US	Gray AAF|KGRF
+Dobbins Air Reserve Base	33.9154	-84.5163	US	Dobbins ARB|KMGE|Dobbins|Marietta
+Joint Base Cape Cod	41.6588	-70.5214	US	Otis ANGB|Otis|KFMH|Cape Cod
+Pease Air National Guard Base	43.0779	-70.8233	US	Pease ANGB|Pease|KPSM|Portsmouth
+Stewart Air National Guard Base	41.5041	-74.1048	US	Stewart ANGB|Stewart|KSWF|Newburgh
+Memphis Air National Guard Base	35.0424	-89.9767	US	Memphis ANGB|KMEM
+Channel Islands Air National Guard Station	34.2117	-119.0898	US	Channel Islands ANGS|Point Mugu|KNTD
+Selfridge Air National Guard Base	42.6133	-82.8355	US	Selfridge ANGB|Selfridge|KMTC
+Niagara Falls Air Reserve Station	43.1073	-78.9462	US	Niagara Falls ARS|KIAG
+Pittsburgh Air Reserve Station	40.4915	-80.2329	US	Pittsburgh ARS|KPIT
+Youngstown Air Reserve Station	41.2607	-80.6791	US	Youngstown ARS|KYNG
+Grissom Air Reserve Base	40.6481	-86.1521	US	Grissom ARB|KGUS|Grissom
+Minneapolis-St Paul Air Reserve Station	44.8820	-93.2218	US	Minneapolis ARS|KMSP
+Rickenbacker Air National Guard Base	39.8138	-82.9278	US	Rickenbacker ANGB|KLCK|Rickenbacker
+Wright Army Airfield	31.8891	-81.5623	US	Wright AAF|KLHW
+Fort Hamilton	40.6069	-74.0300	US	Hamilton|Brooklyn
+West Point	41.3915	-73.9560	US	United States Military Academy|USMA
+United States Naval Academy	38.9826	-76.4857	US	USNA|Annapolis
+Pentagon	38.8719	-77.0563	US	The Pentagon|Arlington
+Arlington National Cemetery	38.8783	-77.0687	US	Arlington Cemetery
+Walter Reed National Military Medical Center	39.0022	-77.0942	US	Walter Reed|Bethesda
+Brooke Army Medical Center	29.4598	-98.4406	US	BAMC|SAMMC
+Eareckson Air Station	52.7123	174.1136	US	Shemya|PASY|Eareckson
+King Salmon Air Force Station	58.6768	-156.6494	US	King Salmon|PAKN
+Galena Forward Operating Location	64.7362	-156.9374	US	Galena|PAGA

@@ -182,8 +182,57 @@ def parse_query(query: str) -> dict:
     return out
 
 
+@lru_cache(maxsize=1)
+def _bases() -> list[dict]:
+    """Military installations and the airfields crews pass through, with their short names and ICAO codes.
+    The civilian list has towns, not bases; this fills the gap for a life spent on them."""
+    out = []
+    path = resources.files("image_magic") / "data" / "bases.tsv"
+    with path.open("r", encoding="utf-8") as f:
+        for line in f:
+            if not line.strip() or line.startswith("#"):
+                continue
+            name, lat, lon, code, aliases = (line.rstrip("\n").split("\t") + [""])[:5]
+            names = [name] + [a for a in aliases.split("|") if a]
+            out.append({"name": name, "lat": float(lat), "lon": float(lon), "country_code": code,
+                        "keys": [_norm(n) for n in names], "aliases": names[1:]})
+    return out
+
+
+def _norm(s: str) -> str:
+    return re.sub(r"[^a-z0-9 ]+", " ", s.lower().replace("-", " ")).strip()
+
+
+def search_bases(query: str, limit: int = 5) -> list[dict]:
+    """Installations whose name, nickname or ICAO code matches. An exact match (ICAO, short name) ranks first."""
+    q = _norm(query)
+    if len(q) < 2:
+        return []
+    cc = countries()
+    hits = []
+    for b in _bases():
+        best = None
+        for k in b["keys"]:
+            if k == q:
+                best = 0
+            elif k.startswith(q) or (len(q) >= 4 and q.startswith(k) and len(k) >= 4):
+                best = 1 if best is None else min(best, 1)
+            elif len(q) >= 3 and q in k:
+                best = 2 if best is None else min(best, 2)
+        if best is not None:
+            hits.append((best, b))
+    hits.sort(key=lambda t: t[0])
+    out = []
+    for _, b in hits[:limit]:
+        codes = [a for a in b["aliases"] if len(a) == 4 and a.isupper() and a.isalpha()]
+        out.append({"lat": b["lat"], "lon": b["lon"], "name": b["name"], "region": "military installation" + (f" · {codes[0]}" if codes else ""),
+                    "country_code": b["country_code"], "country": cc.get(b["country_code"], b["country_code"]), "base": True})
+    return out
+
+
 def search(query: str, limit: int = 8) -> list[dict]:
-    """Places matching what was typed: a name, "Town, ST", a full postal address, or "lat, lon". Offline."""
+    """Places matching what was typed: a name, "Town, ST", a full postal address, "lat, lon", or a military
+    installation by name, nickname or ICAO code. Offline."""
     parsed = parse_query(query)
     cc = countries()
     if "lat" in parsed:
@@ -194,6 +243,9 @@ def search(query: str, limit: int = 8) -> list[dict]:
     names = [n for n in parsed["names"] if len(n) >= 2]
     if not names:
         return []
+    bases = search_bases(query.split(",")[0]) or (search_bases(names[0]) if names[0] != _norm(query.split(",")[0]) else [])
+    if any(b["region"].endswith(_norm(query).upper()) for b in bases):      # an ICAO code: nothing else is meant
+        return bases[:limit]
     region, country = parsed["region"], parsed["country"]
     scored: list[tuple[int, int, tuple]] = []
     for la, lo, name, reg, code in _all_places():
@@ -216,8 +268,10 @@ def search(query: str, limit: int = 8) -> list[dict]:
         if len(scored) >= limit * 40:
             break
     scored.sort(key=lambda t: t[0])                      # stable: within a rank the bigger places (file order) come first
-    out = []
-    for _, _, (la, lo, name, reg, code) in scored[:limit]:
+    out = list(bases)                                    # installations first: "Dover" means the base before the town, to a crew
+    for _, _, (la, lo, name, reg, code) in scored:
+        if len(out) >= limit:
+            break
         out.append({"lat": la, "lon": lo, "name": name, "region": reg or "", "country_code": code, "country": cc.get(code, code)})
     return out
 

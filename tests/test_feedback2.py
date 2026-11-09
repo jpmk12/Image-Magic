@@ -14,7 +14,7 @@ def test_place_search_understands_addresses_states_and_coordinates():
     assert top("14400 State Hwy Z, St Robert, MO 65584, United States") == [("Saint Robert", "Missouri")]
     assert top("St Robert, MO") == [("Saint Robert", "Missouri")]
     assert top("st robert") == [("Saint Robert", "Missouri")]
-    assert top("Dover, DE") == [("Dover", "Delaware")]                 # DE is Delaware in an address, not Germany
+    assert ("Dover", "Delaware") in [(r["name"], r["region"]) for r in places.search("Dover, DE")[:2]]   # DE is Delaware here, not Germany; the base ranks first
     assert top("Paris, TX") == [("Paris", "Texas")]
     assert top("Ft Walton Beach") == [("Fort Walton Beach", "Florida")]
     assert top("Petra, Jordan") == [("Petra", "Ma'an")]
@@ -188,3 +188,20 @@ def test_loose_filter_shows_photos_in_no_trip_or_album(tmp_path):
     assert len(browse.ids(conn, {"loose": "1"})) == 15
     assert len(browse.ids(conn, {"loose": "1", "year": "2019"})) == 15 and len(browse.ids(conn, {"loose": "1", "year": "2018"})) == 0
     assert albums.clean_filters({"loose": "1", "junk": 1}) == {"loose": "1"}
+
+
+def test_place_search_knows_military_bases():
+    top = lambda q: [(r["name"], r["country_code"]) for r in places.search(q)[:2]]  # noqa: E731
+    assert top("Ramstein")[0] == ("Ramstein Air Base", "DE")
+    assert top("Al Udeid")[0] == ("Al Udeid Air Base", "QA") and top("the deid")[0][0] == "Al Udeid Air Base"
+    assert top("OTBH") == [("Al Udeid Air Base", "QA")]                      # an ICAO code means exactly one place
+    assert top("Bagram")[0][0] == "Bagram Airfield" and top("Kadena AB")[0][0] == "Kadena Air Base"
+    assert top("Dover AFB")[0] == ("Dover Air Force Base", "US")
+    assert top("Dover")[0] == ("Dover Air Force Base", "US") and top("Dover, DE")[0][0] == "Dover Air Force Base"
+    assert top("Fort Leonard Wood")[0][0] == "Fort Leonard Wood" and top("KTBN")[0][0] == "Fort Leonard Wood"
+    assert top("Diego Garcia")[0][1] == "IO" and top("Thule")[0][0] == "Pituffik Space Base"
+    r = places.search("Ramstein")
+    assert r[0]["base"] and "ETAR" in r[0]["region"] and any(not x.get("base") for x in r)   # the town still follows
+    assert all(len(b["keys"]) >= 2 for b in places._bases()) and len(places._bases()) > 150
+    # the towns still work as before
+    assert places.search("Saint Robert")[0]["name"] == "Saint Robert" and places.search("Tokyo, Japan")[0]["name"] == "Tokyo"
