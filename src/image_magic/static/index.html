@@ -181,9 +181,17 @@
   .tile .badge { position: absolute; left: 8px; bottom: 8px; background: rgba(0,0,0,.6); color: #fff; backdrop-filter: blur(4px);
                  font-size: 10px; font-weight: 700; letter-spacing: .08em; padding: 2px 7px; border-radius: 99px; }
   .tile.video { display: grid; place-items: center; color: var(--muted); font-size: 30px; }
-  .grid.selecting .tile::after { content: ""; position: absolute; top: 8px; left: 8px; width: 22px; height: 22px; border-radius: 50%; border: 2px solid #fff; background: rgba(0,0,0,.35); }
-  .grid.selecting .tile.sel::after { content: "✓"; background: var(--accent); color: #fff; font-weight: 700; display: grid; place-items: center; font-size: 14px; }
-  .grid.selecting .tile.sel { outline: 3px solid var(--accent); }
+  .grid { position: relative; user-select: none; }
+  .grid img { -webkit-user-drag: none; user-drag: none; }
+  .grid .tile .pick { position: absolute; top: 8px; left: 8px; width: 24px; height: 24px; border-radius: 50%; border: 2px solid #fff; background: rgba(0,0,0,.35);
+                      display: grid; place-items: center; color: #fff; font-weight: 700; font-size: 14px; opacity: 0; transition: opacity .12s; z-index: 2; cursor: pointer; }
+  .grid .tile:hover .pick, .grid.selecting .tile .pick, html.phone .grid .tile .pick { opacity: 1; }
+  .grid .tile .pick:hover { background: rgba(0,0,0,.6); transform: scale(1.08); }
+  .grid .tile.sel .pick { background: var(--accent); border-color: #fff; opacity: 1; }
+  .grid .tile.sel .pick::after { content: "✓"; }
+  .grid .tile.sel { outline: 3px solid var(--accent); outline-offset: -3px; }
+  .grid .tile.sel img { opacity: .85; }
+  #grid-lasso { position: absolute; border: 2px dashed var(--accent); background: rgba(13,148,136,.10); border-radius: 6px; pointer-events: none; display: none; z-index: 3; }
   .ib.done { background: color-mix(in srgb, var(--accent) 10%, var(--panel)); border-color: var(--accent); }
   .rev-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 6px; }
   .rev-grid .tile { cursor: pointer; }
@@ -212,7 +220,7 @@
   .target:hover, .target.over { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, var(--panel)); }
   .target img { width: 36px; height: 36px; border-radius: 7px; object-fit: cover; background: var(--soft); flex: none; }
   .target .k { font-size: 11px; color: var(--muted); border: 1px solid var(--line); border-radius: 5px; padding: 1px 6px; }
-  #selbar { position: sticky; bottom: 10px; z-index: 5; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 10px 14px; box-shadow: var(--shadow); margin-top: 10px; }
+  #selbar { position: sticky; bottom: 10px; z-index: 5; flex-wrap: wrap; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 10px 14px; box-shadow: var(--shadow); margin-top: 10px; }
 
   /* ---- timeline */
   .tl-chapter { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); margin-bottom: 16px; overflow: hidden; box-shadow: var(--shadow); }
@@ -611,6 +619,7 @@
       <select id="f-kind"><option value="">Photos &amp; videos</option><option value="photo">Photos only</option><option value="video">Videos only</option></select>
       <label class="chip" title="Only well-exposed, sharp photos; one per burst"><input type="checkbox" id="f-best"> Best only</label>
       <label class="chip" title="Photos you hearted in iCloud Photos"><input type="checkbox" id="f-fav"> ♥ Favourites</label>
+      <label class="chip" title="Photos in no trip and no hand-picked album: the ones still to file"><input type="checkbox" id="f-loose"> ⬚ Loose</label>
       <span id="f-trip" class="chip hidden"></span>
       <button class="btn hidden" id="f-replay" title="Watch these photos in order, on the map">▶ Replay</button>
       <button class="btn hidden" id="f-share" title="Export a page with these photos, metadata removed">↗ Share</button>
@@ -621,6 +630,7 @@
     <div class="grid" id="grid"></div>
     <div id="selbar" class="row hidden">
       <b id="sel-count">0 selected</b>
+      <span class="small muted">Shift-click a range · Ctrl-click to add · drag to lasso · Esc to finish</span>
       <button class="btn" id="sel-all">Select all shown</button>
       <button class="btn" id="sel-trip">Move to trip…</button>
       <button class="btn" id="sel-notrip">Not part of a trip</button>
@@ -2059,7 +2069,7 @@ function fillCities() {
 function setFilters(f) {
   grid = { filters: f, offset: 0, total: 0, items: [], loading: false, lastMonth: "", loaded: true };
   $("#grid").replaceChildren();
-  $("#f-year").value = f.year || ""; $("#f-country").value = f.country || ""; $("#f-kind").value = f.kind || ""; $("#f-best").checked = !!f.best; $("#f-fav").checked = !!f.favorite;
+  $("#f-year").value = f.year || ""; $("#f-country").value = f.country || ""; $("#f-kind").value = f.kind || ""; $("#f-best").checked = !!f.best; $("#f-fav").checked = !!f.favorite; $("#f-loose").checked = !!f.loose;
   $("#f-q").value = f.q || ""; $("#f-q-clear").classList.toggle("hidden", !f.q);
   fillCities();
   const chip = $("#f-trip");
@@ -2070,7 +2080,7 @@ function setFilters(f) {
   $("#f-replay").classList.toggle("hidden", !(f.trip || f.day || f.month || f.event || f.flying || f.album));
   $("#f-share").classList.toggle("hidden", !(f.trip || f.day || f.month || f.person || f.chapter || f.year || f.event || f.flying || f.album));
   $("#f-replay").textContent = f.trip ? "▶ Replay trip" : f.event ? "▶ Replay event" : f.album ? "▶ Replay album" : f.day ? "▶ Replay this day" : "▶ Replay this month";
-  $("#f-save-album").classList.toggle("hidden", !!f.album || !["q", "year", "month", "day", "country", "city", "trip", "event", "person", "chapter", "best", "favorite", "flying", "contributor", "kind"].some(k => f[k]));
+  $("#f-save-album").classList.toggle("hidden", !!f.album || !["q", "year", "month", "day", "country", "city", "trip", "event", "person", "chapter", "best", "favorite", "loose", "flying", "contributor", "kind"].some(k => f[k]));
   if (label) {
     chip.replaceChildren(document.createTextNode(label));
     const x = document.createElement("button"); x.textContent = "✕"; x.title = "Show all photos";
@@ -2094,12 +2104,55 @@ $("#f-city").onchange = e => setFilters({ ...grid.filters, city: e.target.value,
 $("#f-kind").onchange = e => setFilters({ ...grid.filters, kind: e.target.value });
 $("#f-best").onchange = e => setFilters({ ...grid.filters, best: e.target.checked ? "1" : "" });
 $("#f-fav").onchange = e => setFilters({ ...grid.filters, favorite: e.target.checked ? "1" : "" });
+$("#f-loose").onchange = e => setFilters({ ...grid.filters, loose: e.target.checked ? "1" : "" });
 
 // ---- multi-select
-const sel = { on: false, ids: new Set() };
+const sel = { on: false, ids: new Set(), last: null };
 function toggleSel(id, el) { if (sel.ids.has(id)) sel.ids.delete(id); else sel.ids.add(id); if (el) el.classList.toggle("sel", sel.ids.has(id)); $("#sel-count").textContent = `${sel.ids.size} selected`; }
+// One click on a tile's corner circle (or Ctrl-click anywhere on it) starts selecting right where you are;
+// Shift-click takes everything between the last pick and this one; the bar with the actions stays in view.
+function pickTile(idx, el, ev) {
+  if (!sel.on) setSelectMode(true);
+  const it = grid.items[idx]; if (!it) return;
+  if (ev && ev.shiftKey && sel.last !== null) {
+    const [a, b] = [Math.min(sel.last, idx), Math.max(sel.last, idx)];
+    for (let k = a; k <= b; k++) sel.ids.add(grid.items[k].id);
+    $$("#grid .tile").forEach(t => t.classList.toggle("sel", sel.ids.has(+t.dataset.id)));
+    $("#sel-count").textContent = `${sel.ids.size} selected`;
+  } else toggleSel(it.id, el);
+  sel.last = idx;
+}
+const lasso = { start: null, moved: false };
+(() => {   // drag on the grid (empty space or across tiles) to select a rectangle; Shift keeps what was already selected
+  const g = $("#grid"); const box = document.createElement("div"); box.id = "grid-lasso"; g.append(box);
+  g.addEventListener("mousedown", ev => {
+    if (ev.button !== 0 || ev.target.closest(".pick")) return;
+    if (!box.isConnected) g.append(box);                                             // the grid is rebuilt on every filter change
+    ev.preventDefault();                                                             // no native image drag: our lasso needs the mouse moves
+    const r = g.getBoundingClientRect();
+    lasso.start = { x: ev.clientX - r.left + g.scrollLeft, y: ev.clientY - r.top, cx: ev.clientX, cy: ev.clientY, add: ev.shiftKey || ev.ctrlKey || ev.metaKey, rects: null, r, keep: new Set(sel.ids) };
+    lasso.moved = false;
+  });
+  document.addEventListener("mousemove", ev => {
+    const s = lasso.start; if (!s) return;
+    if (!lasso.moved) { if (Math.hypot(ev.clientX - s.cx, ev.clientY - s.cy) < 6) return; lasso.moved = true; if (!sel.on) setSelectMode(true); box.style.display = "block";
+      s.rects = $$("#grid .tile").map(t => { const b = t.getBoundingClientRect(); return { el: t, id: +t.dataset.id, l: b.left - s.r.left, t: b.top - s.r.top, w: b.width, h: b.height }; }); }
+    const x = ev.clientX - s.r.left, y = ev.clientY - s.r.top;
+    const L = Math.min(s.x, x), T = Math.min(s.y, y), W = Math.abs(x - s.x), H = Math.abs(y - s.y);
+    Object.assign(box.style, { left: L + "px", top: T + "px", width: W + "px", height: H + "px" });
+    sel.ids = new Set(s.add ? s.keep : []);
+    for (const c of s.rects) { const hit = c.l < L + W && c.l + c.w > L && c.t < T + H && c.t + c.h > T; if (hit) sel.ids.add(c.id); c.el.classList.toggle("sel", sel.ids.has(c.id)); }
+    $("#sel-count").textContent = `${sel.ids.size} selected`;
+  });
+  document.addEventListener("mouseup", () => { if (lasso.start) { lasso.start = null; box.style.display = "none"; if (!lasso.moved) return; setTimeout(() => { lasso.moved = false; }, 0); } });
+})();
+document.addEventListener("keydown", e => {
+  if ($("#tab-photos").classList.contains("hidden") || ["INPUT", "SELECT", "TEXTAREA"].includes(document.activeElement.tagName) || lbIndex >= 0) return;
+  if (e.key === "Escape" && sel.on) setSelectMode(false);
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "a") { e.preventDefault(); $("#sel-all").click(); }
+});
 function setSelectMode(on) {
-  sel.on = on; if (!on) sel.ids.clear();
+  sel.on = on; if (!on) { sel.ids.clear(); sel.last = null; }
   $("#grid").classList.toggle("selecting", on); $("#selbar").classList.toggle("hidden", !on); $("#f-select").classList.toggle("primary", on);
   $$("#grid .tile").forEach(t => t.classList.toggle("sel", on && sel.ids.has(+t.dataset.id))); $("#sel-count").textContent = `${sel.ids.size} selected`;
 }
@@ -2137,7 +2190,7 @@ async function loadMorePhotos() {
   grid.loading = true;
   const mine = grid;
   const q = new URLSearchParams({ offset: grid.offset, limit: PAGE });
-  for (const k of ["q", "year", "country", "city", "trip", "kind", "person", "month", "day", "chapter", "event", "best", "burst", "flying", "contributor", "favorite", "album", "person2", "ids"]) if (grid.filters[k]) q.set(k, grid.filters[k]);
+  for (const k of ["q", "year", "country", "city", "trip", "kind", "person", "month", "day", "chapter", "event", "best", "burst", "flying", "contributor", "favorite", "loose", "album", "person2", "ids"]) if (grid.filters[k]) q.set(k, grid.filters[k]);
   try {
     const res = await api("/api/photos?" + q);
     if (mine !== grid) return;  // filters changed meanwhile
@@ -2164,8 +2217,14 @@ async function loadMorePhotos() {
         img.src = media("thumb", it.id); img.alt = ""; b.append(img);
       }
       if (it.live) { const s = document.createElement("span"); s.className = "badge"; s.textContent = "LIVE"; b.append(s); }
-      b.dataset.id = it.id; if (sel.on && sel.ids.has(it.id)) b.classList.add("sel");
-      b.onclick = () => { if (sel.on) { toggleSel(it.id, b); } else openLightbox(idx); };
+      b.dataset.id = it.id; b.dataset.idx = idx; if (sel.on && sel.ids.has(it.id)) b.classList.add("sel");
+      const pick = document.createElement("span"); pick.className = "pick"; pick.title = "Select (Shift-click for a range, Ctrl-click to add)";
+      pick.onclick = ev => { ev.stopPropagation(); pickTile(idx, b, ev); };
+      b.append(pick);
+      b.onclick = ev => {
+        if (lasso.moved) { lasso.moved = false; return; }                          // the mouse-up of a drag, not a click
+        if (ev.shiftKey || ev.ctrlKey || ev.metaKey || sel.on) pickTile(idx, b, ev); else openLightbox(idx);
+      };
       frag.append(b);
     }
     box.append(frag);

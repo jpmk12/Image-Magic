@@ -359,9 +359,15 @@ program only. Your photos and settings are kept.
 - **Review bursts:** on the Home tab's Clean up panel, **Review bursts** lists every burst with
   its frames and scores. The app pre-picks the sharpest frame (★); click another to make it the
   keeper, then **Keep ★, trash the rest** or **Keep all**. One button handles every burst at once.
-- **Select mode:** **☑ Select** on the Photos tab lets you tick many photos (or **Select all
-  shown**) and then move them to a trip or a new trip, take them out of their trips, add them
-  to an album, or move them to the trash in one go.
+- **Selecting photos:** on the Photos tab, hover a photo and click the circle in its top-left
+  corner to start selecting right where you are, no need to scroll back to the Select button.
+  Shift-click takes a range, Ctrl-click adds one, dragging on the grid draws a lasso (hold
+  Shift to keep what you had), Ctrl+A selects everything shown, Esc finishes. The action bar
+  stays at the bottom of the window: move the selection to a trip or a new trip, take it out
+  of its trips, add it to an album, or move it to the trash in one go.
+- **Loose photos:** the **⬚ Loose** chip on the Photos tab shows only photos that are in no
+  trip and no hand-picked album, so you can walk a year and see what is still unfiled. It
+  combines with the year and other filters, and can be saved as a smart album.
 - **Fixing mistakes:** everything the app works out can be corrected, and your corrections
   stick through rebuilds. In the viewer: **Trip ✎ change** moves a photo to another trip, a
   new trip, or no trip, and as soon as you do, the app suggests other photos that belong with

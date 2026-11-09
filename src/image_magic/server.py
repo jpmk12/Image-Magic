@@ -965,7 +965,7 @@ def make_handler(app: App):
                     settings, conn = app.db()
                     try:
                         filters = {k: v for k, v in dict(data.get("filters") or {}).items() if k in
-                                   ("trip", "chapter", "person", "year", "month", "day", "country", "city", "q", "event", "best", "flying", "album", "favorite")}
+                                   ("trip", "chapter", "person", "year", "month", "day", "country", "city", "q", "event", "best", "flying", "album", "favorite", "loose")}
                         if path.endswith("check"):
                             return self._json(200, share.check(conn, filters))
                         folder = share.export(conn, settings.originals, settings.library, filters,

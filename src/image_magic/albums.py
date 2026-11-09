@@ -12,7 +12,7 @@ import json
 import sqlite3
 from datetime import datetime, timezone
 
-FILTER_KEYS = ("q", "year", "month", "day", "country", "city", "trip", "event", "person", "chapter", "kind",
+FILTER_KEYS = ("q", "year", "month", "day", "country", "city", "trip", "event", "person", "chapter", "kind", "loose",
                "best", "favorite", "flying", "contributor")
 
 SCHEMA = """

@@ -368,6 +368,9 @@ Service features (flying log, squadron yearbook) slot into S2 (log) and S9 (year
   pages for index/chapters/trips/events/albums (+ years with everything), stories and
   milestones inline, optional voice notes; `archive` job with progress; Home panel.
 - Phase 6 complete.
+- **Photos tab selection and loose filter** (v0.57.0): per-tile corner pick circle, Shift
+  range, Ctrl add, lasso on the grid (native image drag suppressed), Ctrl+A, Esc; `loose=1`
+  filter (no trip, no manual album) as a chip, a smart-album key and a share filter.
 - **Album ideas and learned signal weights** (v0.56.0): `albumideas.py` (themes by spherical
   k-means over the visual index, people sets from named faces, recurring 200 m cells, big
   events) as inbox `album_create` cards with skip memory (`album_rejections`); `suggest_for_album`

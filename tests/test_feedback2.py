@@ -170,3 +170,21 @@ def test_unticked_clutter_is_kept_and_not_listed_again(tmp_path):
     # and you can change your mind
     assert cleanup.forget_kept(conn) == 1
     assert cleanup.candidates(conn, lib, orig)["groups"]["black"] and cleanup.kept(conn) == set()
+
+
+def test_loose_filter_shows_photos_in_no_trip_or_album(tmp_path):
+    from image_magic import albums, browse
+    lib = tmp_path / "lib"
+    orig = lib / "originals"
+    for i in range(8):
+        make_photo(orig / f"jo{i}.jpg", datetime(2019, 3, 10, 9) + timedelta(hours=6 * i), PETRA)     # a trip
+    for i in range(20):
+        make_photo(orig / f"h{i}.jpg", datetime(2019, 1, 1, 12) + timedelta(days=i * 4), HOME)        # home: loose
+    conn = catalog.connect(lib / "library.db")
+    catalog.scan(conn, orig)
+    home = [r[0] for r in conn.execute("SELECT id FROM assets WHERE path LIKE 'h%' ORDER BY id")]
+    assert len(browse.ids(conn, {"loose": "1"})) == 20
+    albums.create(conn, "Picked", ids=home[:5])
+    assert len(browse.ids(conn, {"loose": "1"})) == 15
+    assert len(browse.ids(conn, {"loose": "1", "year": "2019"})) == 15 and len(browse.ids(conn, {"loose": "1", "year": "2018"})) == 0
+    assert albums.clean_filters({"loose": "1", "junk": 1}) == {"loose": "1"}
