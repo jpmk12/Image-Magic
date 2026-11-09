@@ -368,6 +368,9 @@ Service features (flying log, squadron yearbook) slot into S2 (log) and S9 (year
   pages for index/chapters/trips/events/albums (+ years with everything), stories and
   milestones inline, optional voice notes; `archive` job with progress; Home panel.
 - Phase 6 complete.
+- **Menus and dialog buttons stay reachable** (v0.60.0): `showMenu` measures the menu, caps
+  its height, scrolls it and flips it above the anchor when there is more room there; dialog
+  cards mark their header row `dlg-head` and action row `dlg-foot`, both `position: sticky`.
 - **Set location for a selection** (v0.59.0): `#sel-loc` on the Photos action bar opens
   `openLocation(selIds(), …)`; the apply handler refreshes the grid and keeps the selection.
 - **Military installations in place search** (v0.58.0): `data/bases.tsv` (~200 bases with

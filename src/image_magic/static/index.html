@@ -291,6 +291,8 @@
   /* ---- dialogs */
   .story { position: fixed; inset: 0; background: rgba(8,10,14,.62); backdrop-filter: blur(3px); z-index: 2050; display: grid; place-items: center; padding: 20px; }
   .story .card { background: var(--panel); color: var(--text); border-radius: 18px; width: min(760px, 100%); max-height: 90vh; overflow: auto; padding: 24px 26px; box-shadow: 0 30px 80px -30px rgba(0,0,0,.6); }
+  .story .card > .dlg-head { position: sticky; top: -24px; z-index: 3; background: var(--panel); margin: -24px -26px 0; padding: 18px 26px 10px; border-radius: 18px 18px 0 0; }
+  .story .card > .dlg-foot { position: sticky; bottom: -24px; z-index: 3; background: var(--panel); margin: 14px -26px -24px !important; padding: 10px 26px 18px; border-top: 1px solid var(--line); border-radius: 0 0 18px 18px; }
   .story textarea { max-width: none; min-height: 260px; line-height: 1.6; padding: 12px; resize: vertical; }
   .story .text { white-space: pre-wrap; line-height: 1.75; font-size: 16.5px; max-width: 64ch; }
   .share, .film { z-index: 2200; }
@@ -309,7 +311,7 @@
 
   /* ---- corrections */
   .menu { position: fixed; z-index: 2600; background: var(--panel); color: var(--text); border: 1px solid var(--line);
-          border-radius: 12px; box-shadow: 0 20px 50px -20px rgba(0,0,0,.6); padding: 6px; min-width: 220px; }
+          border-radius: 12px; box-shadow: 0 20px 50px -20px rgba(0,0,0,.6); padding: 6px; min-width: 220px; max-width: min(420px, calc(100vw - 16px)); overflow: auto; overscroll-behavior: contain; }
   .menu button { display: block; width: 100%; text-align: left; background: none; border: 0; font: inherit; color: var(--text);
                  padding: 8px 12px; border-radius: 8px; cursor: pointer; }
   .menu button:hover { background: var(--soft); }
@@ -468,7 +470,7 @@
     </div>
 
     <div class="panel hidden" id="dailypanel">
-      <div class="row" style="justify-content:space-between"><h2 style="margin:0">Memory of the day</h2>
+      <div class="row dlg-head" style="justify-content:space-between"><h2 style="margin:0">Memory of the day</h2>
         <div class="row"><button class="btn" id="daily-week">This week</button><button class="btn" id="tv-mode" title="Full-screen slideshow of your best memories, for a TV or a quiet evening">📺 TV mode</button></div></div>
       <div class="shuffle" id="daily-box" style="margin-top:12px"></div>
       <div id="daily-weekbox" class="small hidden" style="margin-top:12px"></div>
@@ -836,7 +838,7 @@
       <button class="btn" id="map-all" title="Show every photo again">All photos</button><span class="small muted" id="map-thisday-note"></span></div>
     <div id="map"></div>
     <div class="panel" style="margin-top:12px">
-      <div class="row" style="justify-content:space-between"><h2 style="margin:0">Places</h2><span class="small muted" id="world-sum"></span></div>
+      <div class="row dlg-head" style="justify-content:space-between"><h2 style="margin:0">Places</h2><span class="small muted" id="world-sum"></span></div>
       <div id="world-list" class="small" style="margin-top:8px"></div>
     </div>
     <p class="muted small" id="map-note">Map tiles © OpenStreetMap contributors (needs internet). Place names: GeoNames (CC BY 4.0). Map library: Leaflet.</p>
@@ -1015,20 +1017,20 @@
 
 <div class="story share hidden" id="share">
   <div class="card">
-    <div class="row" style="justify-content:space-between"><h2 style="margin:0">Share</h2><button class="btn" id="share-close">✕</button></div>
+    <div class="row dlg-head" style="justify-content:space-between"><h2 style="margin:0">Share</h2><button class="btn" id="share-close">✕</button></div>
     <p class="small muted">Makes a web page with copies of the photos at 1600 px and <b>all metadata removed</b> (no location, no camera, no dates inside the files). Private photos are never included. You get one .zip file to send; the unzipped folder also works on any web host.</p>
     <label class="field"><span>Title</span><input type="text" id="share-title"></label>
     <div id="share-check" class="small"></div>
     <div id="share-flags"></div>
     <label class="check"><input type="checkbox" id="share-voice"><span>Include my voice notes (your voice goes with the photos)</span></label>
     <label class="check"><input type="checkbox" id="share-zip" checked><span>One .zip file, downloaded when ready <small>Untick to get a folder instead (opens in Explorer).</small></span></label>
-    <div class="row" style="margin-top:14px"><button class="btn primary" id="share-go">Export</button><span class="small muted" id="share-note"></span></div>
+    <div class="row dlg-foot" style="margin-top:14px"><button class="btn primary" id="share-go">Export</button><span class="small muted" id="share-note"></span></div>
   </div>
 </div>
 
 <div class="story film hidden" id="film">
   <div class="card">
-    <div class="row" style="justify-content:space-between"><h2 style="margin:0">Make a film</h2><button class="btn" id="film-close">✕</button></div>
+    <div class="row dlg-head" style="justify-content:space-between"><h2 style="margin:0">Make a film</h2><button class="btn" id="film-close">✕</button></div>
     <p class="small muted">Renders a video in your browser from the photos in this replay: slow zooms, captions, optional music. Nothing is uploaded. The file is saved as .webm (plays in Chrome, Edge, VLC and most phones).</p>
     <label class="field"><span>Seconds per photo</span><input type="number" id="film-secs" value="3" min="1" max="10" style="max-width:100px"></label>
     <label class="check"><input type="checkbox" id="film-captions" checked><span>Show date and place on each photo</span></label>
@@ -1036,14 +1038,14 @@
       <select id="film-track"><option value="">No music</option><option value="calm" selected>Calm (built in)</option><option value="warm">Warm strings (built in)</option><option value="bright">Bright (built in)</option><option value="file">A file from my computer…</option></select>
       <input type="file" id="film-music" accept="audio/*" class="hidden"><small>Built-in tracks are generated on your computer (no download, nothing to license). Music fades out at the end.</small></label>
     <label class="check"><input type="checkbox" id="film-voice" checked><span>Include my voice notes (music ducks under them; the photo stays until you finish)</span></label>
-    <div class="row" style="margin-top:10px"><button class="btn primary" id="film-go">🎬 Render</button><span class="small" id="film-note"></span></div>
+    <div class="row dlg-foot" style="margin-top:10px"><button class="btn primary" id="film-go">🎬 Render</button><span class="small" id="film-note"></span></div>
     <canvas id="film-canvas" width="1280" height="720" style="width:100%;margin-top:12px;border-radius:8px;background:#000"></canvas>
   </div>
 </div>
 
 <div class="story share hidden" id="stops">
   <div class="card" style="width:min(1000px,100%)">
-    <div class="row" style="justify-content:space-between"><h2 id="stops-title" style="margin:0">Stops</h2><button class="btn" id="stops-close">✕</button></div>
+    <div class="row dlg-head" style="justify-content:space-between"><h2 id="stops-title" style="margin:0">Stops</h2><button class="btn" id="stops-close">✕</button></div>
     <p class="small muted">The trip as a sequence of places, in order. Move a whole stop to another trip, make it a trip of its own, give it a location, or take it out of the trip. Click a photo to see it.</p>
     <div id="stops-list" style="display:flex;flex-direction:column;gap:14px;max-height:65vh;overflow:auto"></div>
     <div class="small" id="stops-note" style="margin-top:8px;min-height:18px"></div>
@@ -1051,11 +1053,11 @@
 </div>
 <div class="story share hidden" id="sugg">
   <div class="card">
-    <div class="row" style="justify-content:space-between"><h2 id="sugg-title" style="margin:0">More photos from this trip?</h2><button class="btn" id="sugg-close">✕</button></div>
+    <div class="row dlg-head" style="justify-content:space-between"><h2 id="sugg-title" style="margin:0">More photos from this trip?</h2><button class="btn" id="sugg-close">✕</button></div>
     <p class="small muted" id="sugg-intro">These photos look like they belong to the trip, based on when they were taken, how they look, and their captions. Tick the ones that do (Shift-click for a range). Photos you leave unticked are remembered and not suggested for this trip again.</p>
     <div class="row"><button class="btn" id="sugg-all">Select all</button><button class="btn" id="sugg-none">Select none</button><span class="small muted" id="sugg-count"></span></div>
     <div class="sugg" id="sugg-grid"></div>
-    <div class="row" style="margin-top:14px"><button class="btn primary" id="sugg-add">Add selected to trip</button><span class="small muted" id="sugg-note"></span></div>
+    <div class="row dlg-foot" style="margin-top:14px"><button class="btn primary" id="sugg-add">Add selected to trip</button><span class="small muted" id="sugg-note"></span></div>
   </div>
 </div>
 <div class="menu hidden" id="menu"></div>
@@ -1078,13 +1080,13 @@
 
 <div class="story share hidden" id="rev-dlg">
   <div class="card" style="width:min(1100px,100%)">
-    <div class="row" style="justify-content:space-between;align-items:flex-start">
+    <div class="row dlg-head" style="justify-content:space-between;align-items:flex-start">
       <div><div class="small" id="rev-kind" style="font-weight:700;letter-spacing:.04em;text-transform:uppercase"></div><h2 id="rev-title" style="margin:2px 0 0"></h2><p class="small muted" id="rev-why" style="margin:4px 0 0"></p></div>
       <button class="btn" id="rev-close">✕</button>
     </div>
     <p class="small muted" id="rev-hint" style="margin:8px 0 6px">These are exactly the photos this decision is about. Untick any that don't belong; double-click to look closer.</p>
     <div id="rev-body" style="max-height:58vh;overflow:auto"></div>
-    <div class="row" style="margin-top:12px;justify-content:flex-end">
+    <div class="row dlg-foot" style="margin-top:12px;justify-content:flex-end">
       <span class="small" id="rev-count" style="margin-right:auto"></span>
       <button class="btn" id="rev-skip">Skip this suggestion</button>
       <button class="btn primary" id="rev-accept">Accept</button>
@@ -1093,7 +1095,7 @@
 </div>
 <div class="story share hidden" id="burst-dlg">
   <div class="card" style="width:min(1100px,100%)">
-    <div class="row" style="justify-content:space-between"><h2 style="margin:0">Bursts: keep one, let the rest go</h2><button class="btn" id="burst-close">✕</button></div>
+    <div class="row dlg-head" style="justify-content:space-between"><h2 style="margin:0">Bursts: keep one, let the rest go</h2><button class="btn" id="burst-close">✕</button></div>
     <p class="small muted"><b>Nothing is deleted here.</b> A burst is a run of near-identical shots taken within a few seconds (holding the shutter, or several tries at the same moment). For each burst the app pre-picks the sharpest, best-exposed frame (★); click another frame to make it the keeper instead. Only when you press a trash button do the spare frames move to the app's own trash folder on this computer, where they stay until you empty it and can be restored any time. Your iCloud library is never touched.</p>
     <div class="row" style="justify-content:space-between;margin-bottom:8px"><span class="small muted" id="burst-sum"></span><button class="btn primary" id="burst-all">Trash all spare frames, keep the ★</button></div>
     <div id="burst-list" style="display:flex;flex-direction:column;gap:10px;max-height:60vh;overflow:auto"></div>
@@ -1102,7 +1104,7 @@
 </div>
 <div class="story share hidden" id="loc-dlg">
   <div class="card" style="width:min(900px,100%)">
-    <div class="row" style="justify-content:space-between"><h2 id="loc-title" style="margin:0">Set location</h2><button class="btn" id="loc-close">✕</button></div>
+    <div class="row dlg-head" style="justify-content:space-between"><h2 id="loc-title" style="margin:0">Set location</h2><button class="btn" id="loc-close">✕</button></div>
     <p class="small muted" id="loc-sum"></p>
     <div class="row" style="margin:6px 0 10px">
       <button class="btn" data-loctab="nearby">Same as nearby photos</button>
@@ -1137,33 +1139,33 @@
         <p class="small muted" style="margin:10px 0 0">Recorded as "set by you" and kept through every rebuild.</p>
       </div>
     </div>
-    <div class="row" style="margin-top:14px;justify-content:flex-end"><span class="small" id="loc-note" style="margin-right:auto;color:var(--accent)"></span><button class="btn primary" id="loc-apply">Apply</button></div>
+    <div class="row dlg-foot" style="margin-top:14px;justify-content:flex-end"><span class="small" id="loc-note" style="margin-right:auto;color:var(--accent)"></span><button class="btn primary" id="loc-apply">Apply</button></div>
   </div>
 </div>
 <div class="story share hidden" id="place-dlg">
   <div class="card" style="width:min(960px,100%)">
-    <div class="row" style="justify-content:space-between"><h2 id="place-title" style="margin:0"></h2><button class="btn" id="place-close">✕</button></div>
+    <div class="row dlg-head" style="justify-content:space-between"><h2 id="place-title" style="margin:0"></h2><button class="btn" id="place-close">✕</button></div>
     <p class="small muted" id="place-meta"></p>
     <div id="place-body"></div>
   </div>
 </div>
 <div class="story share hidden" id="clean-dlg">
   <div class="card" style="width:min(1000px,100%)">
-    <div class="row" style="justify-content:space-between"><h2 style="margin:0">Clean up</h2><button class="btn" id="clean-close">✕</button></div>
+    <div class="row dlg-head" style="justify-content:space-between"><h2 style="margin:0">Clean up</h2><button class="btn" id="clean-close">✕</button></div>
     <p class="small muted" id="clean-sum"></p>
     <div id="clean-groups"></div>
-    <div class="row" style="margin-top:14px"><button class="btn primary" id="clean-go">🗑 Move selected to trash</button><span class="small" id="clean-note"></span></div>
+    <div class="row dlg-foot" style="margin-top:14px"><button class="btn primary" id="clean-go">🗑 Move selected to trash</button><span class="small" id="clean-note"></span></div>
   </div>
 </div>
 <div class="story hidden" id="voice-dlg">
   <div class="card" style="width:min(520px,100%)">
-    <div class="row" style="justify-content:space-between">
+    <div class="row dlg-head" style="justify-content:space-between">
       <h2 id="voice-title" style="margin:0">Voice note</h2>
       <button class="btn" id="voice-close">✕</button>
     </div>
     <p class="muted small">Say what this moment was: who, what, how it felt. Stored on this computer only, played back in replays.</p>
     <div id="voice-list" class="small"></div>
-    <div class="row" style="margin-top:12px">
+    <div class="row dlg-foot" style="margin-top:12px">
       <button class="btn primary" id="voice-rec">● Record</button>
       <button class="btn hidden" id="voice-stop">■ Stop</button>
       <span class="small muted" id="voice-note"></span>
@@ -1172,7 +1174,7 @@
 </div>
 <div class="story hidden" id="home-dlg">
   <div class="card" style="width:min(960px,100%)">
-    <div class="row" style="justify-content:space-between">
+    <div class="row dlg-head" style="justify-content:space-between">
       <h2 id="home-title" style="margin:0"></h2>
       <button class="btn" id="home-close">✕</button>
     </div>
@@ -1182,14 +1184,14 @@
 </div>
 <div class="story hidden" id="story">
   <div class="card">
-    <div class="row" style="justify-content:space-between">
+    <div class="row dlg-head" style="justify-content:space-between">
       <h2 id="story-title" style="margin:0"></h2>
       <button class="btn" id="story-close">✕</button>
     </div>
     <p class="muted small" id="story-meta"></p>
     <div class="text" id="story-text"></div>
     <textarea id="story-edit" class="hidden"></textarea>
-    <div class="row" style="margin-top:14px">
+    <div class="row dlg-foot" style="margin-top:14px">
       <button class="btn primary" id="story-write">✍ Write with AI</button>
       <button class="btn" id="story-editbtn">Edit</button>
       <button class="btn" id="story-speak" title="Read the story aloud">🔊 Read aloud</button>
@@ -3069,9 +3071,11 @@ function showMenu(anchor, items) {
     if (it.head) { const h = document.createElement("div"); h.className = "hd"; h.textContent = it.head; m.append(h); continue; }
     const b = document.createElement("button"); b.textContent = it.label; b.onclick = () => { hideMenu(); it.run(); }; m.append(b);
   }
-  const r = anchor.getBoundingClientRect();
-  m.style.left = Math.min(r.left, innerWidth - 260) + "px"; m.style.top = Math.min(r.bottom + 4, innerHeight - 320) + "px";
-  m.classList.remove("hidden");
+  const r = anchor.getBoundingClientRect(), below = innerHeight - r.bottom - 12, above = r.top - 12;
+  m.classList.remove("hidden"); m.style.maxHeight = Math.min(innerHeight * 0.7, Math.max(below, above, 160)) + "px";
+  const h = m.offsetHeight, up = h > below && above > below;        // open upward when the anchor sits near the bottom
+  m.style.left = Math.max(8, Math.min(r.left, innerWidth - m.offsetWidth - 8)) + "px";
+  m.style.top = Math.max(8, up ? r.top - 4 - h : Math.min(r.bottom + 4, innerHeight - h - 8)) + "px";
   setTimeout(() => document.addEventListener("click", hideMenu, { once: true }), 0);
 }
 function hideMenu() { $("#menu").classList.add("hidden"); }

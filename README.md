@@ -372,6 +372,11 @@ program only. Your photos and settings are kept.
   place picker as the viewer: nearby photos, place search, pasted coordinates or a map
   pin, with an overwrite tick for photos that already have a place), or move it to the
   trash in one go. The selection stays put after a location change so you can keep going.
+- **Menus and dialogs that fit the window:** the trip and album pick-lists open upward when
+  the action bar sits near the bottom of the window and scroll inside themselves when they
+  are long, so nothing is cut off. Every dialog keeps its title, ✕ and its Apply / Export /
+  Add buttons pinned in view while the middle scrolls, so no more scrolling up and down to
+  find them.
 - **Loose photos:** the **⬚ Loose** chip on the Photos tab shows only photos that are in no
   trip and no hand-picked album, so you can walk a year and see what is still unfiled. It
   combines with the year and other filters, and can be saved as a smart album.
