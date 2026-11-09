@@ -167,6 +167,9 @@
 
   /* ---- photos */
   .filters { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 14px; }
+  #photo-tools { position: sticky; top: 0; z-index: 6; background: var(--bg); padding: 10px 0 2px; margin: -10px 0 8px;
+                 box-shadow: 0 8px 12px -10px rgba(0,0,0,.25); }
+  #photo-tools .filters:last-child { margin-bottom: 8px; }
   .filters select { width: auto; min-width: 140px; }
   .chip { display: inline-flex; gap: 6px; align-items: center; background: var(--accent-soft); color: var(--accent); border-radius: 99px;
           padding: 5px 12px; font-size: 13px; font-weight: 600; }
@@ -607,6 +610,7 @@
 
   <!-- PHOTOS -->
   <section id="tab-photos" class="hidden">
+    <div id="photo-tools">
     <form class="filters" id="search-form" style="margin-bottom:10px">
       <input type="text" id="f-q" placeholder='Search: "C-17", "kids at the beach", "christmas 2019", "last summer", "Emma&#39;s 3rd birthday"' style="max-width:520px" autocomplete="off">
       <button class="btn primary" type="submit">Search</button>
@@ -626,6 +630,7 @@
       <button class="btn hidden" id="f-save-album" title="Keep this search as a smart album that updates itself">＋ Save as album</button>
       <button class="btn" id="f-select" title="Tick several photos, then move them to a trip, an album or the trash">☑ Select</button>
       <span class="muted small" id="f-count"></span>
+    </div>
     </div>
     <div class="grid" id="grid"></div>
     <div id="selbar" class="row hidden">

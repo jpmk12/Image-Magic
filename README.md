@@ -362,8 +362,9 @@ program only. Your photos and settings are kept.
 - **Selecting photos:** on the Photos tab, hover a photo and click the circle in its top-left
   corner to start selecting right where you are, no need to scroll back to the Select button.
   Shift-click takes a range, Ctrl-click adds one, dragging on the grid draws a lasso (hold
-  Shift to keep what you had), Ctrl+A selects everything shown, Esc finishes. The action bar
-  stays at the bottom of the window: move the selection to a trip or a new trip, take it out
+  Shift to keep what you had), Ctrl+A selects everything shown, Esc finishes. The search and
+  filter toolbar stays at the top of the window however far you scroll, and the action bar
+  stays at the bottom: move the selection to a trip or a new trip, take it out
   of its trips, add it to an album, or move it to the trash in one go.
 - **Loose photos:** the **⬚ Loose** chip on the Photos tab shows only photos that are in no
   trip and no hand-picked album, so you can walk a year and see what is still unfiled. It
