@@ -368,6 +368,8 @@ Service features (flying log, squadron yearbook) slot into S2 (log) and S9 (year
   pages for index/chapters/trips/events/albums (+ years with everything), stories and
   milestones inline, optional voice notes; `archive` job with progress; Home panel.
 - Phase 6 complete.
+- **Set location for a selection** (v0.59.0): `#sel-loc` on the Photos action bar opens
+  `openLocation(selIds(), …)`; the apply handler refreshes the grid and keeps the selection.
 - **Military installations in place search** (v0.58.0): `data/bases.tsv` (~200 bases with
   short names and ICAO codes) searched by `places.search_bases`; an ICAO code returns only
   that base; bases rank ahead of towns.

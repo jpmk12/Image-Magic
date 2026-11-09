@@ -368,7 +368,10 @@ program only. Your photos and settings are kept.
   Shift to keep what you had), Ctrl+A selects everything shown, Esc finishes. The search and
   filter toolbar stays at the top of the window however far you scroll, and the action bar
   stays at the bottom: move the selection to a trip or a new trip, take it out
-  of its trips, add it to an album, or move it to the trash in one go.
+  of its trips, add it to an album, give it a location (📍 Set location… opens the same
+  place picker as the viewer: nearby photos, place search, pasted coordinates or a map
+  pin, with an overwrite tick for photos that already have a place), or move it to the
+  trash in one go. The selection stays put after a location change so you can keep going.
 - **Loose photos:** the **⬚ Loose** chip on the Photos tab shows only photos that are in no
   trip and no hand-picked album, so you can walk a year and see what is still unfiled. It
   combines with the year and other filters, and can be saved as a smart album.

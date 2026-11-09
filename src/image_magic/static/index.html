@@ -640,6 +640,7 @@
       <button class="btn" id="sel-trip">Move to trip…</button>
       <button class="btn" id="sel-notrip">Not part of a trip</button>
       <button class="btn" id="sel-album">Add to album…</button>
+      <button class="btn" id="sel-loc">📍 Set location…</button>
       <button class="btn" id="sel-trash">🗑 Trash</button>
       <button class="btn" id="sel-done">Done</button>
     </div>
@@ -2185,6 +2186,7 @@ $("#sel-album").onclick = async ev => {
   items.push("-", { label: "New album…", run: async () => { const n = prompt("Album name:"); if (n && n.trim()) { await api("/api/albums/create", { title: n, kind: "manual", ids: selIds() }).catch(e => toast(e.message)); toast("Album made"); setSelectMode(false); } } });
   showMenu(anchor, items);
 };
+$("#sel-loc").onclick = () => { if (!sel.ids.size) return toast("Tick some photos first."); openLocation(selIds(), `${sel.ids.size} photos`); };
 $("#sel-trash").onclick = async () => {
   if (!sel.ids.size) return toast("Tick some photos first.");
   if (!confirm(`Move ${sel.ids.size} photos to the app's trash? They stay in iCloud and can be restored from the Home tab.`)) return;
@@ -2673,6 +2675,7 @@ $("#loc-apply").onclick = async () => {
     else if (!loc.target) throw new Error("Choose a place first.");
     else r = await api("/api/location/set", { ids: loc.ids, ...loc.target, overwrite: ow });
     $("#loc-note").textContent = `Done: ${r.changed} photos updated.`; refresh();
+    if (!$("#tab-photos").classList.contains("hidden") && grid.loaded && lbIndex < 0) { const keep = new Set(sel.ids); setFilters(grid.filters); if (sel.on) { sel.ids = keep; setTimeout(() => setSelectMode(true), 400); } }
     if (!$("#tab-organize").classList.contains("hidden")) loadOrganize(); if (lbIndex >= 0) openLightbox(lbIndex, lbItems === grid.items ? undefined : lbItems);
   } catch (e) { $("#loc-note").textContent = e.message; }
 };
